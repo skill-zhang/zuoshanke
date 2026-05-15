@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 — UI 布局原型 v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif; background:#0d1117; color:#c9d1d9; height:100vh; display:flex; flex-direction:column; font-size:14px; }
+
+  .topbar { height:46px; background:#161b22; border-bottom:1px solid #30363d; display:flex; align-items:center; padding:0 18px; gap:28px; font-size:15px; flex-shrink:0; }
+  .logo-group { display:flex; align-items:center; gap:10px; cursor:pointer; margin-right:8px; }
+  .logo-group svg { width:30px; height:30px; }
+  .logo-text { font-family:'Noto Sans SC',sans-serif; color:#e6edf3; font-weight:900; font-size:18px; letter-spacing:1px; }
+  .breadcrumb { display:flex; align-items:center; gap:12px; color:#8b949e; font-size:15px; }
+  .breadcrumb .arrow { color:#484f58; font-size:16px; }
+  .breadcrumb .label { color:#8b949e; }
+  .breadcrumb .val { color:#c9d1d9; font-weight:500; }
+  .breadcrumb .val.clickable { cursor:pointer; color:#58a6ff; }
+  .breadcrumb .val.clickable:hover { text-decoration:underline; }
+  .spacer { flex:1; }
+  .topbar .btn { background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:5px; padding:5px 14px; font-size:14px; cursor:pointer; }
+  .topbar .btn:hover { background:#30363d; }
+  .topbar .btn.active { background:#1f3a5f; border-color:#58a6ff; color:#58a6ff; }
+
+  .main { flex:1; display:flex; overflow:hidden; }
+
+  /* 侧边栏 */
+  .sidebar { width:230px; background:#161b22; border-right:1px solid #30363d; display:flex; flex-direction:column; flex-shrink:0; }
+  .sidebar-section { padding:12px 16px 8px; border-bottom:1px solid #21262d; }
+  .sidebar-section .label { font-size:13px; color:#8b949e; display:flex; align-items:center; gap:6px; }
+  .sidebar-section .label svg { width:16px; height:16px; flex-shrink:0; }
+  .sidebar-item { padding:7px 16px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; border-left:2px solid transparent; }
+  .sidebar-item:hover { background:#1c2128; }
+  .sidebar-item.active { background:#1c2128; border-left-color:#58a6ff; color:#e6edf3; }
+  .sidebar-item .icon { font-size:16px; width:22px; text-align:center; }
+  .sidebar-item .badge { margin-left:auto; background:#30363d; border-radius:10px; padding:1px 8px; font-size:11px; color:#8b949e; }
+  .sidebar-list { flex:1; overflow-y:auto; }
+  .sidebar-footer { padding:10px 16px; border-top:1px solid #30363d; display:flex; flex-direction:column; gap:6px; }
+  .sidebar-footer .link { font-size:14px; color:#8b949e; cursor:pointer; padding:4px 0; display:flex; align-items:center; gap:6px; }
+  .sidebar-footer .link:hover { color:#c9d1d9; }
+
+  /* 对话区 */
+  .center { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .chat-messages { flex:1; overflow-y:auto; padding:20px 28px; display:flex; flex-direction:column; gap:14px; }
+  .chat-msg { max-width:80%; padding:10px 16px; border-radius:8px; font-size:15px; line-height:1.7; }
+  .chat-msg.user { align-self:flex-end; background:#1f3a5f; color:#c9d1d9; }
+  .chat-msg.ai { align-self:flex-start; background:#161b22; border:1px solid #30363d; color:#c9d1d9; }
+  .chat-msg .meta { font-size:11px; color:#8b949e; margin-top:6px; display:flex; gap:8px; }
+  .map-ref { display:inline-block; background:#1f3a5f; border:1px solid #58a6ff; border-radius:6px; padding:6px 12px; margin:4px 0; cursor:pointer; font-size:14px; }
+  .map-ref:hover { background:#2d4a7a; }
+  .map-ref.action { background:#3d1f1f; border-color:#f85149; }
+
+  .chat-input-bar { padding:10px 18px; border-top:1px solid #30363d; display:flex; gap:10px; background:#161b22; }
+  .chat-input-bar input { flex:1; background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:9px 14px; color:#c9d1d9; font-size:15px; outline:none; }
+  .chat-input-bar input:focus { border-color:#58a6ff; }
+  .chat-input-bar button { padding:9px 22px; font-size:15px; background:#1f3a5f; color:#e6edf3; border:1px solid #58a6ff; border-radius:6px; cursor:pointer; }
+  .chat-input-bar button:hover { background:#2d4a7a; }
+
+  /* 抽屉 */
+  .drawer-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:90; }
+  .drawer-overlay.open { display:block; }
+  .drawer { position:fixed; top:0; right:-700px; width:700px; height:100vh; background:#161b22; border-left:1px solid #30363d; z-index:100; display:flex; flex-direction:column; transition:right 0.3s ease; }
+  .drawer.open { right:0; }
+  .drawer-header { height:46px; border-bottom:1px solid #30363d; display:flex; align-items:center; padding:0 16px; gap:14px; font-size:14px; flex-shrink:0; }
+  .drawer-header .tab { padding:6px 16px; border-radius:5px; cursor:pointer; color:#8b949e; border:1px solid transparent; font-size:14px; }
+  .drawer-header .tab.active { background:#1f3a5f; border-color:#58a6ff; color:#58a6ff; }
+  .drawer-header .tab.action-tab.active { background:#3d1f1f; border-color:#f85149; color:#f85149; }
+  .drawer-header .close { margin-left:auto; cursor:pointer; color:#8b949e; font-size:24px; line-height:1; }
+  .drawer-header .close:hover { color:#f85149; }
+  .drawer-body { flex:1; overflow:auto; position:relative; }
+
+  /* Markmap 颜色覆盖 */
+  #mindmap-wrap { width:100%; height:100%; padding:20px; }
+  #mindmap-wrap svg { width:100% !important; height:100% !important; }
+  /* 强制 markmap 文字亮色 + 节点背景暗色 */
+  #mindmap-wrap svg text { fill:#e6edf3 !important; }
+  #mindmap-wrap svg .markmap-node > circle,
+  #mindmap-wrap svg .markmap-node > rect { fill:#1c2128 !important; stroke:#484f58 !important; }
+  #mindmap-wrap svg .markmap-node > g > rect { fill:#1c2128 !important; stroke:#484f58 !important; }
+  #mindmap-wrap svg path { stroke:#484f58 !important; }
+  #mindmap-wrap svg .markmap-link { stroke:#484f58 !important; }
+
+  /* Action Map 列表 */
+  .action-list { padding:20px; overflow-y:auto; height:100%; }
+  .action-list h3 { font-size:16px; color:#e6edf3; margin-bottom:6px; }
+  .action-list .subtitle { color:#8b949e; font-size:13px; margin-bottom:16px; }
+  .action-card { background:#1c2128; border:1px solid #30363d; border-radius:8px; padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:border-color 0.2s; }
+  .action-card:hover { border-color:#58a6ff; }
+  .action-card.selected { border-color:#58a6ff; background:#1f3a5f; }
+  .action-card .card-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .action-card .card-title { font-size:15px; color:#e6edf3; font-weight:500; }
+  .action-card .card-status { font-size:11px; padding:2px 8px; border-radius:10px; }
+  .card-status.running { background:rgba(210,153,34,0.15); color:#d29922; }
+  .card-status.completed { background:rgba(63,185,80,0.12); color:#3fb950; }
+  .card-status.paused { background:rgba(188,140,255,0.12); color:#bc8cff; }
+  .card-status.failed { background:rgba(248,81,73,0.12); color:#f85149; }
+  .action-card .card-meta { font-size:12px; color:#8b949e; display:flex; gap:12px; }
+
+  .action-detail { padding:16px; }
+  .back-link { color:#58a6ff; cursor:pointer; font-size:13px; margin-bottom:12px; display:inline-block; }
+  .back-link:hover { text-decoration:underline; }
+
+  /* Action Map SVG 容器 */
+  #actionmap-svg-wrap { width:100%; height:100%; min-height:500px; }
+  #actionmap-svg { width:100%; height:100%; }
+
+  /* 状态颜色系统 */
+  /* completed=绿, failed=红, timeout=橙, running=蓝, pending=亮灰 */
+  .node-completed { fill:rgba(63,185,80,0.12); stroke:#3fb950; }
+  .node-failed { fill:rgba(248,81,73,0.1); stroke:#f85149; }
+  .node-timeout { fill:rgba(210,153,34,0.1); stroke:#d29922; }
+  .node-running { fill:rgba(88,166,255,0.12); stroke:#58a6ff; }
+  .node-pending { fill:rgba(110,118,129,0.08); stroke:#6e7681; }
+  .node-decision { fill:rgba(248,81,73,0.08); stroke:#f85149; }
+  .node-milestone { fill:rgba(63,185,80,0.08); stroke:#3fb950; }
+  .node-end { fill:rgba(188,140,255,0.08); stroke:#bc8cff; }
+  .node-start { fill:rgba(188,140,255,0.08); stroke:#bc8cff; }
+  .node-fallback { fill:rgba(210,153,34,0.06); stroke:#d29922; stroke-dasharray:6,3; }
+
+  /* 项目管理 */
+  .page { display:none; flex:1; overflow-y:auto; padding:32px 44px; }
+  .page.active { display:block; }
+  .page h2 { font-size:22px; color:#e6edf3; margin-bottom:8px; }
+  .page .subtitle { color:#8b949e; font-size:14px; margin-bottom:28px; }
+  .page table { width:100%; border-collapse:collapse; font-size:15px; }
+  .page th { text-align:left; color:#8b949e; padding:12px 16px; border-bottom:1px solid #30363d; font-weight:400; }
+  .page td { padding:14px 16px; border-bottom:1px solid #0d1117; }
+  .page tr:hover td { background:#1c2128; }
+  .page .project-name { color:#58a6ff; cursor:pointer; font-size:16px; font-weight:500; }
+  .page .project-name:hover { text-decoration:underline; }
+  .page .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .page .status-dot.green { background:#3fb950; }
+  .page .status-dot.gray { background:#484f58; }
+  .page .actions { display:flex; gap:10px; margin-top:24px; }
+  .page button { padding:9px 20px; font-size:14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; cursor:pointer; }
+  .page button:hover { background:#30363d; }
+  .page button.primary { background:#1f3a5f; border-color:#58a6ff; color:#e6edf3; }
+
+  .chat-area-wrap { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+  .statusbar { height:26px; background:#161b22; border-top:1px solid #30363d; display:flex; align-items:center; padding:0 14px; gap:14px; font-size:12px; color:#8b949e; flex-shrink:0; }
+  .statusbar .dot { width:7px; height:7px; border-radius:50%; }
+  .statusbar .dot.green { background:#3fb950; }
+  .statusbar .dot.yellow { background:#d29922; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-group" onclick="navigateTo('projects')">
+    <svg viewBox="0 0 40 40">
+      <polygon points="20,3 38,35 2,35" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+      <polygon points="20,11 31,32 9,32" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round"/>
+      <line x1="20" y1="20" x2="20" y2="27" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="20" cy="18" r="2.5" fill="#58a6ff"/>
+    </svg>
+    <span class="logo-text">坐山客</span>
+  </div>
+  <div class="breadcrumb">
+    <span class="arrow">›</span>
+    <span class="label">项目</span>
+    <span class="val clickable" onclick="navigateTo('projects')">客户X SaaS</span>
+    <span style="margin:0 8px;color:#30363d">|</span>
+    <span class="label">场景</span>
+    <span class="val">用户系统</span>
+  </div>
+  <span class="spacer"></span>
+  <button class="btn" id="btn-thinkmap" onclick="openDrawer('thinkmap')" style="display:none">🧠 Thinking Map</button>
+  <button class="btn" id="btn-actionmap" onclick="openDrawer('actionmap')" style="display:none">⚡ Action Map</button>
+  <button class="btn">⚙ 设置</button>
+</div>
+
+<div class="main">
+
+  <div class="sidebar">
+    <div class="sidebar-list">
+      <div class="sidebar-section">
+        <div class="label">
+          <svg viewBox="0 0 16 16" width="16" height="16"><path d="M1 3a1 1 0 011-1h4l2 2h7a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V3z" fill="none" stroke="#58a6ff" stroke-width="1.2"/></svg>
+          当前项目 · 客户X SaaS
+        </div>
+      </div>
+      <div class="sidebar-item active">
+        <span class="icon">💬</span> 讨论
+        <span class="badge">3</span>
+      </div>
+      <div class="sidebar-item" style="color:#8b949e">
+        <span class="icon">+</span> 新建场景
+      </div>
+      <div class="sidebar-section" style="margin-top:8px">
+        <div class="label">
+          <svg viewBox="0 0 16 16" width="16" height="16"><rect x="1" y="2" width="14" height="12" rx="1" fill="none" stroke="#58a6ff" stroke-width="1.2"/><line x1="4" y1="6" x2="12" y2="6" stroke="#58a6ff" stroke-width="1"/><line x1="4" y1="9" x2="10" y2="9" stroke="#58a6ff" stroke-width="1"/></svg>
+          讨论 · 频道
+        </div>
+      </div>
+      <div class="sidebar-item active" style="padding-left:30px">
+        <span class="icon">#</span> 需求讨论（当前）
+      </div>
+      <div class="sidebar-item" style="padding-left:30px">
+        <span class="icon">#</span> 闲聊
+      </div>
+      <div class="sidebar-item" style="padding-left:30px;color:#8b949e">
+        <span class="icon">+</span> 新频道
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <span class="link" onclick="navigateTo('projects')">
+        <svg viewBox="0 0 16 16" width="16" height="16"><path d="M1 3a1 1 0 011-1h4l2 2h7a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V3z" fill="none" stroke="#8b949e" stroke-width="1.2"/></svg>
+        切换项目
+      </span>
+      <span class="link">
+        <svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="2.5" fill="none" stroke="#8b949e" stroke-width="1.2"/><path d="M8 1a7 7 0 017 7 7 7 0 01-7 7A7 7 0 011 8a7 7 0 017-7z" fill="none" stroke="#8b949e" stroke-width="1.2"/></svg>
+        设置
+      </span>
+    </div>
+  </div>
+
+  <div class="center" id="center-area">
+    <div class="chat-area-wrap" id="chat-wrap">
+      <div class="chat-messages">
+        <div class="chat-msg user">
+          我想做一个SaaS产品，用户可以在线管理他们的数据
+          <div class="meta"><span>10:15</span></div>
+        </div>
+        <div class="chat-msg ai">
+          好的，让我从几个维度帮你梳理：<br><br>
+          <b>① 用户系统</b> — 注册登录、权限、多租户？<br>
+          <b>② 核心业务</b> — 数据 CRUD、实时协作？<br>
+          <b>③ 计费系统</b> — 订阅模式、支付接入<br>
+          <b>④ 对接客户</b> — 已有系统调研、API 开放
+          <div class="meta"><span>10:16</span></div>
+        </div>
+        <div class="chat-msg ai">
+          <span class="map-ref" onclick="openDrawer('thinkmap')">🧠 查看 Thinking Map</span>
+          <div class="meta"><span>10:16</span></div>
+        </div>
+        <div class="chat-msg user">
+          多租户先按单租户做吧
+          <div class="meta"><span>10:18</span></div>
+        </div>
+        <div class="chat-msg ai">
+          明白。"多租户方案"标记为可执行了。要生成 Action Map 吗？
+          <div class="meta"><span>10:19</span></div>
+        </div>
+        <div class="chat-msg user">好的，生成吧<div class="meta"><span>10:20</span></div></div>
+        <div class="chat-msg ai">
+          已生成 3 个 Action Map 👇<br>
+          <span class="map-ref action" onclick="openDrawer('actionmap')">⚡ 查看 Action Maps（3 个）</span>
+          <br><br>第一个「确定多租户模型」已就绪，开始执行？
+          <div class="meta"><span>10:20</span></div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input placeholder="输入消息...（说「开始执行」触发 Task，说「聊点别的」切闲聊）">
+        <button>发送</button>
+      </div>
+    </div>
+
+    <div class="page" id="page-projects">
+      <h2>📁 项目管理</h2>
+      <p class="subtitle">每个项目包含多个场景，场景下有独立讨论频道和 Thinking Map</p>
+      <table>
+        <thead><tr><th>项目名称</th><th>场景</th><th>最后活跃</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td><span class="project-name" onclick="navigateTo('chat')">客户X SaaS 平台</span></td><td>用户系统 · 计费方案 · 核心业务</td><td>10 分钟前</td><td><span class="status-dot green"></span>活跃</td></tr>
+          <tr><td><span class="project-name">内部工具链</span></td><td>CI/CD 迁移</td><td>3 天前</td><td><span class="status-dot gray"></span>闲置</td></tr>
+          <tr><td><span class="project-name">个人博客重构</span></td><td>主题设计 · 评论系统</td><td>1 周前</td><td><span class="status-dot gray"></span>归档</td></tr>
+        </tbody>
+      </table>
+      <div class="actions"><button class="primary">+ 新建项目</button><button>导入项目...</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 抽屉 -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <span class="tab active" id="tab-think" onclick="switchDrawerTab('thinkmap')">🧠 Thinking Map</span>
+    <span class="tab action-tab" id="tab-action" onclick="switchDrawerTab('actionmap')">⚡ Action Maps</span>
+    <span class="close" onclick="closeDrawer()">✕</span>
+  </div>
+
+  <!-- Thinking Map -->
+  <div class="drawer-body" id="drawer-body-think">
+    <div id="mindmap-wrap"></div>
+  </div>
+
+  <!-- Action Map 列表 -->
+  <div class="drawer-body" id="drawer-body-action-list" style="display:none">
+    <div class="action-list">
+      <h3>⚡ Action Maps</h3>
+      <p class="subtitle">一个 Thinking Map 的「可执行」叶子可触发多个 Action Map</p>
+      <div class="action-card selected" onclick="showActionDetail('multi-tenant')">
+        <div class="card-header">
+          <span class="card-title">确定多租户模型</span>
+          <span class="card-status running">⏳ 执行中</span>
+        </div>
+        <div class="card-meta"><span>📎 关联: 多租户方案</span><span>📊 节点: 2/6</span><span>🕐 2分钟前</span></div>
+      </div>
+      <div class="action-card" onclick="showActionDetail('billing')">
+        <div class="card-header">
+          <span class="card-title">确定计费方案</span>
+          <span class="card-status paused">⏸ 暂停</span>
+        </div>
+        <div class="card-meta"><span>📎 关联: 订阅模式</span><span>📊 节点: 1/4</span><span>🕐 5分钟前</span></div>
+      </div>
+      <div class="action-card" onclick="showActionDetail('integration')">
+        <div class="card-header">
+          <span class="card-title">调研对接方案</span>
+          <span class="card-status completed">✅ 完成</span>
+        </div>
+        <div class="card-meta"><span>📎 关联: 已有系统</span><span>📊 节点: 4/4</span><span>🕐 1小时前</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Map 详情 -->
+  <div class="drawer-body" id="drawer-body-action-detail" style="display:none">
+    <div style="padding:16px;height:100%;display:flex;flex-direction:column">
+      <span class="back-link" onclick="backToActionList()">← 返回 Action Map 列表</span>
+      <div style="font-size:15px;color:#e6edf3;margin-bottom:4px;font-weight:500">确定多租户模型</div>
+      <div style="font-size:12px;color:#8b949e;margin-bottom:8px">关联 Thinking Map: 多租户方案</div>
+      <div style="display:flex;gap:12px;margin-bottom:12px;font-size:11px;color:#8b949e;flex-wrap:wrap">
+        <span>🟢 已完成</span><span>🔴 失败</span><span>🟠 超时</span>
+        <span>🔵 执行中</span><span>⚪ 待执行</span><span>🔶 备选路径</span>
+      </div>
+      <div id="actionmap-svg-wrap">
+        <svg id="actionmap-svg" viewBox="0 0 680 380"></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span class="dot green"></span> Hermes 在线
+  <span>|</span> 模型: deepseek-chat
+  <span>|</span> Tokens: 8K / 32K
+  <span>|</span> <span class="dot yellow"></span> Action: 节点 2/6
+  <span>|</span> 模式: Chat
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.17"></script>
+<script>
+// ═══ 页面导航 ═══
+function navigateTo(page) {
+  const cw = document.getElementById('chat-wrap');
+  const pp = document.getElementById('page-projects');
+  if (page==='projects') { cw.style.display='none'; pp.classList.add('active'); }
+  else { cw.style.display=''; pp.classList.remove('active'); closeDrawer(); }
+}
+
+// ═══ 抽屉 ═══
+let currentTab = 'thinkmap';
+function openDrawer(tab) {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+  switchDrawerTab(tab);
+  document.getElementById('btn-thinkmap').style.display='inline-block';
+  document.getElementById('btn-actionmap').style.display='inline-block';
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+function switchDrawerTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-think').classList.toggle('active',tab==='thinkmap');
+  document.getElementById('tab-action').classList.toggle('active',tab==='actionmap');
+  document.getElementById('drawer-body-think').style.display=(tab==='thinkmap')?'block':'none';
+  document.getElementById('drawer-body-action-list').style.display=(tab==='actionmap')?'block':'none';
+  document.getElementById('drawer-body-action-detail').style.display='none';
+  if(tab==='thinkmap') renderThinkMap();
+  if(tab==='actionmap') renderActionMap();
+}
+
+// ═══ Thinking Map (D3 手绘) ═══
+let thinkRendered = false;
+function renderThinkMap() {
+  if(thinkRendered) return;
+  thinkRendered = true;
+  const wrap = document.getElementById('mindmap-wrap');
+  wrap.innerHTML = '';
+
+  const w = 680, h = 600;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  svg.setAttribute('width','100%'); svg.setAttribute('height','100%');
+  wrap.appendChild(svg);
+
+  // 中心
+  drawNode(svg,340,60,'坐山客 SaaS 产品','root');
+
+  // 分支1: 用户系统
+  drawNode(svg,120,160,'用户系统','domain');
+  drawLink(svg,340,76,130,155);
+  drawNode(svg,60,240,'注册登录 ✓','done');
+  drawNode(svg,130,240,'权限管理 ✓','done');
+  drawNode(svg,200,240,'多租户 ❓','discuss');
+  drawLink(svg,125,176,65,234);
+  drawLink(svg,130,176,135,234);
+  drawLink(svg,135,176,195,234);
+  drawNode(svg,270,310,'🔧 可执行','actionable');
+  drawLink(svg,205,256,255,306);
+  drawNode(svg,100,310,'单租户够用?','detail');
+  drawNode(svg,170,310,'后期扩展成本','detail');
+  drawLink(svg,200,260,105,306);
+  drawLink(svg,200,260,165,306);
+
+  // 分支2: 核心业务
+  drawNode(svg,340,180,'核心业务','domain');
+  drawLink(svg,340,76,340,164);
+  drawNode(svg,280,250,'数据 CRUD ✓','done');
+  drawNode(svg,350,250,'版本管理 ✓','done');
+  drawNode(svg,420,250,'实时协作 ❓','discuss');
+  drawLink(svg,340,196,285,244);
+  drawLink(svg,340,196,345,244);
+  drawLink(svg,340,196,415,244);
+
+  // 分支3: 计费系统
+  drawNode(svg,540,160,'计费系统','domain');
+  drawLink(svg,340,76,530,155);
+  drawNode(svg,490,240,'订阅模式 ❓','discuss');
+  drawNode(svg,570,240,'支付接入 ❌','unknown');
+  drawLink(svg,535,176,495,234);
+  drawLink(svg,535,176,565,234);
+  drawNode(svg,500,310,'🔧 可执行','actionable');
+  drawNode(svg,580,310,'🔧 可执行','actionable');
+  drawLink(svg,495,256,485,306);
+  drawLink(svg,575,256,575,306);
+
+  // 分支4: 对接客户
+  drawNode(svg,470,370,'对接客户','domain');
+  drawLink(svg,340,76,460,364);
+  drawNode(svg,420,440,'已有系统 ❌','unknown');
+  drawNode(svg,500,440,'API 开放 ❓','discuss');
+  drawLink(svg,465,386,425,434);
+  drawLink(svg,465,386,495,434);
+  drawNode(svg,440,510,'🔧 可执行','actionable');
+  drawLink(svg,425,456,435,506);
+
+  // 再画根节点（盖在线上）
+  drawNode(svg,340,60,'坐山客 SaaS 产品','root');
+}
+
+function drawNode(svg,x,y,text,type) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  const colors = {
+    root: {fill:'#1f3a5f',stroke:'#58a6ff',fz:14,fw:'bold'},
+    domain: {fill:'rgba(63,185,80,0.1)',stroke:'#3fb950',fz:12},
+    done: {fill:'rgba(63,185,80,0.08)',stroke:'#3fb950',fz:11},
+    discuss: {fill:'rgba(210,153,34,0.08)',stroke:'#d29922',fz:11},
+    unknown: {fill:'rgba(248,81,73,0.08)',stroke:'#f85149',fz:11},
+    actionable: {fill:'rgba(88,166,255,0.08)',stroke:'#58a6ff',fz:10},
+    detail: {fill:'rgba(110,118,129,0.06)',stroke:'#6e7681',fz:10},
+  };
+  const c = colors[type] || colors.detail;
+  const tw = text.length * (c.fz * 0.7) + 24;
+  const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  r.setAttribute('x',x-tw/2); r.setAttribute('y',y-10);
+  r.setAttribute('width',tw); r.setAttribute('height',22);
+  r.setAttribute('rx','11'); r.setAttribute('ry','11');
+  r.setAttribute('fill',c.fill); r.setAttribute('stroke',c.stroke);
+  g.appendChild(r);
+  const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',x); t.setAttribute('y',y+4);
+  t.setAttribute('fill','#e6edf3'); t.setAttribute('text-anchor','middle');
+  t.setAttribute('font-size',c.fz); t.textContent = text;
+  if(c.fw) t.setAttribute('font-weight',c.fw);
+  g.appendChild(t);
+  svg.appendChild(g);
+}
+
+function drawLink(svg,x1,y1,x2,y2) {
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+  line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+  line.setAttribute('stroke','#484f58'); line.setAttribute('stroke-width','1');
+  svg.appendChild(line);
+}
+
+// ═══ Action Map ═══
+let actionRendered = false;
+function renderActionMap() {
+  if(actionRendered) return;
+  actionRendered = true;
+  const svg = document.getElementById('actionmap-svg');
+  if(!svg) return;
+  svg.innerHTML = '';
+
+  const N = [
+    {id:'start', x:15, y:170, w:40,h:24, label:'START', cls:'start'},
+    {id:'res',  x:80, y:160, w:110,h:36, label:'调研多租户方案', status:'completed'},
+    {id:'dec',  x:220,y:162, w:90,h:32, label:'数据量级?', cls:'decision'},
+    {id:'rls',  x:350,y:50, w:110,h:36, label:'RLS 方案', status:'failed', sub:'API timeout'},
+    {id:'sch',  x:350,y:130,w:130,h:36, label:'Schema 隔离', status:'running', sub:'备选 · 执行中'},
+    {id:'db',   x:350,y:210,w:90,h:36, label:'DB 隔离', status:'pending', sub:'待执行'},
+    {id:'ms',   x:530,y:50, w:70,h:24, label:'验证', cls:'milestone', status:'pending'},
+    {id:'ok',   x:530,y:130,w:80,h:24, label:'END ✓', cls:'end', status:'pending'},
+    {id:'fail', x:530,y:210,w:90,h:24, label:'END 重讨论', cls:'end', status:'pending'},
+  ];
+
+  const E = [
+    {from:'start',to:'res'},
+    {from:'res',to:'dec'},
+    {from:'dec',to:'rls',label:'<100'},
+    {from:'dec',to:'sch',label:'100-1K'},
+    {from:'dec',to:'db',label:'>1K'},
+    {from:'rls',to:'ms',dash:true,label:'失败换路'},
+    {from:'sch',to:'ms',dash:true},
+    {from:'db',to:'ms'},
+    {from:'ms',to:'ok',label:'✓'},
+    {from:'ms',to:'fail',label:'✗'},
+  ];
+
+  const nmap = {}; N.forEach(n=>nmap[n.id]=n);
+
+  const statusColors = {
+    completed: {fill:'rgba(63,185,80,0.12)',stroke:'#3fb950',text:'#c9d1d9'},
+    failed:    {fill:'rgba(248,81,73,0.1)',stroke:'#f85149',text:'#c9d1d9'},
+    timeout:   {fill:'rgba(210,153,34,0.1)',stroke:'#d29922',text:'#c9d1d9'},
+    running:   {fill:'rgba(88,166,255,0.12)',stroke:'#58a6ff',text:'#e6edf3'},
+    pending:   {fill:'rgba(110,118,129,0.06)',stroke:'#6e7681',text:'#b0b8c0'},
+  };
+  const typeColors = {
+    decision: {fill:'rgba(248,81,73,0.06)',stroke:'#f85149',text:'#c9d1d9'},
+    milestone:{fill:'rgba(63,185,80,0.06)',stroke:'#3fb950',text:'#c9d1d9'},
+    start:    {fill:'rgba(188,140,255,0.06)',stroke:'#bc8cff',text:'#c9d1d9'},
+    end:      {fill:'rgba(188,140,255,0.06)',stroke:'#bc8cff',text:'#c9d1d9'},
+  };
+
+  // 边（画在节点下面）
+  E.forEach(e=>{
+    const f=nmap[e.from], t=nmap[e.to];
+    const x1=f.x+f.w/2, y1=f.y+f.h/2;
+    const x2=t.x+t.w/2, y2=t.y+t.h/2;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+    line.setAttribute('stroke', e.dash ? '#d29922' : '#6e7681');
+    line.setAttribute('stroke-width','1.5');
+    if(e.dash) line.setAttribute('stroke-dasharray','5,3');
+    svg.appendChild(line);
+    if(e.label){
+      const tx = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tx.setAttribute('x',(x1+x2)/2); tx.setAttribute('y',(y1+y2)/2-6);
+      tx.setAttribute('fill','#8b949e'); tx.setAttribute('font-size','9');
+      tx.setAttribute('text-anchor','middle'); tx.textContent=e.label;
+      svg.appendChild(tx);
+    }
+  });
+
+  // 节点
+  N.forEach(n=>{
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    let sc = n.status ? statusColors[n.status] : null;
+    let tc = n.cls ? typeColors[n.cls] : null;
+    let fill = '#1c2128', stroke = '#6e7681', textColor = '#b0b8c0';
+    if(sc) { fill=sc.fill; stroke=sc.stroke; textColor=sc.text; }
+    else if(tc) { fill=tc.fill; stroke=tc.stroke; textColor=tc.text; }
+
+    const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',n.x); r.setAttribute('y',n.y);
+    r.setAttribute('width',n.w); r.setAttribute('height',n.h);
+    r.setAttribute('rx', (n.cls==='milestone'||n.cls==='end')?'12':'5');
+    r.setAttribute('fill',fill); r.setAttribute('stroke',stroke);
+    r.setAttribute('stroke-width','1.2');
+    if(n.status==='failed' && n.sub && n.sub.includes('API')) r.setAttribute('stroke-dasharray','3,2');
+    g.appendChild(r);
+
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',n.x+n.w/2); t.setAttribute('y',n.y+(n.sub?15:17));
+    t.setAttribute('fill',textColor); t.setAttribute('font-size','11');
+    t.setAttribute('text-anchor','middle'); t.textContent=n.label;
+    g.appendChild(t);
+
+    if(n.sub){
+      const st = document.createElementNS('http://www.w3.org/2000/svg','text');
+      st.setAttribute('x',n.x+n.w/2); st.setAttribute('y',n.y+28);
+      st.setAttribute('fill','#8b949e'); st.setAttribute('font-size','9');
+      st.setAttribute('text-anchor','middle'); st.textContent=n.sub;
+      g.appendChild(st);
+    }
+    svg.appendChild(g);
+  });
+}
+
+// ═══ Action 列表 ↔ 详情 ═══
+function showActionDetail(id) {
+  document.getElementById('drawer-body-action-list').style.display='none';
+  document.getElementById('drawer-body-action-detail').style.display='block';
+}
+function backToActionList() {
+  document.getElementById('drawer-body-action-list').style.display='block';
+  document.getElementById('drawer-body-action-detail').style.display='none';
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+</script>
+</body>
+</html>
