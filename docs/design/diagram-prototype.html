@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thinking Map & Action Map — Hermes 双图架构原型</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d1117; color: #c9d1d9; padding: 20px;
+  }
+  h1 { text-align: center; margin-bottom: 8px; font-size: 1.5em; color: #58a6ff; }
+  .subtitle { text-align: center; color: #8b949e; margin-bottom: 30px; font-size: 0.9em; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1400px; margin: 0 auto; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 20px; overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #30363d;
+  }
+  .badge {
+    padding: 3px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 600;
+  }
+  .badge-think { background: #1f3a5f; color: #58a6ff; }
+  .badge-action { background: #3d1f1f; color: #f85149; }
+  .card-header h2 { font-size: 1.1em; color: #e6edf3; }
+  .card-desc { font-size: 0.8em; color: #8b949e; margin-bottom: 12px; }
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+    font-size: 0.75em; color: #8b949e;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-green { background: #3fb950; }
+  .dot-yellow { background: #d29922; }
+  .dot-red { background: #f85149; }
+  .dot-blue { background: #58a6ff; }
+  .mermaid-wrapper {
+    background: #0d1117; border-radius: 8px; padding: 16px;
+    display: flex; justify-content: center; overflow-x: auto;
+  }
+  .mermaid-wrapper svg { max-width: 100%; height: auto; }
+
+  .action-legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+    font-size: 0.75em; color: #8b949e;
+  }
+  .action-legend .legend-item { display: flex; align-items: center; gap: 4px; }
+  .shape-rect { width: 30px; height: 16px; background: #1f3a5f; border: 1px solid #58a6ff; border-radius: 3px; }
+  .shape-diamond { width: 16px; height: 16px; background: #3d1f1f; border: 1px solid #f85149; transform: rotate(45deg); }
+  .shape-pill { width: 30px; height: 16px; background: #1f3a1f; border: 1px solid #3fb950; border-radius: 10px; }
+  .shape-end { width: 30px; height: 16px; background: #1f1f3d; border: 1px solid #bc8cff; border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<h1>🧠 Thinking Map × ⚡ Action Map</h1>
+<p class="subtitle">上层思考 · 下层执行 · 独立数据结构 · 可执行叶子关联</p>
+
+<div class="grid">
+
+  <!-- ========== THINKING MAP ========== -->
+  <div class="card">
+    <div class="card-header">
+      <span class="badge badge-think">THINKING MAP</span>
+      <h2>思维导图 — 认知同步</h2>
+    </div>
+    <p class="card-desc">
+      无流向 · 网状发散 · 共识标记 · 用户与 AI 均可编辑
+    </p>
+    <div class="legend">
+      <span class="legend-item"><span class="dot dot-green"></span> 已共识</span>
+      <span class="legend-item"><span class="dot dot-yellow"></span> 待讨论</span>
+      <span class="legend-item"><span class="dot dot-red"></span> 未知/风险</span>
+      <span class="legend-item"><span class="dot dot-blue"></span> 🔧 可执行叶子</span>
+    </div>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+mindmap
+  root((SaaS 产品))
+    用户系统
+      注册登录 ✓
+      权限管理 ✓
+      多租户方案 ❓
+        ::icon(fa fa-question)
+        单租户够用？
+        后期扩展成本
+        🔧 确定租户模型
+    核心业务
+      数据 CRUD ✓
+      版本管理 ✓
+      实时协作 ❓
+        ::icon(fa fa-question)
+        初期是否必要
+        🔧 确定协作范围
+    计费系统
+      订阅模式 ❓
+        ::icon(fa fa-question)
+       月度/年度
+       按用户数/按用量
+       免费试用期
+       🔧 确定计费方案
+      支付接入 ❓
+        ::icon(fa fa-question)
+        Stripe / 支付宝
+        地区覆盖
+       🔧 确定支付渠道
+    对接客户
+        已有系统 ❌
+        ::icon(fa fa-exclamation-triangle)
+        客户说"有一个老ERP"
+        接口文档不全
+        🔧 调研对接方案
+        API 开放策略 ❓
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== ACTION MAP ========== -->
+  <div class="card">
+    <div class="card-header">
+      <span class="badge badge-action">ACTION MAP</span>
+      <h2>行动图 — 执行契约</h2>
+    </div>
+    <p class="card-desc">
+      有流向 · 决策分支 · 结果摘要 · 多终点 · 用户只读（可暂停/停止）
+      <br>← 关联 Thinking Map 叶子: <strong>"🔧 确定租户模型"</strong>
+    </p>
+    <div class="action-legend">
+      <span class="legend-item"><span class="shape-rect"></span> 执行节点</span>
+      <span class="legend-item"><span class="shape-diamond"></span> 决策节点</span>
+      <span class="legend-item"><span class="shape-pill"></span> 里程碑</span>
+      <span class="legend-item"><span class="shape-end"></span> 终点</span>
+    </div>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+graph TD
+    START(🚀 START) --> A
+
+    A[调研多租户方案]:::execNode
+    A -->|产出| A1
+
+    A1[/三种主流方案:\n① DB-per-tenant\n② Schema-per-tenant\n③ Row-level RLS/]
+
+    A1 --> B{客户数据量级?}:::decisionNode
+
+    B -->|小规模: 小于100租户| C1[采用 RLS 方案]:::execNode
+    B -->|中规模: 100-1000租户| C2[采用 Schema 隔离]:::execNode
+    B -->|大规模: 大于1000租户| C3[采用 DB 隔离]:::execNode
+
+    C1 --> D1[实现 RLS\nPostgreSQL policy]:::execNode
+    D1 --> D2[/Result:\ntenant_id 列 + RLS policy\n查询自动过滤 ✓/]
+
+    C2 --> E1[实现 Schema 隔离\n动态 schema 切换]:::execNode
+    E1 --> E2[/Result:\nSchema 切换中间件\n迁移脚本就绪 ✓/]
+
+    C3 --> F1[实现 DB 隔离\n连接池路由]:::execNode
+    F1 --> F2[/Result:\n按域名分发\n运维复杂度较高 ⚠/]
+
+    D2 --> G[里程碑: 租户隔离验证]:::milestoneNode
+    E2 --> G
+    F2 --> G
+
+    G --> H{验证通过?}:::decisionNode
+    H -->|✅ 通过| END1(租户模型确定)
+    H -->|❌ 未通过| I[分析失败原因\n回馈 Thinking Map]:::execNode
+    I --> END2(需重新讨论)
+
+    classDef execNode fill:#1f3a5f,stroke:#58a6ff,color:#c9d1d9
+    classDef decisionNode fill:#3d1f1f,stroke:#f85149,color:#ffa198
+    classDef milestoneNode fill:#1f3a1f,stroke:#3fb950,color:#f0f6fc
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1f3a5f',
+      primaryTextColor: '#c9d1d9',
+      primaryBorderColor: '#58a6ff',
+      lineColor: '#58a6ff',
+      secondaryColor: '#3d1f1f',
+      tertiaryColor: '#0d1117',
+    },
+    mindmap: { padding: 20, useMaxWidth: true },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+  });
+</script>
+
+</body>
+</html>
