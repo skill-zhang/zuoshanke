@@ -12,7 +12,17 @@
   .topbar { height:46px; background:#161b22; border-bottom:1px solid #30363d; display:flex; align-items:center; padding:0 18px; gap:28px; font-size:15px; flex-shrink:0; }
   .logo-group { display:flex; align-items:center; gap:10px; cursor:pointer; margin-right:8px; }
   .logo-group svg { width:30px; height:30px; }
-  .logo-text { font-family:'Noto Sans SC',sans-serif; color:#e6edf3; font-weight:900; font-size:18px; letter-spacing:1px; }
+  .logo-text {
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    font-weight:900; font-size:26px; letter-spacing:2px;
+    background: linear-gradient(180deg, #ffd700 0%, #f0c040 30%, #c8a84e 60%, #a08030 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    filter: drop-shadow(0 0 6px rgba(255,215,0,0.3));
+    line-height: 1;
+  }
+  .logo-text span { font-size:12px; -webkit-text-fill-color: #58a6ff; margin-left:4px; vertical-align:super; }
   .breadcrumb { display:flex; align-items:center; gap:12px; color:#8b949e; font-size:15px; }
   .breadcrumb .arrow { color:#484f58; font-size:16px; }
   .breadcrumb .label { color:#8b949e; }
@@ -259,7 +269,7 @@
     </div>
 
     <div class="page" id="page-projects">
-      <h2>📁 项目管理</h2>
+      <h2><svg viewBox="0 0 20 16" width="24" height="20" style="vertical-align:middle;margin-right:6px"><path d="M1 3a1 1 0 011-1h5l2.5 2.5H19a1 1 0 011 1v10a1 1 0 01-1 1H2a1 1 0 01-1-1V3z" fill="none" stroke="#58a6ff" stroke-width="1.5"/></svg>项目管理</h2>
       <p class="subtitle">每个项目包含多个场景，场景下有独立讨论频道和 Thinking Map</p>
       <table>
         <thead><tr><th>项目名称</th><th>场景</th><th>最后活跃</th><th>状态</th></tr></thead>
