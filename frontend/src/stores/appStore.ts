@@ -1,0 +1,425 @@
+/** 全局状态管理 — Zustand */
+import { create } from 'zustand';
+import {
+  listProjects, createProject, deleteProject,
+  listScenes, createScene, updateScene, deleteScene,
+  getThinkingMap, addNode, updateNode, deleteNode,
+  sendMessage, listSceneMessages, sendSceneMessageStream,
+  deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
+  listChannels, createChannel, updateChannel, deleteChannel, clearChannelMessages,
+  sendChannelMessage, listChannelMessages, sendChannelMessageStream,
+  listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
+  Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent,
+  ActionMap as ActionMapType, ActionMapStreamEvent,
+} from '../api/client';
+
+export type ViewPage = 'projects' | 'chat';
+
+interface AppState {
+  view: ViewPage;
+  setView: (v: ViewPage) => void;
+
+  // ═══ 项目 ═══
+  projects: Project[];
+  loadProjects: () => Promise<void>;
+  createProjectAndReload: (name: string, desc?: string) => Promise<Project>;
+
+  currentProject: Project | null;
+  setCurrentProject: (p: Project | null) => void;
+  currentScene: Scene | null;
+  setCurrentScene: (s: Scene | null) => void;
+
+  // ═══ Thinking Map ═══
+  thinkingMap: ThinkingMap | null;
+  loadThinkingMap: (sceneId: string) => Promise<void>;
+
+  drawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
+  toggleNodeActionable: (nodeId: string, actionable: boolean) => Promise<void>;
+
+  // ═══ Action Map ═══
+  actionMaps: ActionMapType[];
+  currentActionMap: ActionMapType | null;
+  actionMapDrawerOpen: boolean;
+  loadActionMaps: (thinkMapId: string) => Promise<void>;
+  setCurrentActionMap: (m: ActionMapType | null) => void;
+  openActionMapDrawer: () => void;
+  closeActionMapDrawer: () => void;
+  updateActionMapStatusAndReload: (id: string, status: string) => Promise<void>;
+  deleteActionMapAndReload: (id: string) => Promise<void>;
+  generateActionMapAndReload: (thinkNodeId: string) => Promise<void>;
+
+  // ═══ 场景消息 ═══
+  messages: Message[];
+  loadSceneMessages: (sceneId: string) => Promise<void>;
+  sendSceneMsg: (sceneId: string, content: string) => Promise<void>;
+
+  // ═══ 频道 ═══
+  channels: Channel[];
+  currentChannel: Channel | null;
+  loadChannels: () => Promise<void>;
+  createChannelAndReload: (name: string) => Promise<Channel>;
+  updateChannelAndReload: (id: string, data: { name?: string; pinned?: boolean }) => Promise<void>;
+  deleteChannelAndReload: (id: string) => Promise<void>;
+  clearChannelHistory: (id: string) => Promise<void>;
+  setCurrentChannel: (c: Channel) => void;
+
+  // ═══ 频道消息 ═══
+  channelMessages: Message[];
+  loadChannelMessages: (channelId: string) => Promise<void>;
+  sendChannelMsg: (channelId: string, content: string) => Promise<void>;
+
+  // ═══ 流式状态 ═══
+  isGenerating: boolean;
+
+  // ═══ 消息操作 ═══
+  deleteMsg: (messageId: string) => Promise<void>;
+  regenerateMsg: (messageId: string) => Promise<void>;
+  reloadCurrentMessages: () => Promise<void>;
+}
+
+export const useStore = create<AppState>((set, get) => ({
+  view: 'chat',  // 默认进入聊天视图
+  setView: (v) => set({ view: v }),
+  isGenerating: false,
+
+  // ═══ 项目 ═══
+  projects: [],
+  loadProjects: async () => {
+    try {
+      const projects = await listProjects();
+      set({ projects });
+    } catch (e) {
+      console.error('[store] loadProjects failed:', e);
+    }
+  },
+  createProjectAndReload: async (name, desc = '') => {
+    const p = await createProject(name, desc);
+    await get().loadProjects();
+    return p;
+  },
+
+  currentProject: null,
+  setCurrentProject: (p) => set({ currentProject: p, currentScene: null, messages: [] }),
+  currentScene: null,
+  setCurrentScene: (s) => set({ currentScene: s, messages: [] }),
+
+  // ═══ Thinking Map ═══
+  thinkingMap: null,
+  loadThinkingMap: async (sceneId) => {
+    try {
+      const tm = await getThinkingMap(sceneId);
+      set({ thinkingMap: tm });
+    } catch (e) {
+      console.error('[store] loadThinkingMap failed:', e);
+    }
+  },
+
+  drawerOpen: false,
+  openDrawer: () => set({ drawerOpen: true }),
+  closeDrawer: () => set({ drawerOpen: false }),
+  toggleNodeActionable: async (nodeId, actionable) => {
+    await updateNode(nodeId, { actionable });
+    const state = get();
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+  },
+
+  // ═══ Action Map ═══
+  actionMaps: [],
+  currentActionMap: null,
+  actionMapDrawerOpen: false,
+  loadActionMaps: async (thinkMapId) => {
+    try {
+      const maps = await listActionMaps({ think_map_id: thinkMapId });
+      set({ actionMaps: maps });
+    } catch (e) {
+      console.error('[store] loadActionMaps failed:', e);
+    }
+  },
+  setCurrentActionMap: (m) => set({ currentActionMap: m }),
+  openActionMapDrawer: () => set({ actionMapDrawerOpen: true }),
+  closeActionMapDrawer: () => set({ actionMapDrawerOpen: false, currentActionMap: null }),
+  updateActionMapStatusAndReload: async (id, status) => {
+    await updateActionMapStatus(id, status);
+    const state = get();
+    if (state.thinkingMap) {
+      await state.loadActionMaps(state.thinkingMap.id);
+    }
+  },
+  deleteActionMapAndReload: async (id) => {
+    await deleteActionMap(id);
+    const state = get();
+    if (state.thinkingMap) {
+      await state.loadActionMaps(state.thinkingMap.id);
+      const sceneId = state.currentScene?.id;
+      if (sceneId) await state.loadThinkingMap(sceneId);
+    }
+  },
+  generateActionMapAndReload: async (thinkNodeId) => {
+    await generateActionMap(thinkNodeId);
+    const state = get();
+    if (state.thinkingMap) {
+      await state.loadActionMaps(state.thinkingMap.id);
+      const sceneId = state.currentScene?.id;
+      if (sceneId) await state.loadThinkingMap(sceneId);
+    }
+    // 自动打开 Action Map 抽屉查看结果
+    set({ actionMapDrawerOpen: true });
+  },
+
+  // ═══ 场景消息 ═══
+  messages: [],
+  loadSceneMessages: async (sceneId) => {
+    try {
+      const msgs = await listSceneMessages(sceneId);
+      set({ messages: msgs });
+    } catch (e) {
+      console.error('[store] loadSceneMessages failed:', e);
+    }
+  },
+  sendSceneMsg: async (sceneId, content) => {
+    // 0. 乐观更新：立即插入临时用户消息 + 空壳 AI 消息
+    const tempUserId = 'temp-user-' + Date.now();
+    const tempUserMsg: Message = {
+      id: tempUserId,
+      scene_id: sceneId,
+      channel_id: null,
+      role: 'user',
+      content,
+      map_ref: null,
+      created_at: new Date().toISOString(),
+    };
+
+    const tempAiId = 'temp-ai-' + Date.now();
+    const tempAiMsg: Message = {
+      id: tempAiId,
+      scene_id: sceneId,
+      channel_id: null,
+      role: 'ai',
+      content: '🤔 正在分析...',
+      map_ref: null,
+      created_at: new Date().toISOString(),
+    };
+
+    set({
+      isGenerating: true,
+      messages: [...get().messages, tempUserMsg, tempAiMsg],
+    });
+
+    try {
+      const stream = sendSceneMessageStream(sceneId, content);
+
+      for await (const event of stream) {
+        if (event.type === 'user_msg') {
+          set(state => ({
+            messages: state.messages.map(m =>
+              m.id === tempUserId
+                ? { ...m, id: event.id, created_at: event.created_at }
+                : m
+            ),
+          }));
+        } else if (event.type === 'token') {
+          set(state => ({
+            messages: state.messages.map(m =>
+              m.id === tempAiId
+                ? { ...m, content: m.content === '🤔 正在分析...' ? event.token : m.content + event.token }
+                : m
+            ),
+          }));
+          // 打断 React 18 批量化，让每个 token 独立渲染
+          await new Promise(r => setTimeout(r, 0));
+        } else if (event.type === 'done') {
+          set(state => ({
+            isGenerating: false,
+            messages: state.messages.map(m =>
+              m.id === tempAiId
+                ? { ...m, id: event.id, content: event.content, created_at: event.created_at }
+                : m
+            ),
+          }));
+          // 流式完成后刷新 Thinking Map
+          get().loadThinkingMap(sceneId);
+        } else if (event.type === 'error') {
+          set(state => ({
+            isGenerating: false,
+            messages: state.messages.map(m =>
+              m.id === tempAiId
+                ? { ...m, content: `❌ ${event.message}` }
+                : m
+            ),
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('[store] sendSceneMsg stream failed:', e);
+      set(state => ({
+        isGenerating: false,
+        messages: state.messages.map(m =>
+          m.id === tempAiId
+            ? { ...m, content: '❌ 网络请求失败，请重试' }
+            : m
+        ),
+      }));
+    }
+  },
+
+  // ═══ 频道 ═══
+  channels: [],
+  currentChannel: null,
+  loadChannels: async () => {
+    try {
+      const chs = await listChannels();
+      set({ channels: chs });
+      // 自动选中默认频道
+      if (!get().currentChannel && chs.length > 0) {
+        set({ currentChannel: chs[0] });
+      }
+    } catch (e) {
+      console.error('[store] loadChannels failed:', e);
+    }
+  },
+  createChannelAndReload: async (name) => {
+    const ch = await createChannel(name);
+    await get().loadChannels();
+    return ch;
+  },
+  updateChannelAndReload: async (id, data) => {
+    await updateChannel(id, data);
+    await get().loadChannels();
+  },
+  deleteChannelAndReload: async (id) => {
+    await deleteChannel(id);
+    await get().loadChannels();
+    // 如果删的是当前频道，切回第一个
+    if (get().currentChannel?.id === id) {
+      const chs = get().channels.filter(c => c.id !== id);
+      set({ currentChannel: chs[0] || null, channelMessages: [] });
+    }
+  },
+  clearChannelHistory: async (id) => {
+    await clearChannelMessages(id);
+    if (get().currentChannel?.id === id) {
+      set({ channelMessages: [] });
+    }
+  },
+  setCurrentChannel: (c) => set({ currentChannel: c, channelMessages: [] }),
+
+  // ═══ 频道消息 ═══
+  channelMessages: [],
+  loadChannelMessages: async (channelId) => {
+    try {
+      const msgs = await listChannelMessages(channelId);
+      set({ channelMessages: msgs });
+    } catch (e) {
+      console.error('[store] loadChannelMessages failed:', e);
+    }
+  },
+  sendChannelMsg: async (channelId, content) => {
+    // 1. 乐观更新：立即插入临时用户消息
+    const tempUserId = 'temp-user-' + Date.now();
+    const tempUserMsg: Message = {
+      id: tempUserId,
+      scene_id: null,
+      channel_id: channelId,
+      role: 'user',
+      content,
+      map_ref: null,
+      created_at: new Date().toISOString(),
+    };
+
+    // 2. 插入占位 AI 消息（空壳）
+    const tempAiId = 'temp-ai-' + Date.now();
+    const tempAiMsg: Message = {
+      id: tempAiId,
+      scene_id: null,
+      channel_id: channelId,
+      role: 'ai',
+      content: '',
+      map_ref: null,
+      created_at: new Date().toISOString(),
+    };
+
+    set({
+      isGenerating: true,
+      channelMessages: [...get().channelMessages, tempUserMsg, tempAiMsg],
+    });
+
+    try {
+      const stream = sendChannelMessageStream(channelId, content);
+
+      for await (const event of stream) {
+        if (event.type === 'user_msg') {
+          // 收到服务器确认的用户消息 → 替换临时 ID
+          set(state => ({
+            channelMessages: state.channelMessages.map(m =>
+              m.id === tempUserId
+                ? { ...m, id: event.id, created_at: event.created_at }
+                : m
+            ),
+          }));
+        } else if (event.type === 'token') {
+          // 逐 token 追加到 AI 消息
+          set(state => ({
+            channelMessages: state.channelMessages.map(m =>
+              m.id === tempAiId
+                ? { ...m, content: m.content + event.token }
+                : m
+            ),
+          }));
+          // 打断 React 18 批量化，让每个 token 独立渲染
+          await new Promise(r => setTimeout(r, 0));
+        } else if (event.type === 'done') {
+          // 服务器保存完成 → 用真实 ID 替换占位
+          set(state => ({
+            isGenerating: false,
+            channelMessages: state.channelMessages.map(m =>
+              m.id === tempAiId
+                ? { ...m, id: event.id, content: event.content, created_at: event.created_at }
+                : m
+            ),
+          }));
+        } else if (event.type === 'error') {
+          set(state => ({
+            isGenerating: false,
+            channelMessages: state.channelMessages.map(m =>
+              m.id === tempAiId
+                ? { ...m, content: `❌ ${event.message}` }
+                : m
+            ),
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('[store] sendChannelMsg stream failed:', e);
+      set(state => ({
+        isGenerating: false,
+        channelMessages: state.channelMessages.map(m =>
+          m.id === tempAiId
+            ? { ...m, content: '❌ 网络请求失败，请重试' }
+            : m
+        ),
+      }));
+    }
+  },
+
+  // ═══ 消息操作 ═══
+  deleteMsg: async (messageId) => {
+    await apiDeleteMessage(messageId);
+    await get().reloadCurrentMessages();
+  },
+  regenerateMsg: async (messageId) => {
+    await apiRegenerateMessage(messageId);
+    await get().reloadCurrentMessages();
+  },
+  reloadCurrentMessages: async () => {
+    const state = get();
+    if (state.currentScene) {
+      await state.loadSceneMessages(state.currentScene.id);
+    } else if (state.currentChannel) {
+      await state.loadChannelMessages(state.currentChannel.id);
+    }
+  },
+}));

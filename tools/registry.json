@@ -1,0 +1,41 @@
+{
+  "tools": [
+    {
+      "name": "equipment_checklist",
+      "path": "equipment_checklist/equipment_checklist.py",
+      "skill_path": "equipment_checklist/SKILL.md",
+      "created_from": "action-ba7bce5d",
+      "created_at": "2026-05-16T16:58:09.535460"
+    },
+    {
+      "name": "recommend",
+      "path": "recommend/recommend.py",
+      "skill_path": "recommend/SKILL.md",
+      "created_from": "action-ba7bce5d",
+      "created_at": "2026-05-16T16:59:11.895244"
+    },
+    {
+      "name": "weather",
+      "path": "weather/weather.py",
+      "skill_path": "weather/SKILL.md",
+      "created_from": "action-ba7bce5d",
+      "created_at": "2026-05-16T16:59:57.124293"
+    },
+    {
+      "name": "weather_bridge",
+      "path": "weather_bridge/weather_bridge.py",
+      "skill_path": "weather_bridge/SKILL.md",
+      "description": "天气桥接模块 — 为场景对话注入实时天气上下文，智能检测用户天气意图并自动获取结构化天气数据",
+      "created_from": "action-8ef8da93",
+      "created_at": "2026-05-16T19:36:24.149274"
+    },
+    {
+      "name": "tianjin_daytrip_cost_analysis",
+      "path": "tianjin_daytrip_cost_analysis/tianjin_daytrip_cost_analysis.py",
+      "skill_path": "tianjin_daytrip_cost_analysis/SKILL.md",
+      "description": "",
+      "created_from": "action-b2a2629b",
+      "created_at": "2026-05-16T20:19:05.804437"
+    }
+  ]
+}

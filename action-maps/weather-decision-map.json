@@ -1,0 +1,192 @@
+{
+  "title": "天气关联决策机制 · Action Map",
+  "nodes": [
+    {
+      "id": "a-start",
+      "type": "start",
+      "label": "START",
+      "order_index": 0
+    },
+    {
+      "id": "a-1",
+      "type": "exec",
+      "label": "调研天津亲子游景点及天气适应性",
+      "description": "收集天津主要亲子景点清单，按室内/室外分类，并调研各景点在不同天气条件下的适宜性（晴朗/阴雨/高温/大风等）",
+      "timeout": 600,
+      "retry": 1,
+      "requires_approval": false,
+      "verification": {
+        "checks": [
+          {"type": "command", "target": "test -f /home/administrator/zuoshanke/data/tianjin-attractions.json || echo MISSING"}
+        ]
+      },
+      "order_index": 1
+    },
+    {
+      "id": "a-2",
+      "type": "exec",
+      "label": "调研天津气候规律与场景分类参数",
+      "description": "收集天津月均气温、降水、湿度等气候数据，确定晴朗/阴雨/高温/大风等阈值的定义标准（如气温>35°C为高温，降水概率>60%为阴雨），为映射表提供分类依据",
+      "timeout": 600,
+      "retry": 1,
+      "requires_approval": false,
+      "verification": {
+        "checks": [
+          {"type": "command", "target": "test -f /home/administrator/zuoshanke/data/tianjin-climate.json || echo MISSING"}
+        ]
+      },
+      "order_index": 2
+    },
+    {
+      "id": "a-3",
+      "type": "decision",
+      "label": "调研结果是否充分支撑分类？",
+      "description": "判断收集到的景点数据和气候数据是否完整，是否满足建立映射表的条件。如景点缺失超过3个或气候数据缺月份，走 fallback 补充调研",
+      "order_index": 3
+    },
+    {
+      "id": "a-4",
+      "type": "exec",
+      "label": "补充调研：扩增景点/气候数据",
+      "description": "对缺失的景点和气候数据进行补充调研，确认天津主要亲子景点覆盖率和气候月份数据完整度为100%",
+      "timeout": 600,
+      "retry": 1,
+      "requires_approval": false,
+      "verification": {
+        "checks": [
+          {"type": "command", "target": "test -f /home/administrator/zuoshanke/data/tianjin-attractions.json && test -f /home/administrator/zuoshanke/data/tianjin-climate.json || echo MISSING"}
+        ]
+      },
+      "order_index": 4
+    },
+    {
+      "id": "a-5",
+      "type": "exec",
+      "label": "构建天气-场景映射表规则文档",
+      "description": "基于调研数据建立映射表，包含：天气分类字段（晴天、多云、阴雨、高温、大风、雾霾）、阈值定义、推荐场景类型（户外/室内/混合）、具体推荐景点列表、备选方案字段。输出为结构化 JSON 配置文件",
+      "timeout": 900,
+      "retry": 2,
+      "requires_approval": true,
+      "verification": {
+        "checks": [
+          {"type": "file", "target": "/home/administrator/zuoshanke/data/weather-scene-mapping.json"}
+        ]
+      },
+      "order_index": 5
+    },
+    {
+      "id": "a-6",
+      "type": "decision",
+      "label": "是否需要集成实时天气 API？",
+      "description": "判断映射表是否需要接入实时天气API（如和风天气/OpenWeatherMap）实现动态响应。如果当前阶段仅做静态规则，走 NO 分支；如果考虑最终产品化，走 YES 分支",
+      "order_index": 6
+    },
+    {
+      "id": "a-7",
+      "type": "exec",
+      "label": "编写天气API集成适配层",
+      "description": "实现天气查询API适配层，支持自动获取实时天气数据并匹配映射表规则。包含：API请求封装、响应解析、天气分类判断、结果缓存（减少API调用频率）、错误处理回退到静态规则",
+      "timeout": 1200,
+      "retry": 2,
+      "requires_approval": true,
+      "verification": {
+        "checks": [
+          {"type": "command", "target": "test -f /home/administrator/zuoshanke/services/weather_service.py || echo MISSING"}
+        ]
+      },
+      "order_index": 7
+    },
+    {
+      "id": "a-8",
+      "type": "milestone",
+      "label": "天气-场景映射表完成",
+      "description": "映射表规则文档/配置文件已就绪，验证通过：所有天气分类有对应场景推荐，景点列表完整且天气适应性标记正确",
+      "order_index": 8
+    },
+    {
+      "id": "a-end",
+      "type": "end",
+      "label": "END",
+      "order_index": 99
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-1",
+      "from_node_id": "a-start",
+      "to_node_id": "a-1",
+      "type": "flow",
+      "label": ""
+    },
+    {
+      "id": "e-2",
+      "from_node_id": "a-1",
+      "to_node_id": "a-2",
+      "type": "flow",
+      "label": ""
+    },
+    {
+      "id": "e-3",
+      "from_node_id": "a-2",
+      "to_node_id": "a-3",
+      "type": "flow",
+      "label": ""
+    },
+    {
+      "id": "e-4",
+      "from_node_id": "a-3",
+      "to_node_id": "a-5",
+      "type": "flow",
+      "label": "数据充分"
+    },
+    {
+      "id": "e-5",
+      "from_node_id": "a-3",
+      "to_node_id": "a-4",
+      "type": "fallback",
+      "label": "数据不足"
+    },
+    {
+      "id": "e-6",
+      "from_node_id": "a-4",
+      "to_node_id": "a-5",
+      "type": "flow",
+      "label": "回补完成"
+    },
+    {
+      "id": "e-7",
+      "from_node_id": "a-5",
+      "to_node_id": "a-6",
+      "type": "flow",
+      "label": "映射表就绪"
+    },
+    {
+      "id": "e-8",
+      "from_node_id": "a-6",
+      "to_node_id": "a-8",
+      "type": "flow",
+      "label": "不做API集成"
+    },
+    {
+      "id": "e-9",
+      "from_node_id": "a-6",
+      "to_node_id": "a-7",
+      "type": "flow",
+      "label": "需要API集成"
+    },
+    {
+      "id": "e-10",
+      "from_node_id": "a-7",
+      "to_node_id": "a-8",
+      "type": "flow",
+      "label": "API集成完成"
+    },
+    {
+      "id": "e-11",
+      "from_node_id": "a-8",
+      "to_node_id": "a-end",
+      "type": "flow",
+      "label": ""
+    }
+  ]
+}

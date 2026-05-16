@@ -1,0 +1,212 @@
+# ============================================================
+# 天气-场景映射规则表 (Weather → Scene Mapping Rules)
+# 适用: 坐山客 AI 工作台 · ThinkingMap 场景推荐引擎
+# 设计日期: 2026-05-16
+# ============================================================
+
+# ──────────────────────────────────────────
+# 一、天气分类阈值 (Weather Classification Thresholds)
+# ──────────────────────────────────────────
+weather_categories:
+  sunny:                     # 晴朗
+    condition_weather: ["晴", "多云"]
+    temp_range: [5, 38]      # 体感舒适温度范围(°C)
+    rainfall_mm: [0, 0.5]    # 日累计降水(mm)
+    wind_speed_max: 5        # 最大风速(m/s), ~3级风
+    visibility_km: [10, 30]  # 能见度(km)
+
+  overcast:                  # 阴天
+    condition_weather: ["阴", "雾", "霾"]
+    temp_range: [0, 35]
+    rainfall_mm: [0, 2]
+    wind_speed_max: 8
+    visibility_km: [2, 10]
+
+  rainy:                     # 雨天
+    condition_weather: ["小雨", "中雨", "大雨", "暴雨", "雷阵雨"]
+    temp_range: [-5, 32]
+    rainfall_mm: [0.5, 200]  # 0.5mm以上视为有降水
+    wind_speed_max: 15
+    visibility_km: [0.5, 8]
+
+  snowy:                     # 雪天
+    condition_weather: ["小雪", "中雪", "大雪", "暴雪"]
+    temp_range: [-20, 5]
+    rainfall_mm: [0, 50]     # 雪量按融化后折算
+    wind_speed_max: 10
+    visibility_km: [0.3, 5]
+
+  hot:                       # 高温 (>35°C)
+    condition_weather: ["晴", "多云", "阴"]
+    temp_range: [35, 50]     # 高温阈值
+    rainfall_mm: [0, 1]
+    wind_speed_max: 6
+    visibility_km: [5, 25]
+
+  cold:                      # 低温 (<0°C)
+    condition_weather: ["晴", "多云", "阴", "小雪"]
+    temp_range: [-30, 0]
+    rainfall_mm: [0, 5]
+    wind_speed_max: 8
+    visibility_km: [1, 20]
+
+  extreme:                   # 极端天气
+    condition_weather: ["台风", "沙尘暴", "冰雹", "暴雪", "暴雨"]
+    temp_range: [-40, 50]
+    rainfall_mm: [0, 500]
+    wind_speed_max: 50       # 无限制
+    visibility_km: [0, 5]
+
+# 优先级: 从高到低匹配
+# extreme > hot/cold > rainy/snowy > overcast > sunny
+# 当多个类别满足时，取优先级最高的那个
+
+# ──────────────────────────────────────────
+# 二、天气→场景映射规则 (Weather → Scene Mapping)
+# ──────────────────────────────────────────
+weather_to_scene:
+  # ── 晴朗 → 户外 ──
+  sunny:
+    default_category: 户外
+    recommended_scenes:
+      - name: 海河沿岸漫步
+        type: 户外 · 滨水
+        tags: ["散步", "拍照", "骑行"]
+        tips: "注意防晒，建议上午10点前或下午4点后出行"
+        time_windows: ["06:00-10:00", "16:00-19:00"]
+      - name: 城市公园
+        type: 户外 · 绿地
+        tags: ["野餐", "跑步", "亲子"]
+        tips: "周末人流量大，建议工作日前往"
+      - name: 登山/徒步
+        type: 户外 · 山地
+        tags: ["徒步", "自然", "运动"]
+        condition: temp_range=[10,30] and wind_speed_max<=5
+      - name: 露天咖啡馆
+        type: 户外 · 休闲
+        tags: ["阅读", "社交", "下午茶"]
+        condition: temp_range=[15,30]
+
+  # ── 阴天 → 户外(谨慎) / 户内(备选) ──
+  overcast:
+    default_category: 户内
+    recommended_scenes:
+      - name: 老街/胡同漫步
+        type: 户外 · 人文
+        tags: ["漫步", "摄影（柔和光线）", "探店"]
+        tips: "阴天光线柔和，适合街拍"
+      - name: 室内美术馆/画廊
+        type: 户内 · 文化
+        tags: ["看展", "艺术", "安静"]
+      - name: 书店/图书馆
+        type: 户内 · 学习
+        tags: ["阅读", "自习", "咖啡"]
+
+  # ── 雨天 → 户内 ──
+  rainy:
+    default_category: 户内
+    recommended_scenes:
+      - name: 博物馆/科技馆
+        type: 户内 · 文化
+        tags: ["展览", "知识", "亲子"]
+        tips: "雨天的最佳选择，建议提前预约"
+      - name: 商场/购物中心
+        type: 户内 · 商业
+        tags: ["购物", "美食", "电影"]
+      - name: 室内运动馆
+        type: 户内 · 运动
+        tags: ["羽毛球", "游泳", "攀岩"]
+      - name: 咖啡馆听雨
+        type: 户内 · 休闲
+        tags: ["阅读", "写作", "放空"]
+    # 小雨允许带伞户外
+    permitted_if_light:
+      - name: 雨中美景徒步
+        type: 户外 · 特殊体验
+        tags: ["摄影", "独特体验"]
+        condition: rainfall_mm=[0.5, 5]
+
+  # ── 雪天 → 户内/雪景户外 ──
+  snowy:
+    default_category: 户内
+    recommended_scenes:
+      - name: 室内温泉/汗蒸
+        type: 户内 · 养生
+        tags: ["放松", "温暖"]
+      - name: 雪景公园
+        type: 户外 · 冬季限定
+        tags: ["拍照", "玩雪"]
+        condition: snowfall_level in ["小雪", "中雪"]
+        tips: "注意保暖，穿防滑鞋"
+      - name: 火锅店/暖锅
+        type: 户内 · 美食
+        tags: ["聚餐", "温暖"]
+
+  # ── 高温(>35°C) → 户内/避开中午 ──
+  hot:
+    default_category: 户内
+    recommended_scenes:
+      - name: 博物馆（有空调）
+        type: 户内 · 文化
+        tags: ["避暑", "展览"]
+        tips: "建议全天在室内活动"
+      - name: 水上乐园/游泳馆
+        type: 户外 · 水上
+        tags: ["戏水", "避暑", "亲子"]
+        condition: temp_range=[35,40]
+      - name: 夜间夜市/步行街
+        type: 户外 · 夜间
+        tags: ["夜市", "美食", "夜景"]
+        time_windows: ["18:30-23:00"]
+      - name: 电影院
+        type: 户内 · 娱乐
+        tags: ["电影", "避暑"]
+
+  # ── 低温(<0°C) → 户内(优先) ──
+  cold:
+    default_category: 户内
+    recommended_scenes:
+      - name: 室内滑冰场
+        type: 户内 · 运动
+        tags: ["滑冰", "冬季限定"]
+      - name: 温泉/汤泉
+        type: 户内 · 养生
+        tags: ["放松", "温暖"]
+      - name: 室内书吧
+        type: 户内 · 学习
+        tags: ["阅读", "咖啡", "安静"]
+
+  # ── 极端天气 → 室内避险 ──
+  extreme:
+    default_category: 室内避险
+    recommended_scenes:
+      - name: 居家活动
+        type: 室内 · 居家
+        tags: ["安全", "休息"]
+        tips: "极端天气请避免外出"
+      - name: 室内停车场/避难所
+        type: 室内 · 避险
+        tags: ["安全", "应急"]
+
+# ──────────────────────────────────────────
+# 三、时间因子调节 (Time-based Adjustment)
+# ──────────────────────────────────────────
+time_factors:
+  morning:     [06:00, 12:00]   # 推荐晨跑/早茶/公园
+  afternoon:   [12:00, 18:00]   # 推荐博物馆/书店/咖啡馆
+  evening:     [18:00, 22:00]   # 推荐夜市/电影院/晚餐
+  night:       [22:00, 06:00]   # 仅推荐室内/夜店/24h场所
+
+# ──────────────────────────────────────────
+# 四、匹配优先级 (完整决策链)
+# ──────────────────────────────────────────
+decision_chain:
+  1. "获取实时天气数据（天气状况、温度、降水、风速、能见度）"
+  2. "按优先级匹配 weather_categories（extreme > hot/cold > rainy/snowy > overcast > sunny）"
+  3. "根据 category 查 weather_to_scene 获取推荐场景列表"
+  4. "按当前时间 time_factors 过滤 time_windows"
+  5. "按 temp_range / wind_speed_max / rainfall_mm 条件过滤"
+  6. "输出 default_category + 按置信度排序的 recommended_scenes"
+
+# ============================================================
+# EOF

@@ -1,0 +1,482 @@
+{
+  "meta": {
+    "title": "天津5-6月亲子出行 · 最终物资准备清单（含场景对照表）",
+    "version": "v2.0",
+    "generated_at": "2026-05-16",
+    "target_age": "2-5岁幼儿",
+    "target_city": "天津",
+    "target_period": "5月中旬至6月",
+    "data_sources": [
+      "travel-supplies-base.md (通用亲子出行清单 v1.0)",
+      "equipment_checklist.py (天气场景装备数据库)",
+      "tianjin_weather_report.txt (5-6月天气概率报告)",
+      "recommend.py (景点推荐引擎)"
+    ],
+    "structure": {
+      "part1": "场景对照总表 — 天气→推荐活动→装备需求→景点",
+      "part2": "物资分类清单 — 按物品类别整理（衣物/日用品/医疗/安全）",
+      "part3": "打包层次速查 — 随身包/大箱/车辆分装"
+    }
+  },
+  "scenario_comparison_table": [
+    {
+      "scenario": "晴热/高温 (28-33°C)",
+      "icon": "☀️",
+      "weather_category": "sunny, hot_and_humid",
+      "probability_MayJun": "30-40%",
+      "typical_dates": "5/24, 5/29, 5/31, 6月中下旬",
+      "recommended_activity": "户外景点 / 玩水避暑",
+      "default_category": "户外暴晒防护",
+      "must_have_basics": [
+        "防晒霜 SPF50+ PA+++",
+        "宽檐遮阳帽+偏光墨镜",
+        "饮用水（每人1.5L+）",
+        "冰感毛巾/速冷巾"
+      ],
+      "recommended_extras": [
+        "便携/挂脖风扇",
+        "冰袖/防晒臂套",
+        "电解质泡腾片",
+        "藿香正气水(防中暑)"
+      ],
+      "recommended_attractions": [
+        "天津方特欢乐世界",
+        "天津欢乐谷（水上项目）",
+        "天津水上公园",
+        "天津光合谷旅游度假区"
+      ],
+      "indoor_fallback": [
+        "天津海昌极地海洋公园(室内)",
+        "天津科技馆(室内)",
+        "天津自然博物馆(室内)"
+      ],
+      "note": "紫外线强烈时段约10:00-15:00，建议户外活动安排在上午或傍晚"
+    },
+    {
+      "scenario": "多云/阴天·舒适型 (18-26°C)",
+      "icon": "⛅",
+      "weather_category": "overcast",
+      "probability_MayJun": "30-35%",
+      "typical_dates": "5/16, 5/21, 5/22, 5/23, 5/28, 5/30",
+      "recommended_activity": "户外公园散步 / 动物园 / 地标观光",
+      "default_category": "户内户外均可",
+      "must_have_basics": [
+        "薄外套（体感温度偏低）",
+        "折叠伞（阴天可能转雨）",
+        "饮用水（每人500ml+）"
+      ],
+      "recommended_extras": [
+        "野餐垫/防潮垫",
+        "驱蚊液/驱蚊贴",
+        "湿地巾/棉柔巾"
+      ],
+      "recommended_attractions": [
+        "天津动物园",
+        "天津水上公园",
+        "天津之眼摩天轮",
+        "天津民园体育场(散步)",
+        "天津光合谷旅游度假区"
+      ],
+      "indoor_fallback": [
+        "天津自然博物馆",
+        "天津科技馆",
+        "天津滨海图书馆"
+      ],
+      "note": "全天候型最佳天气，户内户外皆可灵活安排"
+    },
+    {
+      "scenario": "小雨/毛毛雨 (降水<5mm)",
+      "icon": "🌦️",
+      "weather_category": "rainy",
+      "probability_MayJun": "20-25%",
+      "typical_dates": "5/19, 5/20, 5/25, 5/26, 5/27, 5/29, 5/31",
+      "recommended_activity": "户内景点 / 短途户外伞具必备",
+      "default_category": "户内优先",
+      "must_have_basics": [
+        "雨伞/儿童雨衣",
+        "防水鞋/雨鞋套",
+        "替换干衣物1套（随身）",
+        "密封袋（装湿物品）"
+      ],
+      "recommended_extras": [
+        "防水背包",
+        "一次性鞋套",
+        "吸水速干毛巾"
+      ],
+      "recommended_attractions": [
+        "天津海昌极地海洋公园(室内)",
+        "天津科技馆(室内)",
+        "天津自然博物馆(室内)",
+        "天津滨海图书馆(室内)",
+        "天津国家海洋博物馆(室内)"
+      ],
+      "indoor_fallback": [],
+      "note": "毛毛雨不影响外地游览，但地面湿滑注意防摔"
+    },
+    {
+      "scenario": "中到大雨/雷暴 (降水>5mm)",
+      "icon": "🌧️",
+      "weather_category": "rainy, extreme",
+      "probability_MayJun": "10-15%",
+      "typical_dates": "5/17, 5/18",
+      "recommended_activity": "全天户内活动",
+      "default_category": "室内避险",
+      "must_have_basics": [
+        "雨伞+儿童雨衣（双重防护）",
+        "防水鞋/雨鞋套",
+        "替换干衣物2套+干鞋袜",
+        "大号密封袋（装湿衣）",
+        "垃圾袋/呕吐袋（晕车备用）"
+      ],
+      "recommended_extras": [
+        "防水背包/雨罩",
+        "便携热水壶（冲奶/暖身）",
+        "儿童安抚玩具（室内消遣）"
+      ],
+      "recommended_attractions": [
+        "天津海昌极地海洋公园(室内)",
+        "天津科技馆(室内)",
+        "天津自然博物馆(室内)",
+        "天津博物馆(室内)",
+        "天津滨海图书馆(室内)",
+        "天津国家海洋博物馆(室内)"
+      ],
+      "indoor_fallback": [],
+      "note": "雷暴时避免户外活动，尽早转移到室内；天津6月雷暴日数约5-8天"
+    },
+    {
+      "scenario": "大风 (风速>20km/h)",
+      "icon": "💨",
+      "weather_category": "windy",
+      "probability_MayJun": "约10%（5月下旬少见，6月有概率）",
+      "typical_dates": "5/31(18.1km/h), 4-5月多风季",
+      "recommended_activity": "减少高空/滨水活动",
+      "default_category": "防风保暖",
+      "must_have_basics": [
+        "防风外套（连帽抽绳款）",
+        "备用薄外套（体感温度降低3-5°C）"
+      ],
+      "recommended_extras": [
+        "防风围巾/面罩",
+        "防晒防风眼镜",
+        "加固雨伞（抗风骨架）"
+      ],
+      "recommended_attractions": [
+        "户内全部景点",
+        "天津民园体育场(避风处散步)"
+      ],
+      "indoor_fallback": [
+        "天津海昌极地海洋公园",
+        "天津科技馆",
+        "天津自然博物馆",
+        "天津博物馆"
+      ],
+      "note": "天津之眼摩天轮等高空项目可能暂停运营，提前查询"
+    },
+    {
+      "scenario": "雾/低能见度",
+      "icon": "🌫️",
+      "weather_category": "haze_smog",
+      "probability_MayJun": "5-10%",
+      "typical_dates": "无风静稳天气早晨",
+      "recommended_activity": "待雾散后在10:00后出行",
+      "default_category": "等待消散，减少外出",
+      "must_have_basics": [
+        "N95口罩（雾中含PM2.5）",
+        "生理盐水鼻腔喷雾",
+        "人工泪液/滴眼液"
+      ],
+      "recommended_extras": [
+        "空气净化口罩",
+        "保湿面霜/修复霜",
+        "密封水瓶（防尘盖）"
+      ],
+      "recommended_attractions": [
+        "午后转晴后适用晴天景点"
+      ],
+      "indoor_fallback": [
+        "天津海昌极地海洋公园",
+        "天津科技馆",
+        "天津自然博物馆",
+        "天津滨海图书馆"
+      ],
+      "note": "早晨轻雾通常10:00前消散，对全天出行影响有限"
+    },
+    {
+      "scenario": "早晚温差大 (温差≥10°C)",
+      "icon": "🌡️",
+      "weather_category": "diurnal_range",
+      "probability_MayJun": "约25%（春夏交替期常见）",
+      "typical_dates": "5月中旬, 6月晴雨交替期",
+      "recommended_activity": "分层穿衣，灵活增减",
+      "default_category": "洋葱式穿衣",
+      "must_have_basics": [
+        "三层穿衣法：速干内层+抓绒中层+防风外层",
+        "可收纳轻薄羽绒服/棉服",
+        "速干T恤（白天单穿+傍晚叠穿内层）"
+      ],
+      "recommended_extras": [
+        "可折叠背包（装脱下的衣物）",
+        "保温杯（热水/热茶）",
+        "暖宝宝备用",
+        "薄羊毛袜（备用）"
+      ],
+      "recommended_attractions": [
+        "白天户外景点",
+        "傍晚转入室内场所"
+      ],
+      "indoor_fallback": [
+        "天津图书馆儿童馆",
+        "天津滨海图书馆",
+        "天津科技馆"
+      ],
+      "note": "最佳策略：白天户外晒太阳 → 傍晚转室内咖啡馆/图书馆/餐厅"
+    }
+  ],
+  "comprehensive_supply_checklist": {
+    "clothing": {
+      "title": "👕 衣物类",
+      "items": [
+        {"name": "上衣（纯棉/速干）", "quantity_short": "3-4件", "quantity_medium": "5-7件", "quantity_long": "7-10件", "necessity": "必带", "note": "备1件厚外套防温差"},
+        {"name": "裤子（松紧带）", "quantity_short": "2-3条", "quantity_medium": "4-5条", "quantity_long": "5-7条", "necessity": "必带", "note": "易穿脱，运动款优先"},
+        {"name": "内裤", "quantity_short": "3-4条", "quantity_medium": "5-7条", "quantity_long": "7-10条", "necessity": "必带", "note": "每天至少1条+备用"},
+        {"name": "袜子（薄厚各半）", "quantity_short": "3-4双", "quantity_medium": "5-7双", "quantity_long": "7-10双", "necessity": "必带", "note": "薄袜透气+厚袜保暖备用"},
+        {"name": "外套（防风防水）", "quantity_short": "1件", "quantity_medium": "1-2件", "quantity_long": "2件", "necessity": "必带", "note": "连帽抽绳款，防风防水优先"},
+        {"name": "轻薄羽绒服/可收纳棉服", "quantity": "1件", "necessity": "推荐", "note": "温差大时必备，压缩后拳头大小，不超过200g"},
+        {"name": "睡衣", "quantity_short": "1套", "quantity_medium": "1-2套", "quantity_long": "2套", "necessity": "推荐", "note": "按住宿天数+洗涤频率准备"},
+        {"name": "鞋（运动+凉/雨鞋）", "quantity_short": "2双", "quantity_medium": "2-3双", "quantity_long": "3双", "necessity": "必带", "note": "1双舒适运动鞋+1双防滑凉/雨鞋"},
+        {"name": "泳衣（如有水上活动）", "quantity": "1套", "necessity": "可选", "note": "夏季玩水/酒店泳池"},
+        {"name": "冰袖/防晒臂套", "quantity": "1-2副", "necessity": "推荐", "note": "UPF50+冰丝面料，湿水降温"},
+        {"name": "速干衣裤（排汗）", "quantity": "1-2套", "necessity": "推荐", "note": "拒绝纯棉，选Polyester/Nylon速干面料"},
+        {"name": "帽子（遮阳+保暖各1）", "quantity": "2顶", "necessity": "推荐", "note": "宽檐渔夫帽（防晒）+薄抓绒帽（保暖）"},
+        {"name": "口水巾/围兜", "quantity_short": "2-3条", "quantity_medium": "3-5条", "quantity_long": "5-7条", "necessity": "推荐", "note": "吃饭/流涎必备"}
+      ]
+    },
+    "daily_necessities": {
+      "title": "🧴 日用品类",
+      "subcategories": [
+        {
+          "name": "洗漱沐浴",
+          "items": [
+            {"name": "儿童牙膏牙刷", "necessity": "必带", "note": "旅行装或分装"},
+            {"name": "儿童洗发沐浴二合一", "necessity": "必带", "note": "50-100ml分装瓶"},
+            {"name": "面霜/润肤露", "necessity": "推荐", "note": "旅行装，尤其天津春季偏干"},
+            {"name": "防晒霜 SPF50+ PA++++", "necessity": "必带", "note": "物理防晒优先，儿童专用；防水抗汗型"},
+            {"name": "驱蚊液/驱蚊贴", "necessity": "推荐", "note": "DEET≤10%或派卡瑞丁；公园/滨水必备"},
+            {"name": "指甲剪", "necessity": "推荐", "note": "小号，防止抓伤"},
+            {"name": "棉柔巾/湿巾（大包）", "necessity": "必带", "note": "干湿两用，多包"},
+            {"name": "小毛巾×2", "necessity": "推荐", "note": "一洗一换"},
+            {"name": "浴巾（速干）", "necessity": "推荐", "note": "超细纤维款"},
+            {"name": "免洗洗手液", "necessity": "推荐", "note": "闷热天用餐前必备"},
+            {"name": "止汗露/爽身粉", "necessity": "可选", "note": "闷热天防汗臭/褶皱部位"},
+            {"name": "凡士林/润唇膏", "necessity": "推荐", "note": "温差大防干裂"}
+          ]
+        },
+        {
+          "name": "睡眠相关",
+          "items": [
+            {"name": "睡袋/隔脏床单", "necessity": "推荐", "note": "隔脏+熟悉感助眠"},
+            {"name": "安抚巾/玩偶", "necessity": "推荐", "note": "睡眠安全感来源"},
+            {"name": "便携遮光帘（夹子式）", "necessity": "可选", "note": "控制入睡环境"},
+            {"name": "白噪音APP/设备", "necessity": "可选", "note": "手机+离线音频即可"},
+            {"name": "小夜灯（USB充电）", "necessity": "推荐", "note": "半夜照看好用"}
+          ]
+        },
+        {
+          "name": "饮食相关",
+          "items": [
+            {"name": "吸管杯/保温杯（300-500ml）", "necessity": "必带", "note": "防漏，每人1个"},
+            {"name": "儿童餐具", "necessity": "必带", "note": "硅胶折叠碗+软头勺叉"},
+            {"name": "围兜（硅胶/一次性）", "necessity": "推荐", "note": "硅胶可卷收纳，一次性备5-10个"},
+            {"name": "辅食剪", "necessity": "推荐", "note": "将食物剪小"},
+            {"name": "零食包", "necessity": "推荐", "note": "无糖棒/果泥/小饼干，安抚+充饥"},
+            {"name": "奶粉/奶瓶（如适用）", "necessity": "可选", "note": "分装奶粉格+便携奶瓶刷"},
+            {"name": "维生素D/鱼油", "necessity": "推荐", "note": "日常补充不间断"},
+            {"name": "便携热水壶", "necessity": "推荐", "note": "冲奶/烧热水/暖身"},
+            {"name": "电解质泡腾片", "necessity": "推荐", "note": "闷热天大量出汗后补充钠钾镁"},
+            {"name": "能量棒/盐丸", "necessity": "推荐", "note": "山地/徒步补充体力，每45分钟补盐丸"}
+          ]
+        },
+        {
+          "name": "如厕/纸尿裤",
+          "items": [
+            {"name": "纸尿裤/拉拉裤", "necessity": "必带", "note": "按每天6-8片+20%余量"},
+            {"name": "隔尿垫（一次性）", "necessity": "推荐", "note": "换尿布/防床湿"},
+            {"name": "便携马桶/尿壶", "necessity": "可选", "note": "车载或酒店应急"},
+            {"name": "湿巾（手口/屁屁分装）", "necessity": "必带", "note": "小包装随身"},
+            {"name": "垃圾袋", "necessity": "必带", "note": "装脏尿裤/湿衣物"}
+          ]
+        }
+      ]
+    },
+    "medical": {
+      "title": "💊 医疗类（儿童常备药箱）",
+      "items": [
+        {"category": "退热", "name": "布洛芬混悬液", "necessity": "必带", "note": "按体重计算剂量"},
+        {"category": "退热", "name": "对乙酰氨基酚滴剂", "necessity": "备选", "note": "交替使用遵医嘱"},
+        {"category": "退热", "name": "电子/耳温枪体温计", "necessity": "必带", "note": "水银禁带（安检）"},
+        {"category": "退热", "name": "退热贴", "necessity": "推荐", "note": "物理降温辅助"},
+        {"category": "腹泻", "name": "口服补液盐III", "necessity": "必带", "note": "预防脱水最重要"},
+        {"category": "腹泻", "name": "蒙脱石散", "necessity": "推荐", "note": "物理止泻"},
+        {"category": "过敏", "name": "西替利嗪滴剂/氯雷他定", "necessity": "推荐", "note": "遵医嘱备用"},
+        {"category": "过敏", "name": "炉甘石洗剂", "necessity": "推荐", "note": "蚊虫叮咬/皮疹止痒"},
+        {"category": "过敏", "name": "生理盐水鼻腔喷雾", "necessity": "推荐", "note": "雾霾天/鼻炎冲洗"},
+        {"category": "外伤", "name": "碘伏棉签（独立包装）", "necessity": "必带", "note": "一次性消毒伤口"},
+        {"category": "外伤", "name": "创可贴（防水+普通）", "necessity": "必带", "note": "卡通款吸引孩子"},
+        {"category": "外伤", "name": "无菌纱布+医用胶带", "necessity": "推荐", "note": "较大伤口包扎"},
+        {"category": "鼻塞", "name": "生理盐水喷鼻剂", "necessity": "推荐", "note": "空调房/干燥环境"},
+        {"category": "晕车", "name": "茶苯海明", "necessity": "推荐", "note": "2岁以上，出发前30分钟"},
+        {"category": "防暑", "name": "藿香正气水", "necessity": "推荐", "note": "中暑前兆立即服用，含酒精款不能开车"},
+        {"category": "护臀", "name": "氧化锌软膏", "necessity": "推荐", "note": "尿布疹预防"},
+        {"category": "防暑", "name": "降温喷雾/清凉喷雾", "necessity": "可选", "note": "喷在衣物上，禁止直接喷皮肤"}
+      ],
+      "general_principles": [
+        "出行前确认孩子无发热/腹泻/皮疹等不适症状",
+        "所有药品标注体重对应剂量，出发前咨询儿科医生",
+        "避光阴凉储存，部分需冷藏（打开后的混悬液）",
+        "随身携带过敏记录卡（中英文）",
+        "提前查好目的地三甲医院/连锁药店位置",
+        "天津主要儿科医院：天津市儿童医院（河西区马场道）",
+        "天津滨海新区：泰达国际心血管病医院（综合儿科）"
+      ]
+    },
+    "emergency_safety": {
+      "title": "🛡️ 应急/安全类",
+      "subcategories": [
+        {
+          "name": "随身证件包",
+          "items": [
+            {"name": "户口本/出生证明复印件", "necessity": "必带", "note": "国内住宿登记"},
+            {"name": "儿童医保卡", "necessity": "必带", "note": "异地就医结算"},
+            {"name": "紧急联系卡（姓名+血型+过敏药+父母电话）", "necessity": "必带", "note": "中英文"},
+            {"name": "旅行保险单", "necessity": "推荐", "note": "含儿童意外医疗条款"},
+            {"name": "疫苗接种本（复印件）", "necessity": "推荐", "note": "国际旅行疫苗记录"}
+          ]
+        },
+        {
+          "name": "安全防护",
+          "items": [
+            {"name": "防走失背包/牵引绳", "necessity": "推荐", "note": "人流密集区必用"},
+            {"name": "儿童安全座椅", "necessity": "必带", "note": "自驾必备"},
+            {"name": "防走失手表/GPS定位", "necessity": "可选", "note": "带SOS呼叫"},
+            {"name": "口哨（系在背包上）", "necessity": "推荐", "note": "约定吹哨=停下"},
+            {"name": "反光背心/贴条", "necessity": "推荐", "note": "夜间/傍晚出行可见"},
+            {"name": "窗户安全锁（便携）", "necessity": "推荐", "note": "酒店窗户限位器"},
+            {"name": "电源插座保护盖", "necessity": "推荐", "note": "酒店插座防插手指"},
+            {"name": "儿童退热指示卡", "necessity": "推荐", "note": "体温-体重-剂量对照表"}
+          ]
+        }
+      ]
+    },
+    "weather_specific_gear": {
+      "title": "🌤️ 天气场景专用装备（按场景选配）",
+      "scenarios": {
+        "晴热": [
+          {"name": "便携小风扇/挂脖风扇", "note": "5000mAh+，户外降温首选"},
+          {"name": "冰感毛巾/速冷巾", "note": "浸湿甩几下即降温3-5°C"},
+          {"name": "宽檐遮阳帽+偏光墨镜", "note": "物理防晒三件套之一"},
+          {"name": "冰袖/防晒臂套 UPF50+", "note": "湿水后更有降温效果"},
+          {"name": "汗巾/速干运动毛巾", "note": "超细纤维速干材质"},
+          {"name": "降温喷雾", "note": "喷衣物上，不能直接喷皮肤"}
+        ],
+        "降雨": [
+          {"name": "儿童专用雨衣", "note": "亮色款+反光条"},
+          {"name": "防水鞋/雨鞋套", "note": "高筒防溅水"},
+          {"name": "防水背包/背包雨罩", "note": "保护随身物品"},
+          {"name": "密封袋（大号+中号）", "note": "装湿衣/湿鞋/电子设备"},
+          {"name": "吸水速干毛巾", "note": "擦干孩子身上的雨水"}
+        ],
+        "大风": [
+          {"name": "防风外套（连帽抽绳）", "note": "面料选高密度尼龙"},
+          {"name": "防风围脖/面罩", "note": "冷风灌入衣领的克星"},
+          {"name": "加固雨伞（抗风骨架）", "note": "普通伞易被吹翻"},
+          {"name": "防风眼镜/骑行镜", "note": "防沙尘入眼"}
+        ],
+        "雾霾": [
+          {"name": "N95/KN95口罩（带呼气阀）", "note": "过滤95%PM2.5"},
+          {"name": "封闭式护目镜", "note": "防雾涂层"},
+          {"name": "人工泪液/玻璃酸钠滴眼液", "note": "单支装不含防腐剂"},
+          {"name": "生理盐水鼻腔喷雾", "note": "早晚各喷一次清洗鼻腔"}
+        ],
+        "温差大": [
+          {"name": "可收纳轻薄羽绒服", "note": "800FP+，压缩拳头大小"},
+          {"name": "可折叠背包（10-15L）", "note": "装脱下来的衣物"},
+          {"name": "暖宝宝/自发热贴", "note": "贴后腰/腹部/脚底"},
+          {"name": "保温杯（热水）", "note": "500ml+不锈钢真空"},
+          {"name": "薄羊毛袜（备用）", "note": "白天薄袜+晚上换厚袜"}
+        ]
+      }
+    },
+    "packing_layers": {
+      "title": "📦 打包层次速查表",
+      "随身包（不离身）": [
+        "备用衣物1套（含鞋袜）",
+        "纸尿裤3-5片 + 湿巾",
+        "零食 + 水（吸管杯）",
+        "安抚玩具/绘本",
+        "外套1件（空调车/温差）",
+        "退热药 + 电子体温计",
+        "紧急联系卡",
+        "创可贴 + 碘伏棉签",
+        "手机充电宝 + 数据线",
+        "一次性垃圾袋",
+        "防晒霜（小瓶装）",
+        "驱蚊液（小瓶装）",
+        "折叠伞（阴雨备用）"
+      ],
+      "大行李箱": [
+        "衣物按天分装多备20%",
+        "洗漱包（儿童专用）",
+        "药品包（标注剂量）",
+        "睡眠用品（睡袋/安抚物）",
+        "如厕用品（尿裤/隔尿垫）",
+        "餐具+围兜",
+        "防晒+驱蚊（大瓶补充）",
+        "安全设备（防走失+安全锁）",
+        "证件包（核对有效期）",
+        "家长衣物和个人物品",
+        "鞋类（运动+凉/雨鞋各1双）",
+        "泳衣（如安排水上活动）",
+        "天气场景专用装备包"
+      ],
+      "自驾车辆附加": [
+        "儿童安全座椅（必须）",
+        "车窗帘/遮阳挡",
+        "车内垃圾袋+呕吐袋（防晕车）",
+        "保温箱/冰袋（水果/饮料）",
+        "便携热水壶",
+        "备用充电线（车载）"
+      ]
+    },
+    "hotel_checkin_checklist": [
+      "检查插座是否有保护盖",
+      "窗户/阳台是否安全锁闭",
+      "地面有无尖角/小物件",
+      "热水壶位置是否够高",
+      "床周围无缝隙（防卡住）",
+      "确认最近的医院/药店位置",
+      "确认最近的超市（补给）",
+      "测试空调温度（避免调太低）"
+    ]
+  },
+  "tianjin_emergency_contacts": {
+    "儿童医院": "天津市儿童医院 - 河西区马场道225号",
+    "滨海儿科": "泰达国际心血管病医院 - 滨海新区第三大街61号",
+    "急诊通用": "120",
+    "药店连锁": "老百姓大药房/天津医药集团连锁",
+    "天气查询": "天津气象局官网 / 中国天气网",
+    "景点预约": "天津文旅公众号 / 各景点官网"
+  },
+  "golden_rules": [
+    "宁多勿少：2-5岁孩子需求不可预测，衣物/尿裤+20%余量",
+    "分层拿取：随身包放最急需品，大箱放换洗和备用",
+    "平常心：孩子会脏会闹会病，视为旅行的一部分",
+    "规律作息：尽量保留午睡/饭点/就寝节奏",
+    "慢节奏：每天安排1-2个活动即可",
+    "就地补给：天津药店/超市很密集，紧急用品随时可买",
+    "安全第一：防走失+防意外是最高优先级",
+    "洋葱式穿衣：早晚温差大时分层穿脱最灵活",
+    "先看天气再定行程：出发前查看当天AQI和天气预报",
+    "带足水：天津春末夏初偏干燥，补水比南方需求量大"
+  ]
+}
