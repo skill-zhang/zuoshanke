@@ -68,6 +68,12 @@ function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap, selectMod
           <button className="msg-action-btn" onClick={handleCopy} title="复制">
             {copied ? '✅ 已复制' : '📋 复制'}
           </button>
+          <button className="msg-action-btn" onClick={() => {}} title="语音朗读（即将支持）">
+            🔊 朗读
+          </button>
+          <button className="msg-action-btn" onClick={() => {}} title="分享（即将支持）">
+            📤 分享
+          </button>
           {msg.role === 'ai' && (
             <button className="msg-action-btn" onClick={() => onRegenerate(msg.id)} title="重新生成">
               🔄 重新生成
