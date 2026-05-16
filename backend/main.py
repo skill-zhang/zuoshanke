@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, init_db, SessionLocal
 from models import Project, Scene, ThinkingMap, ThinkNode, CrossRef, Message, Channel, ActionMap, ActionNode, ActionEdge, ActionExecutionLog
-from ai_engine import ai_process_message, ai_channel_chat, ai_channel_chat_stream, ai_scene_chat_stream, ai_generate_action_map, call_hermes_action_map, call_hermes_execute_node, scan_and_document_tools, call_qwen_chat
+from ai_engine import ai_process_message, ai_channel_chat, ai_channel_chat_stream, ai_scene_chat_stream, ai_scene_light_chat_stream, ai_scene_ask_missing_stream, extract_and_classify, ai_generate_action_map, call_hermes_action_map, call_hermes_execute_node, scan_and_document_tools, call_qwen_chat
 from schemas import (
     ProjectCreate, ProjectOut,
     SceneCreate, SceneOut, SceneUpdate,
@@ -398,10 +398,41 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
     def generate():
         yield f"data: {user_msg_json}\n\n"
 
-        # 流式调用 AI 引擎
+        # ═══ v0.4 约束提取 + 复杂度判定 + 路由 ═══
+        nonlocal scene
+        scene = db.query(Scene).filter(Scene.id == scene_id).first()
+
+        # 判断是否需要约束提取
+        need_extraction = scene.constraints is None or not scene.constraints_locked
+
+        if need_extraction:
+            result = extract_and_classify(
+                data.content,
+                scene.complexity,
+                scene.constraints,
+            )
+            scene.constraints = result["constraints"]
+            scene.complexity = result["complexity"]
+            scene.constraints_locked = result["constraints_locked"]
+            db.commit()
+            complexity = result["complexity"]
+            constraints_ok = result["constraints_locked"]
+            missing_info = result.get("missing_info", [])
+        else:
+            complexity = scene.complexity or "medium"
+            constraints_ok = True
+            missing_info = []
+
+        # 选路
         full_reply = ""
         changes = []
-        for token in ai_scene_chat_stream(scene_id, data.content, db):
+        if need_extraction and not constraints_ok and missing_info:
+            ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, db)
+        elif complexity == "light":
+            ai_stream = ai_scene_light_chat_stream(scene_id, data.content, db)
+        else:
+            ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity)
+        for token in ai_stream:
             if isinstance(token, dict):
                 if token.get("_error"):
                     yield f"data: {json.dumps({'type': 'error', 'message': token['message']}, ensure_ascii=False)}\n\n"
@@ -1226,6 +1257,35 @@ def execute_action_map(action_map_id: str):
                             for r in node_results:
                                 icon = "✅" if r["status"] == "completed" else "❌"
                                 lines.append(f"**{icon} {r['label']}**\n{r['result'] or '(无输出)'}\n")
+
+                        # ═══ 约束校验 ═══
+                        if scene.constraints and scene.constraints_locked:
+                            try:
+                                c_json = json.dumps(scene.constraints, ensure_ascii=False, indent=2)
+                                all_results_text = "\n\n".join(
+                                    f"## {r['label']}（{r['status']}）\n{r['result'] or '(无输出)'}"
+                                    for r in node_results
+                                ) if node_results else "(无执行结果)"
+                                verify_msg = [
+                                    {"role": "system", "content": "你是一个约束校验引擎。检查执行结果是否满足原始约束条件，逐条输出校验结果。"},
+                                    {"role": "user", "content": f"""## 原始约束
+{c_json}
+
+## 执行结果摘要
+{all_results_text[:3000]}
+
+请逐条检查每条约束是否被满足，输出格式（Markdown）：
+✅ 约束名称：结论（证据）
+❌ 约束名称：问题说明"""},
+                                ]
+                                vr = call_qwen_chat(verify_msg, temperature=0.3)
+                                if vr and vr.strip():
+                                    lines.append("")
+                                    lines.append("### ✅ 约束校验\n")
+                                    lines.append(vr.strip())
+                                    lines.append("")
+                            except Exception as e:
+                                print(f"[Constraint verify] 失败: {e}")
 
                         if new_tools:
                             tool_names = " · ".join(f"`{t['name']}`" for t in new_tools)

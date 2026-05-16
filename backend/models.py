@@ -34,6 +34,9 @@ class Scene(Base):
     project_id = Column(String, ForeignKey("projects.id"), nullable=False)
     name = Column(String, nullable=False)
     pinned = Column(Boolean, default=False)
+    complexity = Column(String, nullable=True)  # light | medium | heavy
+    constraints = Column(JSON, nullable=True)    # 约束提取结果
+    constraints_locked = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

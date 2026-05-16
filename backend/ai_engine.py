@@ -397,6 +397,7 @@ def ai_scene_chat_stream(
     scene_id: str,
     user_content: str,
     db: Session,
+    complexity: str = "medium",
 ):
     """场景分析流式生成器（两段式真流式）。
 
@@ -450,15 +451,26 @@ def ai_scene_chat_stream(
         yield token
 
     # ═══ Pass 2: 静默获取 actions 并更新 Thinking Map ═══
+    # medium 复杂度生成简化树（3-5节点扁平结构），heavy 可深度展开
+    actions_system = (
+        "你是Thinking Map更新引擎。基于思维导图和AI回复，输出节点更新actions。\\n\\n"
+        "输出纯JSON数组（不要markdown包裹，不要其他文字）：\\n"
+        '[{"action":"add_domain","label":"领域名","leaves":[{"label":"叶节点","discussion":["问题?"],"actionable":false}]},'
+        '{"action":"add_leaf","parent_label":"父节点","label":"新叶","discussion":[],"actionable":false},'
+        '{"action":"update_status","label":"节点名","status":"confirmed|discussing|unknown"}]\\n\\n'
+        "规则：不创建重复节点、用户确认/否定时更新status、不需要更新则输出[]"
+    )
+    if complexity == "medium":
+        actions_system += (
+            "\\n\\n## Medium 模式规则\\n"
+            "本任务为中等复杂度，请生成简化的思维导图：\\n"
+            "- 最多 3-5 个 domain 节点（一线展开，不要深度嵌套）\\n"
+            "- 每个 domain 直接挂叶子节点，不要再分层\\n"
+            "- 所有新创建的叶子节点必须设置 actionable=true（会自动触发执行）\\n"
+            "- 聚焦可执行任务，减少分析性节点"
+        )
     actions_messages = [
-        {"role": "system", "content": (
-            "你是Thinking Map更新引擎。基于思维导图和AI回复，输出节点更新actions。\n\n"
-            "输出纯JSON数组（不要markdown包裹，不要其他文字）：\n"
-            '[{"action":"add_domain","label":"领域名","leaves":[{"label":"叶节点","discussion":["问题?"],"actionable":false}]},'
-            '{"action":"add_leaf","parent_label":"父节点","label":"新叶","discussion":[],"actionable":false},'
-            '{"action":"update_status","label":"节点名","status":"confirmed|discussing|unknown"}]\n\n'
-            "规则：不创建重复节点、用户确认/否定时更新status、不需要更新则输出[]"
-        )},
+        {"role": "system", "content": actions_system},
         {"role": "user", "content": (
             f"{tree_ctx}\n\n"
             f"用户说: {user_content}\n\n"
@@ -498,6 +510,189 @@ def ai_scene_chat_stream(
         full_reply += update_note
 
     yield {"_done": True, "reply": full_reply, "changes": changes}
+
+
+# ═══ v0.4 约束提取 + 复杂度判定 ═══
+
+EXTRACTION_PROMPT = """分析用户消息，完成两项分析任务。
+
+## 任务1：提取约束条件
+从用户话中提取所有明确的约束。结构化为 JSON 数组，每个约束包含 key/value/unit/description。
+同时判断还缺什么关键信息才能完整回答，列出具体问题。
+
+## 任务2：复杂度判定
+判定标准：
+- light: 单步骤、查1-2个信息、不需要拆解
+- medium: 需2-5步、多个信息维度、需汇总
+- heavy: 多步骤(>5)、跨领域决策、需分支判断
+
+## 输出格式（纯JSON）
+{
+  "complexity": "light|medium|heavy",
+  "constraints": [
+    {"key": "budget", "value": 1000, "unit": "元", "description": "总预算"},
+    {"key": "duration", "value": 3, "unit": "天", "description": "旅行天数"}
+  ],
+  "missing_info": ["具体出发日期？", "住宿偏好？"],
+  "constraints_locked": false
+}
+
+注意：constraints_locked=true 表示信息已够，false 表示还缺信息需要追问。"""
+
+
+def extract_and_classify(
+    user_content: str,
+    existing_complexity: str | None = None,
+    existing_constraints: list | None = None,
+) -> dict:
+    """一次 Qwen 调用完成：约束提取 + 复杂度判定。
+
+    返回:
+        {"complexity": "medium", "constraints": [...],
+         "missing_info": [...], "constraints_locked": false}
+
+    缓存策略:
+    - medium/heavy 场景锁定复杂度不重复判定
+    - 已有约束则增量提取（不替换原有）
+    """
+    # 构建上下文
+    ctx = user_content
+    if existing_constraints:
+        ctx = f"已有约束: {json.dumps(existing_constraints, ensure_ascii=False)}\n\n新的用户消息: {user_content}"
+
+    # 复杂度缓存
+    if existing_complexity and existing_complexity != "light":
+        # 直接跳过复杂度判定，只做约束提取
+        msg = [
+            {"role": "system", "content": "提取用户消息中的约束条件。只输出 JSON 数组，不要其他文字。\n格式: [{\"key\":\"...\", \"value\": ..., \"unit\":\"...\", \"description\":\"...\"}]"},
+            {"role": "user", "content": ctx},
+        ]
+        result = call_qwen_chat(msg, temperature=0.3)
+        constraints = _safe_json_parse(result, [])
+        return {
+            "complexity": existing_complexity,
+            "constraints": constraints,
+            "missing_info": [],
+            "constraints_locked": True,
+        }
+
+    messages = [
+        {"role": "system", "content": EXTRACTION_PROMPT},
+        {"role": "user", "content": ctx},
+    ]
+    result = call_qwen_chat(messages, temperature=0.3)
+    if result:
+        try:
+            parsed = _safe_json_parse(result)
+            if isinstance(parsed, dict):
+                c = parsed.get("complexity", "medium")
+                if c not in ("light", "medium", "heavy"):
+                    c = "medium"
+                return {
+                    "complexity": c,
+                    "constraints": parsed.get("constraints", []),
+                    "missing_info": parsed.get("missing_info", []),
+                    "constraints_locked": parsed.get("constraints_locked", len(parsed.get("missing_info", [])) == 0),
+                }
+        except Exception as e:
+            print(f"[extract] 解析失败: {e}, raw: {result[:200]}")
+    return {"complexity": "medium", "constraints": [], "missing_info": [], "constraints_locked": True}
+
+
+def _safe_json_parse(text: str, default=None):
+    """安全解析 LLM 输出的 JSON（处理 markdown 包裹等）"""
+    if default is None:
+        default = {}
+    if not text:
+        return default
+    text = text.strip()
+    if "```" in text:
+        for part in text.split("```"):
+            part = part.strip()
+            if part.startswith("json"):
+                part = part[4:].strip()
+            if part.startswith("{") or part.startswith("["):
+                text = part
+                break
+    return json.loads(text) if text else default
+
+
+def ai_scene_ask_missing_stream(
+    scene_id: str,
+    user_content: str,
+    missing_info: list[str],
+    db: Session,
+):
+    """约束追问路径：告诉用户还缺什么信息，不建树。
+
+    Yields:
+        - str: reply token
+        - dict: {"_done": True, "reply": "...", "changes": []}
+        - dict: {"_error": True, ...}
+    """
+    questions = "\n".join(f"- {q}" for q in missing_info)
+    system = (
+        "你是一个信息收集助手。用户的需求信息不完整，你需要友好地追问。\n"
+        "用Markdown格式，简洁清晰，50-100字。"
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": (
+            f"用户说: {user_content}\n\n"
+            f"我还需要确认以下信息才能完整答复：\n{questions}\n\n"
+            "请用自然的语气问用户这些问题。"
+        )},
+    ]
+
+    full_reply = ""
+    for token in _stream_qwen(messages, temperature=0.7):
+        if token is None:
+            yield {"_error": True, "message": "AI 引擎响应失败"}
+            return
+        full_reply += token
+        yield token
+
+    yield {"_done": True, "reply": full_reply, "changes": []}
+
+
+def ai_scene_light_chat_stream(
+    scene_id: str,
+    user_content: str,
+    db: Session,
+):
+    """轻量路径：Qwen 直答，不建树不更新 Thinking Map。
+
+    适合 light 复杂度的消息：单步骤、查1-2个信息、不需要拆解。
+
+    Yields:
+        - str: reply 的 token 文本
+        - dict: {"_done": True, "reply": "...", "changes": []}
+        - dict: {"_error": True, "message": "..."}
+    """
+    # ═══ 天气查询注入 ═══
+    _weather_ctx = _weather_maybe(user_content)
+    _weather_prefix = (_weather_ctx + "\n\n") if _weather_ctx else ""
+
+    messages = [
+        {"role": "system", "content": (
+            "你是一个知识丰富的AI助手。直接回答用户问题。\\n"
+            "- 用Markdown格式\\n"
+            "- 完整、有层次地回复，50-300字\\n"
+            "- 不需要拆解任务、不需要创建思维导图\\n"
+            "- 直接输出回复内容，不要JSON包裹"
+        )},
+        {"role": "user", "content": f"{_weather_prefix}{user_content}"},
+    ]
+
+    full_reply = ""
+    for token in _stream_qwen(messages, temperature=0.7):
+        if token is None:
+            yield {"_error": True, "message": "AI 引擎响应失败"}
+            return
+        full_reply += token
+        yield token
+
+    yield {"_done": True, "reply": full_reply, "changes": []}
 
 
 def ai_process_message(
@@ -681,7 +876,7 @@ def ai_generate_action_map(think_node_id: str, db: Session) -> dict | None:
 
 # ═══ Hermes 子进程调用 ═══
 
-def call_hermes_stream(prompt: str, model: str = "deepseek-chat", timeout: int = 120):
+def call_hermes_stream(prompt: str, model: str = "deepseek-v4-flash", timeout: int = 120):
     """通过 subprocess 调用 hermes CLI，逐行流式 yield stdout 日志。
 
     用法:
@@ -783,7 +978,7 @@ type 可选：url / command / file。
 - 输出纯 JSON，不要 markdown 代码块包裹"""
 
 
-def call_hermes_action_map(think_node_id: str, db: Session, model: str = "deepseek-chat"):
+def call_hermes_action_map(think_node_id: str, db: Session, model: str = "deepseek-v4-flash"):
     """通过 Hermes 子进程生成 Action Map（流式生成器）。
 
     在 call_hermes_stream 基础上包装：
@@ -942,7 +1137,7 @@ def call_hermes_execute_node(
     node_type: str,
     verification: dict | None = None,
     timeout: int = 300,
-    model: str = "deepseek-chat",
+    model: str = "deepseek-v4-flash",
 ) -> dict:
     """通过 Hermes 子进程执行单个 Action Map 节点。
 
@@ -987,11 +1182,32 @@ def call_hermes_execute_node(
 - 如果你生成了可复用的工具模块，放到 `tools/` 下，不要注入到 backend/
 - 写文件前先确认路径在 tools/ 下
 
+## 工具复用规则（重要）
+**先查再用**：执行前先读取 `tools/registry.json`，检查是否已有可复用工具。
+- 如果已有工具能完成任务 → **直接使用**，不要新建
+- 只有找不到合适工具时才新建
+
+**新建工具质量要求**（如果必须新建）：
+1. 工具名用**能力命名**（query_weather 而非 tianjin_weather）
+2. 所有可变数据作为函数参数传入，**严禁硬编码**地名/价格等
+3. 单一职责：一个工具只做一类事
+4. 异常处理完整（网络超时、API 限制、空数据）
+5. 输出中文描述，非 raw JSON
+
 ## 要求
 - 使用可用的工具（terminal、web）完成任务
 - 完成后用一句话总结结果（格式：✓ 已完成: 具体做了什么）
 - 如果遇到错误，总结失败原因（格式：✗ 失败: 原因）
-- 保持简洁，不要过度展开"""
+- 保持简洁，不要过度展开
+
+## 输出格式规范
+如果结果包含多条推荐/查询/搜索结果，每条必须包含：
+- **source_url** — 原始来源链接（可直接跳转的 URL）
+- **summary** — 1-2 句概要说明（如「个人一手，4S保养」）
+- **tags** — 标签数组，让用户一眼识别关键特点（如 ["年份新","里程低"]）
+格式示例：
+- [车源1](链接) — 个人一手，4S保养 | `年份新` `里程低`
+- [车源2](链接) — 商家车源，右后门补漆 | `里程低` `价格可议`"""
 
     # 沙箱工作目录
     import os as _os
@@ -1053,7 +1269,7 @@ def call_hermes_execute_node(
 
 # ═══ 工具自文档化 ═══
 
-def call_hermes_generate_skill(tool_path: str, model: str = "deepseek-chat") -> str | None:
+def call_hermes_generate_skill(tool_path: str, model: str = "deepseek-v4-flash") -> str | None:
     """读取工具代码，调 Hermes 生成 SKILL.md 使用说明书。
 
     Args:
@@ -1201,6 +1417,10 @@ def scan_and_document_tools(
         skill_dir = _os.path.join(_tools_dir, tool_name)
         skill_path = _os.path.join(skill_dir, "SKILL.md")
         if _os.path.isfile(skill_path):
+            continue
+
+        # 已在注册表 → 跳过
+        if tool_name in registered_names:
             continue
 
         # 生成说明书

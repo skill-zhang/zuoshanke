@@ -37,6 +37,13 @@ function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap }: {
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
+          components={{
+            a: ({ href, children }) => (
+              <a href={href} target="_blank" rel="noopener noreferrer">
+                {children} ↗
+              </a>
+            ),
+          }}
         >
           {msg.content}
         </ReactMarkdown>

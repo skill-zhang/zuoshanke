@@ -31,6 +31,9 @@ class SceneOut(BaseModel):
     project_id: str
     name: str
     pinned: bool = False
+    complexity: Optional[str] = None
+    constraints: Optional[list] = None
+    constraints_locked: bool = False
     created_at: datetime
     updated_at: datetime
 
