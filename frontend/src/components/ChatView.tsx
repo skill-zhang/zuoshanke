@@ -6,12 +6,15 @@ import rehypeHighlight from 'rehype-highlight';
 import type { Message } from '../api/client';
 import { getActionMap } from '../api/client';
 
-/** 单条消息气泡 */
-function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap }: {
+/** 单条消息气泡（支持多选模式） */
+function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap, selectMode, selected, onToggleSelect }: {
   msg: Message;
   onDelete: (id: string) => void;
   onRegenerate: (id: string) => void;
   onOpenActionMap: (actionMapId: string) => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -21,18 +24,15 @@ function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap }: {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleTTS = () => {
-    // TODO: 对接 TTS API
-    alert('语音朗读功能即将支持');
-  };
-
-  const handleShare = () => {
-    // TODO: 分享功能
-    alert('分享功能即将支持');
-  };
-
   return (
-    <div className={`chat-msg ${msg.role}`}>
+    <div className={`chat-msg ${msg.role} ${selected ? 'chat-msg-selected' : ''}`}>
+      {selectMode && (
+        <div className="chat-msg-check" onClick={() => onToggleSelect(msg.id)}>
+          <div className={`check-box ${selected ? 'check-box-on' : ''}`}>
+            {selected ? '✓' : ''}
+          </div>
+        </div>
+      )}
       <div className="chat-msg-content">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -63,28 +63,24 @@ function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap }: {
         )}
       </div>
 
-      <div className="chat-msg-actions">
-        <button className="msg-action-btn" onClick={handleCopy} title="复制">
-          {copied ? '✅ 已复制' : '📋 复制'}
-        </button>
-        <button className="msg-action-btn" onClick={handleTTS} title="语音朗读">
-          🔊 朗读
-        </button>
-        <button className="msg-action-btn" onClick={handleShare} title="分享">
-          📤 分享
-        </button>
-        {msg.role === 'ai' && (
-          <button className="msg-action-btn" onClick={() => onRegenerate(msg.id)} title="重新生成">
-            🔄 重新生成
+      {!selectMode && (
+        <div className="chat-msg-actions">
+          <button className="msg-action-btn" onClick={handleCopy} title="复制">
+            {copied ? '✅ 已复制' : '📋 复制'}
           </button>
-        )}
-        <button className="msg-action-btn msg-action-delete" onClick={() => onDelete(msg.id)} title="删除">
-          🗑 删除
-        </button>
-        <span className="msg-time">
-          {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      </div>
+          {msg.role === 'ai' && (
+            <button className="msg-action-btn" onClick={() => onRegenerate(msg.id)} title="重新生成">
+              🔄 重新生成
+            </button>
+          )}
+          <button className="msg-action-btn msg-action-delete" onClick={() => onDelete(msg.id)} title="删除">
+            🗑 删除
+          </button>
+          <span className="msg-time">
+            {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -109,7 +105,9 @@ export function ChatView() {
     messages, channelMessages,
     currentScene, currentChannel,
     sendSceneMsg, sendChannelMsg,
-    deleteMsg, regenerateMsg,
+    deleteMsg, regenerateMsg, newSceneSession,
+    batchDeleteMsgs, clearSceneMsgs,
+    sessions, loadSceneSessions, switchSceneSession,
     isGenerating,
   } = useStore();
 
@@ -119,6 +117,16 @@ export function ChatView() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // 多选模式
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 会话切换面板
+  const [showSessionPanel, setShowSessionPanel] = useState(false);
+
+  // 清空确认：两步确认防误触
+  const [clearStep, setClearStep] = useState(0);
+
   // 判断当前模式
   const isChannel = !currentScene && !!currentChannel;
   const displayMessages: Message[] = isChannel ? channelMessages : messages;
@@ -127,6 +135,17 @@ export function ChatView() {
     : currentScene
       ? `🧠 ${currentScene.name} · AI 分析模式`
       : '';
+
+  // 在场景切换时加载会话列表
+  useEffect(() => {
+    if (currentScene) {
+      loadSceneSessions(currentScene.id);
+    } else {
+      setSelectMode(false);
+      setSelectedIds(new Set());
+      setShowSessionPanel(false);
+    }
+  }, [currentScene?.id]);
 
   // 自动滚动
   useEffect(() => {
@@ -150,12 +169,10 @@ export function ChatView() {
 
     try {
       if (isChannel && currentChannel) {
-        // 频道流式模式：不 await，store 内部管理 isGenerating
         sendChannelMsg(currentChannel.id, text);
         setSending(false);
         return;
       } else if (currentScene) {
-        // 场景流式模式：不 await，store 内部管理 isGenerating
         sendSceneMsg(currentScene.id, text);
         setSending(false);
         return;
@@ -179,6 +196,13 @@ export function ChatView() {
     await deleteMsg(msgId);
   };
 
+  const handleNewSession = async () => {
+    if (!currentScene) return;
+    if (!confirm('开始新对话？之前的聊天记录将保留但不再显示。')) return;
+    setShowSessionPanel(false);
+    await newSceneSession(currentScene.id);
+  };
+
   const handleRegenerate = async (msgId: string) => {
     await regenerateMsg(msgId);
   };
@@ -187,7 +211,6 @@ export function ChatView() {
     const store = useStore.getState();
     try {
       const amap = await getActionMap(actionMapId);
-      // 先加载列表，再设当前
       if (store.thinkingMap) {
         await store.loadActionMaps(store.thinkingMap.id);
       }
@@ -198,12 +221,119 @@ export function ChatView() {
     }
   }, []);
 
+  // 多选操作
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const enterSelectMode = () => {
+    setSelectMode(true);
+    setSelectedIds(new Set());
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定删除选中的 ${selectedIds.size} 条消息？`)) return;
+    await batchDeleteMsgs(Array.from(selectedIds));
+    exitSelectMode();
+  };
+
+  const handleClearAll = async () => {
+    if (!currentScene) return;
+    if (clearStep === 0) {
+      setClearStep(1);
+      return;
+    }
+    if (clearStep === 1) {
+      if (!confirm('⚠️ 此操作将永久删除场景的所有聊天记录，不可恢复。确定继续？')) return;
+      setClearStep(0);
+      await clearSceneMsgs(currentScene.id);
+    }
+  };
+
+  const handleSwitchSession = async (sessionId: string | null) => {
+    setShowSessionPanel(false);
+    switchSceneSession(sessionId);
+  };
+
   return (
     <div className="chat-overlay">
       <div className="chat-panel">
         {/* 上下文标签 */}
         {contextLabel && (
-          <div className="chat-context-label">{contextLabel}</div>
+          <div className="chat-context-label">
+            <span>{contextLabel}</span>
+            <div className="chat-label-actions">
+              {!isChannel && currentScene && (
+                <>
+                  <button className="new-session-btn" onClick={() => { setShowSessionPanel(!showSessionPanel); loadSceneSessions(currentScene.id); }} title="查看历史会话">
+                    📋 记录
+                  </button>
+                  <button className="new-session-btn" onClick={handleNewSession} title="开始新对话">
+                    🆕 新会话
+                  </button>
+                  <button className="new-session-btn" onClick={selectMode ? exitSelectMode : enterSelectMode} title={selectMode ? '退出选择' : '选择多条消息'}>
+                    {selectMode ? '✅ 完成' : '☑️ 管理'}
+                  </button>
+                  <button
+                    className={`new-session-btn ${clearStep > 0 ? 'danger-btn' : ''}`}
+                    onClick={handleClearAll}
+                    title="清空聊天记录"
+                  >
+                    {clearStep === 0 ? '🗑 清空' : '⚠️ 确认清空?'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 会话切换面板 */}
+        {showSessionPanel && currentScene && (
+          <div className="session-panel">
+            <div className="session-panel-header">历史会话</div>
+            <div className="session-panel-list">
+              <div className="session-item" onClick={() => handleSwitchSession(null)}>
+                <span className="session-item-name">📋 全部消息</span>
+                <span className="session-item-count">{sessions.reduce((s, x) => s + x.message_count, 0)} 条</span>
+              </div>
+              {sessions.map(s => (
+                <div key={s.session_id} className="session-item" onClick={() => handleSwitchSession(s.session_id)}>
+                  <span className="session-item-name">🗂 会话</span>
+                  <span className="session-item-info">
+                    <span>{s.message_count} 条</span>
+                    {s.last_active && <span> · {new Date(s.last_active).toLocaleString('zh-CN')}</span>}
+                  </span>
+                </div>
+              ))}
+              {sessions.length === 0 && <div className="session-empty">暂无历史会话</div>}
+            </div>
+          </div>
+        )}
+
+        {/* 多选操作栏 */}
+        {selectMode && (
+          <div className="select-mode-bar">
+            <span>已选 {selectedIds.size} 条</span>
+            <button
+              className="select-delete-btn"
+              onClick={handleBatchDelete}
+              disabled={selectedIds.size === 0}
+            >
+              🗑 删除选中 ({selectedIds.size})
+            </button>
+            <button className="select-cancel-btn" onClick={exitSelectMode}>取消</button>
+          </div>
         )}
 
         {/* 消息列表 */}
@@ -216,6 +346,9 @@ export function ChatView() {
               onDelete={handleDelete}
               onRegenerate={handleRegenerate}
               onOpenActionMap={handleOpenActionMap}
+              selectMode={selectMode}
+              selected={selectedIds.has(msg.id)}
+              onToggleSelect={toggleSelect}
             />
           ))}
           <div ref={bottomRef} />

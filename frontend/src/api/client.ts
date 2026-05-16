@@ -64,27 +64,50 @@ export const deleteNode = (nodeId: string) =>
 // ═══ 消息 ═══
 export interface Message {
   id: string; scene_id: string | null; channel_id: string | null;
+  session_id: string | null;
   role: 'user' | 'ai' | 'system';
   content: string; map_ref: string | null; created_at: string;
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
-export const listSceneMessages = (sceneId: string) =>
-  request<Message[]>(`/scenes/${sceneId}/messages`);
+export const listSceneMessages = (sceneId: string, sessionId?: string) => {
+  const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+  return request<Message[]>(`/scenes/${sceneId}/messages${params}`);
+};
 export const deleteMessage = (messageId: string) =>
   request(`/messages/${messageId}`, { method: 'DELETE' });
 export const regenerateMessage = (messageId: string) =>
   request<Message>(`/messages/${messageId}/regenerate`, { method: 'POST' });
+export const newSceneSession = (sceneId: string) =>
+  request<{ session_id: string }>(`/scenes/${sceneId}/new-session`, { method: 'POST' });
+
+export const batchDeleteMessages = (ids: string[]) =>
+  request<{ ok: boolean; deleted: number }>('/messages/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+
+export const clearSceneMessages = (sceneId: string) =>
+  request<{ ok: boolean; deleted: number }>(`/scenes/${sceneId}/messages`, { method: 'DELETE' });
+
+export interface SceneSession {
+  session_id: string;
+  last_active: string | null;
+  message_count: number;
+}
+export const listSceneSessions = (sceneId: string) =>
+  request<SceneSession[]>(`/scenes/${sceneId}/sessions`);
 
 /** 发送场景消息 + 流式接收 AI 回复（SSE） */
 export async function* sendSceneMessageStream(
   sceneId: string,
   content: string,
+  sessionId?: string,
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${BASE}/scenes/${sceneId}/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, scene_id: sceneId }),
+    body: JSON.stringify({ content, scene_id: sceneId, session_id: sessionId || null }),
   });
 
   if (!res.ok) {

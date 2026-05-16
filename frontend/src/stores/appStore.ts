@@ -6,6 +6,9 @@ import {
   getThinkingMap, addNode, updateNode, deleteNode,
   sendMessage, listSceneMessages, sendSceneMessageStream,
   deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
+  newSceneSession as apiNewSceneSession,
+  batchDeleteMessages, clearSceneMessages, listSceneSessions,
+  SceneSession,
   listChannels, createChannel, updateChannel, deleteChannel, clearChannelMessages,
   sendChannelMessage, listChannelMessages, sendChannelMessageStream,
   listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
@@ -52,8 +55,15 @@ interface AppState {
 
   // ═══ 场景消息 ═══
   messages: Message[];
+  currentSessionId: string | null;   // 场景当前会话 ID
+  sessions: SceneSession[];          // 历史会话列表
   loadSceneMessages: (sceneId: string) => Promise<void>;
   sendSceneMsg: (sceneId: string, content: string) => Promise<void>;
+  newSceneSession: (sceneId: string) => Promise<string | null>;  // 开始新会话
+  batchDeleteMsgs: (ids: string[]) => Promise<void>;             // 批量删除
+  clearSceneMsgs: (sceneId: string) => Promise<void>;            // 一键清空
+  loadSceneSessions: (sceneId: string) => Promise<void>;         // 加载会话列表
+  switchSceneSession: (sessionId: string | null) => void;        // 切换会话
 
   // ═══ 频道 ═══
   channels: Channel[];
@@ -172,9 +182,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   // ═══ 场景消息 ═══
   messages: [],
+  currentSessionId: null,
+  sessions: [],
   loadSceneMessages: async (sceneId) => {
     try {
-      const msgs = await listSceneMessages(sceneId);
+      const sessionId = get().currentSessionId;
+      const msgs = await listSceneMessages(sceneId, sessionId || undefined);
       set({ messages: msgs });
     } catch (e) {
       console.error('[store] loadSceneMessages failed:', e);
@@ -210,7 +223,8 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     try {
-      const stream = sendSceneMessageStream(sceneId, content);
+      const sessionId = get().currentSessionId;
+      const stream = sendSceneMessageStream(sceneId, content, sessionId || undefined);
 
       for await (const event of stream) {
         if (event.type === 'user_msg') {
@@ -420,6 +434,44 @@ export const useStore = create<AppState>((set, get) => ({
       await state.loadSceneMessages(state.currentScene.id);
     } else if (state.currentChannel) {
       await state.loadChannelMessages(state.currentChannel.id);
+    }
+  },
+  newSceneSession: async (sceneId) => {
+    try {
+      const { session_id } = await apiNewSceneSession(sceneId);
+      set({ currentSessionId: session_id, messages: [] });
+      // 新会话后刷新会话列表
+      get().loadSceneSessions(sceneId);
+      return session_id;
+    } catch (e) {
+      console.error('[store] newSceneSession failed:', e);
+      return null;
+    }
+  },
+  batchDeleteMsgs: async (ids) => {
+    if (ids.length === 0) return;
+    await batchDeleteMessages(ids);
+    await get().reloadCurrentMessages();
+  },
+  clearSceneMsgs: async (sceneId) => {
+    await clearSceneMessages(sceneId);
+    set({ messages: [], currentSessionId: null });
+    // 清空后刷新会话列表
+    get().loadSceneSessions(sceneId);
+  },
+  loadSceneSessions: async (sceneId) => {
+    try {
+      const sessions = await listSceneSessions(sceneId);
+      set({ sessions });
+    } catch (e) {
+      console.error('[store] loadSceneSessions failed:', e);
+    }
+  },
+  switchSceneSession: (sessionId) => {
+    set({ currentSessionId: sessionId, messages: [] });
+    const state = get();
+    if (state.currentScene) {
+      state.loadSceneMessages(state.currentScene.id);
     }
   },
 }));

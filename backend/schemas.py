@@ -104,11 +104,13 @@ class MessageCreate(BaseModel):
     channel_id: Optional[str] = None    # 频道消息用
     content: str
     channel: str = "main"  # main = AI 更新 Thinking Map, chat = 只聊天
+    session_id: Optional[str] = None    # 场景会话分组
 
 class MessageOut(BaseModel):
     id: str
     scene_id: Optional[str] = None
     channel_id: Optional[str] = None
+    session_id: Optional[str] = None
     role: str
     content: str
     map_ref: Optional[str]

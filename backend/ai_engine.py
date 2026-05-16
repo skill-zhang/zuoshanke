@@ -398,6 +398,7 @@ def ai_scene_chat_stream(
     user_content: str,
     db: Session,
     complexity: str = "medium",
+    history_messages: list[dict] | None = None,
 ):
     """场景分析流式生成器（两段式真流式）。
 
@@ -429,6 +430,14 @@ def ai_scene_chat_stream(
     _weather_ctx = _weather_maybe(user_content)
     _weather_prefix = (_weather_ctx + "\n\n") if _weather_ctx else ""
 
+    # 构建历史上下文（含 role 映射）
+    history_api = []
+    if history_messages:
+        history_api = [
+            {"role": "assistant" if m["role"] == "ai" else m["role"], "content": m["content"]}
+            for m in history_messages
+        ]
+
     # ═══ Pass 1: 流式获取 reply（真流式，token 即到即发）═══
     reply_messages = [
         {"role": "system", "content": (
@@ -439,6 +448,7 @@ def ai_scene_chat_stream(
             "- 主动追问模糊点\n"
             "- 直接输出回复内容，不要用JSON包裹，不要输出actions"
         )},
+        *history_api,
         {"role": "user", "content": f"{_weather_prefix}{tree_ctx}\n\n用户说: {user_content}\n\n请分析并回复。"},
     ]
 
@@ -471,6 +481,7 @@ def ai_scene_chat_stream(
         )
     actions_messages = [
         {"role": "system", "content": actions_system},
+        *history_api,
         {"role": "user", "content": (
             f"{tree_ctx}\n\n"
             f"用户说: {user_content}\n\n"
@@ -621,6 +632,7 @@ def ai_scene_ask_missing_stream(
     scene_id: str,
     user_content: str,
     missing_info: list[str],
+    history_messages: list[dict],
     db: Session,
 ):
     """约束追问路径：告诉用户还缺什么信息，不建树。
@@ -635,8 +647,14 @@ def ai_scene_ask_missing_stream(
         "你是一个信息收集助手。用户的需求信息不完整，你需要友好地追问。\n"
         "用Markdown格式，简洁清晰，50-100字。"
     )
+    # 注入历史上下文（含 role 映射）
+    history_api = [
+        {"role": "assistant" if m["role"] == "ai" else m["role"], "content": m["content"]}
+        for m in history_messages
+    ]
     messages = [
         {"role": "system", "content": system},
+        *history_api,
         {"role": "user", "content": (
             f"用户说: {user_content}\n\n"
             f"我还需要确认以下信息才能完整答复：\n{questions}\n\n"
@@ -658,6 +676,7 @@ def ai_scene_ask_missing_stream(
 def ai_scene_light_chat_stream(
     scene_id: str,
     user_content: str,
+    history_messages: list[dict],
     db: Session,
 ):
     """轻量路径：Qwen 直答，不建树不更新 Thinking Map。
@@ -673,6 +692,11 @@ def ai_scene_light_chat_stream(
     _weather_ctx = _weather_maybe(user_content)
     _weather_prefix = (_weather_ctx + "\n\n") if _weather_ctx else ""
 
+    # 注入历史上下文（含 role 映射）
+    history_api = [
+        {"role": "assistant" if m["role"] == "ai" else m["role"], "content": m["content"]}
+        for m in history_messages
+    ]
     messages = [
         {"role": "system", "content": (
             "你是一个知识丰富的AI助手。直接回答用户问题。\\n"
@@ -681,6 +705,7 @@ def ai_scene_light_chat_stream(
             "- 不需要拆解任务、不需要创建思维导图\\n"
             "- 直接输出回复内容，不要JSON包裹"
         )},
+        *history_api,
         {"role": "user", "content": f"{_weather_prefix}{user_content}"},
     ]
 

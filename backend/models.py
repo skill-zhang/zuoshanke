@@ -145,6 +145,7 @@ class Message(Base):
     id = Column(String, primary_key=True)
     scene_id = Column(String, ForeignKey("scenes.id"), nullable=True)   # 场景消息
     channel_id = Column(String, ForeignKey("channels.id"), nullable=True)  # 频道消息
+    session_id = Column(String, nullable=True, index=True)   # 场景会话分组
     role = Column(String, nullable=False)  # user | ai | system
     content = Column(Text, nullable=False)
     map_ref = Column(String, nullable=True)     # 关联的 map node/drawer 操作

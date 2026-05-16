@@ -376,12 +376,13 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
     if not scene:
         raise HTTPException(404, "场景不存在")
 
-    # 1. 保存用户消息
+    # 1. 保存用户消息（带上 session_id）
     user_msg = Message(
         id=make_id("msg"),
         scene_id=scene_id,
         role="user",
         content=data.content,
+        session_id=data.session_id,
     )
     db.add(user_msg)
     db.commit()
@@ -397,6 +398,22 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
     def generate():
         yield f"data: {user_msg_json}\n\n"
+
+        # ═══ 获取场景历史消息（按 session_id 隔离）═══
+        scene_history = (
+            db.query(Message)
+            .filter(Message.scene_id == scene_id)
+        )
+        # 如果当前消息有 session_id，只取同 session 的历史
+        if data.session_id:
+            scene_history = scene_history.filter(Message.session_id == data.session_id)
+        scene_history = scene_history.order_by(Message.created_at.desc()).limit(20).all()
+        scene_history.reverse()
+        # 排除当前消息（每个路由函数会用自定义 prompt 包装当前消息）
+        history_messages = [
+            {"role": m.role, "content": m.content}
+            for m in scene_history if m.id != user_msg.id
+        ]
 
         # ═══ v0.4 约束提取 + 复杂度判定 + 路由 ═══
         nonlocal scene
@@ -427,11 +444,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         full_reply = ""
         changes = []
         if need_extraction and not constraints_ok and missing_info:
-            ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, db)
+            ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db)
         elif complexity == "light":
-            ai_stream = ai_scene_light_chat_stream(scene_id, data.content, db)
+            ai_stream = ai_scene_light_chat_stream(scene_id, data.content, history_messages, db)
         else:
-            ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity)
+            ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages)
         for token in ai_stream:
             if isinstance(token, dict):
                 if token.get("_error"):
@@ -453,6 +470,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 scene_id=scene_id,
                 role="ai",
                 content=full_reply,
+                session_id=data.session_id,
             )
             new_db.add(ai_msg)
             new_db.commit()
@@ -627,13 +645,69 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
 
 
 @app.get("/api/scenes/{scene_id}/messages", response_model=List[MessageOut])
-def list_scene_messages(scene_id: str, db: Session = Depends(get_db)):
-    return (
-        db.query(Message)
-        .filter(Message.scene_id == scene_id)
-        .order_by(Message.created_at.asc())
+def list_scene_messages(scene_id: str, session_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    q = db.query(Message).filter(Message.scene_id == scene_id)
+    if session_id:
+        q = q.filter(Message.session_id == session_id)
+    return q.order_by(Message.created_at.asc()).all()
+
+
+@app.post("/api/scenes/{scene_id}/new-session")
+def new_scene_session(scene_id: str, db: Session = Depends(get_db)):
+    """生成一个新的会话 ID，用于场景内重置上下文"""
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(404, "场景不存在")
+    import uuid
+    session_id = f"ses-{uuid.uuid4().hex[:12]}"
+    # 重置约束（新会话需要重新提取）
+    scene.constraints = None
+    scene.constraints_locked = False
+    scene.complexity = None
+    db.commit()
+    return {"session_id": session_id}
+
+
+@app.get("/api/scenes/{scene_id}/sessions")
+def list_scene_sessions(scene_id: str, db: Session = Depends(get_db)):
+    """列出场景的所有历史会话"""
+    from sqlalchemy import func
+    rows = (
+        db.query(Message.session_id, func.max(Message.created_at), func.count(Message.id))
+        .filter(
+            Message.scene_id == scene_id,
+            Message.session_id.isnot(None),
+        )
+        .group_by(Message.session_id)
+        .order_by(func.max(Message.created_at).desc())
         .all()
     )
+    return [
+        {"session_id": r[0], "last_active": r[1].isoformat() if r[1] else None, "message_count": r[2]}
+        for r in rows
+    ]
+
+
+@app.delete("/api/scenes/{scene_id}/messages")
+def clear_scene_messages(scene_id: str, db: Session = Depends(get_db)):
+    """一键清空场景的所有聊天记录"""
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(404, "场景不存在")
+    deleted = db.query(Message).filter(Message.scene_id == scene_id).delete()
+    db.commit()
+    return {"ok": True, "deleted": deleted}
+
+
+@app.post("/api/messages/batch-delete")
+def batch_delete_messages(data: dict, db: Session = Depends(get_db)):
+    """批量删除消息"""
+    ids = data.get("ids", [])
+    if not ids:
+        return {"ok": True, "deleted": 0}
+    deleted = db.query(Message).filter(Message.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "deleted": deleted}
 
 
 @app.get("/api/channels/{channel_id}/messages", response_model=List[MessageOut])

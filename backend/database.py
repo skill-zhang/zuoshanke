@@ -44,6 +44,17 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
 
+    # 迁移：新增 session_id 字段（零破坏）
+    try:
+        with engine.connect() as conn:
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(messages)")).fetchall()]
+            if "session_id" not in cols:
+                conn.execute(text("ALTER TABLE messages ADD COLUMN session_id VARCHAR"))
+                conn.commit()
+                print("✅ messages 表新增 session_id 字段")
+    except Exception as e:
+        print(f"⚠️  session_id 迁移跳过: {e}")
+
     # 种子数据：默认闲聊频道
     db = SessionLocal()
     try:
