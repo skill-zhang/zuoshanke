@@ -1,20 +1,23 @@
-"""天气获取模块 — 集成 wttr.in API，缓存 + 异常回退 + 未来一周预报
+"""天气获取模块 — 集成 wttr.in API，缓存 + 异常回退 + 未来一周预报 + 对话上下文注入
 
 ## 功能
 - 通过 wttr.in 获取城市实时天气（免费，无需 API Key）
 - 内存缓存（60s TTL），减少重复请求
 - API 异常时自动回退到模拟数据
 - 支持未来一周天气预报（forecast_days 参数，最多 7 天）
+- 对话上下文注入：检测用户输入中的天气意图并格式化天气数据
 
 ## 用法
-    from weather import get_weather
+    from weather import get_weather, maybe_weather_context
     r = get_weather("北京")              # → 当前天气
     r = get_weather("北京", forecast_days=7)  # → 当前天气 + 7天预报
+    ctx = maybe_weather_context("北京天气怎么样")  # → 格式化天气上下文
 """
 
 import json
 import random
 import time
+import re
 import requests
 from typing import Optional
 
@@ -86,6 +89,25 @@ _EN_TO_CN_WEATHER = {
     "patchy rain possible": "阵雨", "patchy rain nearby": "阵雨",
     "mist": "薄雾", "fog": "雾",
     "thunder": "雷阵雨",
+}
+
+# ── 对话上下文注入：城市列表 ──
+KNOWN_CITIES = [
+    "北京", "上海", "深圳", "广州", "成都", "杭州", "武汉", "南京", "重庆",
+    "天津", "苏州", "西安", "长沙", "郑州", "东莞", "青岛", "沈阳", "宁波",
+    "昆明", "大连", "厦门", "合肥", "佛山", "福州", "哈尔滨", "济南", "温州",
+    "长春", "石家庄", "常州", "泉州", "南宁", "贵阳", "南昌", "太原", "烟台",
+    "嘉兴", "南通", "金华", "珠海", "惠州", "徐州", "海口", "乌鲁木齐", "绍兴",
+    "中山", "台州", "兰州", "保定", "镇江", "无锡", "邯郸", "洛阳",
+]
+
+EN_CITIES = {
+    "beijing": "北京", "shanghai": "上海", "shenzhen": "深圳",
+    "guangzhou": "广州", "chengdu": "成都", "hangzhou": "杭州",
+    "wuhan": "武汉", "nanjing": "南京", "chongqing": "重庆",
+    "tianjin": "天津", "suzhou": "苏州", "xian": "西安",
+    "london": "伦敦", "tokyo": "东京", "new york": "纽约",
+    "paris": "巴黎", "seoul": "首尔", "singapore": "新加坡",
 }
 
 
@@ -303,3 +325,119 @@ def get_cache_info() -> dict:
         "keys": list(_cache.keys()),
         "ttl": CACHE_TTL,
     }
+
+
+# ═══════════════════════════════════════════════════
+# 对话上下文注入 — 检测用户输入中的天气意图并格式化
+# ═══════════════════════════════════════════════════
+
+_WEATHER_KEYWORDS = [
+    "天气", "温度", "气温", "下雨", "下雪", "刮风", "台风",
+    "多少度", "热不热", "冷不冷", "weather", "temperature",
+    "湿度", "pm", "空气", "雾霾", "晴", "雨", "雪", "阴",
+    "天怎么样", "天如何", "预报",
+]
+
+
+def is_weather_query(text: str) -> bool:
+    """判断文本是否是查询某城市天气的意图"""
+    t = text.strip()
+    has_weather_kw = any(kw in t for kw in _WEATHER_KEYWORDS)
+
+    # 检查是否包含城市名
+    has_city = False
+    for city in KNOWN_CITIES:
+        if city in t:
+            has_city = True
+            break
+    if not has_city:
+        for en_city in EN_CITIES:
+            if en_city in t.lower():
+                has_city = True
+                break
+
+    # 如果只有城市名没有天气关键词，也尝试匹配（"北京现在多少度"）
+    city_degree_pattern = re.search(
+        r'[北|上|广|深|成|杭|武|南|重|天|苏|西|长|郑|东|青|沈|宁|昆|大|厦|合|佛|福|哈|济]', t)
+    if city_degree_pattern:
+        has_degree_num = bool(re.search(r'\d+°?[C度]', t)) or any(
+            w in t for w in ["多少度", "几度", "气温", "温度"])
+        if has_degree_num:
+            return True
+
+    return has_weather_kw and has_city
+
+
+def extract_city(text: str) -> str | None:
+    """从文本中提取城市名"""
+    t = text.strip()
+    # 先匹配英文城市
+    t_lower = t.lower()
+    for en_city, cn_city in EN_CITIES.items():
+        if en_city in t_lower:
+            return cn_city
+
+    # 匹配中文城市（优先匹配更长的，避免"南京"被"南宁"先匹配）
+    sorted_cities = sorted(KNOWN_CITIES, key=len, reverse=True)
+    for city in sorted_cities:
+        if city in t:
+            return city
+
+    return None
+
+
+def format_weather_for_prompt(weather_data: dict) -> str:
+    """将天气数据格式化为适合注入 prompt 的字符串"""
+    city = weather_data.get("city", "未知")
+    temp = weather_data.get("temp", "N/A")
+    desc = weather_data.get("desc", "N/A")
+    humidity = weather_data.get("humidity", "N/A")
+    wind = weather_data.get("wind", "N/A")
+    source = weather_data.get("_source", "api")
+
+    lines = [
+        f"【天气数据 - {city}】",
+        f"- 温度: {temp}",
+        f"- 天气: {desc}",
+        f"- 湿度: {humidity}",
+        f"- 风力: {wind}",
+    ]
+
+    # 如果有预报信息
+    forecast = weather_data.get("forecast")
+    if forecast:
+        lines.append("- 未来预报:")
+        for day in forecast[:3]:  # 最多显示3天
+            lines.append(
+                f"  · {day.get('date', '?')}: {day.get('desc', 'N/A')} "
+                f"{day.get('high', '')}/{day.get('low', '')}"
+            )
+
+    if source == "fallback":
+        lines.append("(数据来源: 本地估算，非实时)")
+
+    return "\n".join(lines)
+
+
+def maybe_weather_context(user_text: str) -> str | None:
+    """检测用户输入，如果是天气查询则返回天气数据上下文
+
+    Args:
+        user_text: 用户输入的对话文本
+
+    Returns:
+        str: 格式化的天气数据字符串（可直接注入 prompt），
+              如果不是天气查询则返回 None
+    """
+    if not is_weather_query(user_text):
+        return None
+
+    city = extract_city(user_text)
+    if not city:
+        return None
+
+    try:
+        weather_data = get_weather(city)
+        return format_weather_for_prompt(weather_data)
+    except Exception as e:
+        return f"【天气查询失败】{city} 天气查询出错: {e}"
