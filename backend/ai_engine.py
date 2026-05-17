@@ -2,34 +2,27 @@
 import json
 import os
 import subprocess
-import uuid
 import requests
 from sqlalchemy.orm import Session
 from models import ThinkingMap, ThinkNode
+from utils import make_id
 
-# ── 天气查询桥接 ──
-import sys as _sys, os as _os
-_WEATHER_BRIDGE = None
+# ── 天气查询（直接调 weather.py） ──
 def _weather_maybe(user_text: str) -> str | None:
-    global _WEATHER_BRIDGE
-    if _WEATHER_BRIDGE is None:
-        try:
-            _tp = _os.path.expanduser("~/zuoshanke/tools")
-            if _tp not in _sys.path: _sys.path.insert(0, _tp)
-            from weather_bridge import maybe_weather_context as _wf
-            _WEATHER_BRIDGE = _wf
-        except ImportError:
-            _WEATHER_BRIDGE = False
-    fn = _WEATHER_BRIDGE
-    return fn(user_text) if fn else None
+    """检测用户消息中的天气意图，调 weather.maybe_weather_context 获取实时数据"""
+    import sys as _sys, os as _os
+    try:
+        _tp = _os.path.expanduser("~/zuoshanke/tools")
+        if _tp not in _sys.path:
+            _sys.path.insert(0, _tp)
+        from weather import maybe_weather_context
+        return maybe_weather_context(user_text)
+    except Exception:
+        return None
 
 
 QWEN_API = "http://localhost:8083/v1/chat/completions"
 HERMES_BIN = os.path.expanduser("~/.local/bin/hermes")
-
-
-def make_id(prefix: str = "") -> str:
-    return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
 SYSTEM_PROMPT = """你是一个专业的 AI 架构顾问和产品经理搭档。在场景工作模式中，帮用户梳理需求、构建 Thinking Map。
