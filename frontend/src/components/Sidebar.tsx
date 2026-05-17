@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene, listMemories } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories } from '../api/client';
 import { ChannelSvg } from './Logo';
 
 const CATEGORIES = [
@@ -33,6 +33,8 @@ export function Sidebar() {
   const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
 
   useEffect(() => { loadChannels(); }, []);
+  // 侧边栏需要工坊数据来展示场景列表和计数，不管当前在哪个视图
+  useEffect(() => { loadWorkshopScenes(); }, []);
 
   useEffect(() => {
     if (view === 'workshop') {
@@ -293,25 +295,20 @@ export function Sidebar() {
           );
         })}
 
-        <div className="sidebar-action" onClick={() => {
-          setView('workshop');
-          // Small delay to let WorkshopView render, then trigger create
-          setTimeout(() => {
-            const name = prompt('场景名称：');
-            if (!name) return;
-            // We need a project to create scenes. If no currentProject, use the first one.
-            import('../api/client').then(({ listProjects, createScene }) => {
-              listProjects().then(projects => {
-                if (projects.length === 0) {
-                  alert('请先创建一个项目');
-                  return;
-                }
-                createScene(projects[0].id, name, { icon: '📦', category: 'other' }).then(() => {
-                  loadWorkshopScenes();
-                }).catch(alert);
-              });
-            });
-          }, 100);
+        <div className="sidebar-action" onClick={async () => {
+          const name = prompt('场景名称：');
+          if (!name) return;
+          try {
+            const projects = await listProjects();
+            if (projects.length === 0) {
+              alert('请先创建一个项目');
+              return;
+            }
+            await createScene(projects[0].id, name, { icon: '📦', category: 'other' });
+            loadWorkshopScenes();
+          } catch (e: any) {
+            alert('创建失败: ' + (e.message || ''));
+          }
         }}>
           <span className="sidebar-item-icon">+</span>
           新建场景

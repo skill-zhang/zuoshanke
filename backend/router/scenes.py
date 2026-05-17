@@ -66,6 +66,84 @@ def list_scenes(project_id: str = None, db: Session = Depends(get_db)):
     return q.order_by(Scene.pinned.desc(), Scene.updated_at.desc()).all()
 
 
+# ═══ 场景广场 ═══
+# 注意：plaza / workshop / import 必须注册在 {scene_id} 之前，否则被路径参数捕获
+
+@router.get("/api/scenes/plaza", response_model=List[SceneOut])
+def list_plaza_scenes(
+    category: str = None,
+    q: str = None,
+    db: Session = Depends(get_db),
+):
+    """场景广场 — 仅返回已发布场景，支持分类过滤和搜索"""
+    query = db.query(Scene).filter(Scene.version != "0.0")
+    if category:
+        query = query.filter(Scene.category == category)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            db.query(Scene).filter(
+                Scene.name.ilike(like) | Scene.description.ilike(like)
+            ).exists()
+        )
+    return query.order_by(Scene.published_at.desc(), Scene.updated_at.desc()).all()
+
+
+@router.get("/api/scenes/workshop", response_model=List[SceneOut])
+def list_workshop_scenes(
+    category: str = None,
+    project_id: str = None,
+    db: Session = Depends(get_db),
+):
+    """工坊 — 自己创作的所有场景（含草稿和已发布）"""
+    q = db.query(Scene)
+    if project_id:
+        q = q.filter(Scene.project_id == project_id)
+    if category:
+        q = q.filter(Scene.category == category)
+    return q.order_by(Scene.pinned.desc(), Scene.updated_at.desc()).all()
+
+
+@router.post("/api/scenes/import", response_model=SceneOut)
+def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
+    """从 JSON 导入场景"""
+    _get_project_or_404(db, data.project_id)
+    s = data.scene
+    scene = Scene(
+        id=make_id("scene"),
+        project_id=data.project_id,
+        name=s.name,
+        icon=s.icon or None,
+        description=s.description or "",
+        category=s.category or "other",
+        guide_text=s.guide_text,
+        user_context=s.user_context,
+        complexity=s.complexity,
+        constraints=s.constraints,
+        constraints_locked=s.constraints_locked,
+        version="0.0",  # 导入后变为草稿
+        source="imported",
+    )
+    db.add(scene)
+    db.commit()
+    db.refresh(scene)
+
+    tmap = ThinkingMap(id=make_id("think"), scene_id=scene.id, title=f"{s.name} · 需求梳理")
+    db.add(tmap)
+    db.commit()
+    db.refresh(tmap)
+
+    root = ThinkNode(
+        id=make_id("n"), map_id=tmap.id,
+        type="root", label=s.name, status="confirmed",
+    )
+    db.add(root)
+    db.commit()
+    return scene
+
+
+# ═══ 场景 detail CRUD ═══
+
 @router.get("/api/scenes/{scene_id}", response_model=SceneOut)
 def get_scene(scene_id: str, db: Session = Depends(get_db)):
     return _get_scene_or_404(db, scene_id)
@@ -100,28 +178,6 @@ def delete_scene(scene_id: str, db: Session = Depends(get_db)):
     db.delete(scene)
     db.commit()
     return {"ok": True}
-
-
-# ═══ 场景广场 ═══
-
-@router.get("/api/scenes/plaza", response_model=List[SceneOut])
-def list_plaza_scenes(
-    category: str = None,
-    q: str = None,
-    db: Session = Depends(get_db),
-):
-    """场景广场 — 仅返回已发布场景，支持分类过滤和搜索"""
-    query = db.query(Scene).filter(Scene.version != "0.0")
-    if category:
-        query = query.filter(Scene.category == category)
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            db.query(Scene).filter(
-                Scene.name.ilike(like) | Scene.description.ilike(like)
-            ).exists()
-        )
-    return query.order_by(Scene.published_at.desc(), Scene.updated_at.desc()).all()
 
 
 # ═══ 发布 / 版本更新 ═══
@@ -171,61 +227,6 @@ def export_scene(scene_id: str, db: Session = Depends(get_db)):
         constraints_locked=scene.constraints_locked,
         version="0.0" if scene.version == "0.0" else scene.version,
     )
-
-
-@router.post("/api/scenes/import", response_model=SceneOut)
-def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
-    """从 JSON 导入场景"""
-    _get_project_or_404(db, data.project_id)
-    s = data.scene
-    scene = Scene(
-        id=make_id("scene"),
-        project_id=data.project_id,
-        name=s.name,
-        icon=s.icon or None,
-        description=s.description or "",
-        category=s.category or "other",
-        guide_text=s.guide_text,
-        user_context=s.user_context,
-        complexity=s.complexity,
-        constraints=s.constraints,
-        constraints_locked=s.constraints_locked,
-        version="0.0",  # 导入后变为草稿
-        source="imported",
-    )
-    db.add(scene)
-    db.commit()
-    db.refresh(scene)
-
-    tmap = ThinkingMap(id=make_id("think"), scene_id=scene.id, title=f"{s.name} · 需求梳理")
-    db.add(tmap)
-    db.commit()
-    db.refresh(tmap)
-
-    root = ThinkNode(
-        id=make_id("n"), map_id=tmap.id,
-        type="root", label=s.name, status="confirmed",
-    )
-    db.add(root)
-    db.commit()
-    return scene
-
-
-# ═══ 工坊 — 全部场景（含草稿） ═══
-
-@router.get("/api/scenes/workshop", response_model=List[SceneOut])
-def list_workshop_scenes(
-    category: str = None,
-    project_id: str = None,
-    db: Session = Depends(get_db),
-):
-    """工坊 — 自己创作的所有场景（含草稿和已发布）"""
-    q = db.query(Scene)
-    if project_id:
-        q = q.filter(Scene.project_id == project_id)
-    if category:
-        q = q.filter(Scene.category == category)
-    return q.order_by(Scene.pinned.desc(), Scene.updated_at.desc()).all()
 
 
 # ═══ Thinking Map ═══
