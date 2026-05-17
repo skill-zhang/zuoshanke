@@ -205,10 +205,19 @@ export interface ToolCard {
 export type StreamEvent =
   | { type: 'user_msg'; id: string; role: 'user'; content: string; created_at: string }
   | { type: 'tool_cards'; cards: ToolCard[] }
+  | { type: 'tool_status'; tool: string; status: 'running' | 'done' | 'error'; success?: boolean; message: string }
   | { type: 'model_info'; model: string; complexity: string | null }
   | { type: 'token'; token: string }
   | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string; model?: string }
   | { type: 'error'; message: string };
+
+/** 工具执行记录（纯前端，不存库） */
+export interface ToolLog {
+  tool: string;
+  status: 'running' | 'done' | 'error';
+  success?: boolean;
+  message: string;
+}
 
 /** 发送频道消息 + 流式接收 AI 回复（SSE） */
 export async function* sendChannelMessageStream(

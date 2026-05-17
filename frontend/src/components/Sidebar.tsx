@@ -44,9 +44,10 @@ export function Sidebar() {
   }, [view]);
 
   // 加载记忆数量（用于 badge）
+  const { memoryDrawerOpen } = useStore();
   useEffect(() => {
     listMemories().then(res => setMemories(res.data)).catch(() => {});
-  }, []);
+  }, [memoryDrawerOpen]);  // 抽屉关闭时刷新（用户可能做了增删改）
 
   const closeMenu = () => setMenuOpen(null);
 

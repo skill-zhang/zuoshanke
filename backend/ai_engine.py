@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from models import ThinkingMap, ThinkNode
 from utils import make_id
 from agent_core.context_builder import _build_memory_block
+from logger import get_logger as _get_logger
+_ai_log = _get_logger("ai_engine")
 
 # ── 天气查询（直接调 weather.py） ──
 def _weather_maybe(user_text: str) -> str | None:
@@ -24,6 +26,14 @@ def _weather_maybe(user_text: str) -> str | None:
 
 QWEN_API = "http://localhost:8083/v1/chat/completions"
 HERMES_BIN = os.path.expanduser("~/.local/bin/hermes")
+
+# ── DeepSeek 云 API 配置（读取环境变量） ──
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+DEEPSEEK_MODEL_MAP = {
+    "flash": "deepseek-chat",        # deepseek-v4-flash → 实际模型名
+    "pro": "deepseek-chat",          # deepseek-v4-pro → 实际模型名（当前同 flash）
+}
 
 # ── 系统设置缓存 ──
 _settings_cache: dict | None = None
@@ -120,6 +130,18 @@ def ai_channel_chat(
     """频道闲聊：纯对话"""
     api_messages = _build_channel_messages(messages, is_default)
 
+    # ── 注入实时数据（天气等）──
+    if messages and isinstance(messages[-1], dict):
+        user_text = messages[-1].get("content", "")
+        weather_ctx = _weather_maybe(user_text)
+        if weather_ctx:
+            # llama.cpp/Jinja 不允许多个 system 消息块，追加到第一个 system prompt 里
+            api_messages[0] = {
+                "role": "system",
+                "content": api_messages[0]["content"]
+                    + f"\n\n【实时数据，请基于此回答，不要编造】\n{weather_ctx}"
+            }
+
     result = call_qwen_chat(api_messages, route="channel")
     if result is None:
         return "收到～（AI 引擎暂时响应缓慢，请稍候重试）"
@@ -201,7 +223,7 @@ def ai_channel_chat_stream(messages: list[dict], is_default: bool = False):
             except (json.JSONDecodeError, KeyError, IndexError):
                 continue
     except Exception as e:
-        print(f"[Qwen stream error] {e}")
+        _ai_log.error(f"[Qwen stream] {e}")
         yield None
 
 
@@ -230,7 +252,7 @@ def call_qwen_chat(messages: list[dict], temperature: float | None = None, route
         data = resp.json()
         return data["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"[Qwen chat error] {e}")
+        _ai_log.error(f"[Qwen chat] {e}")
         return None
 
 
@@ -341,7 +363,7 @@ def call_qwen(system_prompt: str, user_prompt: str) -> dict | None:
             content = content.split("```", 1)[1].split("```", 1)[0]
         return json.loads(content.strip())
     except Exception as e:
-        print(f"[Qwen error] {e}")
+        _ai_log.error(f"[Qwen error] {e}")
         return None
 
 
@@ -568,7 +590,7 @@ def ai_scene_chat_stream(
             if isinstance(actions, list):
                 changes = apply_actions(db, tmap, root, actions)
         except (json.JSONDecodeError, Exception) as e:
-            print(f"[scene actions parse error] {e}")
+            _ai_log.warning(f"[scene actions parse] {e}")
 
     # 追加 Thinking Map 更新提示（也走流式）
     if changes:
@@ -693,7 +715,7 @@ def extract_and_classify(
                     "constraints_locked": parsed.get("constraints_locked", len(parsed.get("missing_info", [])) == 0),
                 }
         except Exception as e:
-            print(f"[extract] 解析失败: {e}, raw: {result[:200]}")
+            _ai_log.warning(f"[extract] 解析失败: {e}, raw: {result[:200]}")
     return {"complexity": "medium", "constraints": [], "missing_info": [], "constraints_locked": True}
 
 
@@ -995,9 +1017,142 @@ def ai_generate_action_map(think_node_id: str, db: Session) -> dict | None:
                 text = text[:-3]
         return json.loads(text.strip())
     except json.JSONDecodeError as e:
-        print(f"[ActionMap gen] JSON parse error: {e}")
-        print(f"[ActionMap gen] Raw output: {str(raw)[:500]}")
+        _ai_log.error(f"[ActionMap gen] JSON parse error: {e}")
+        _ai_log.error(f"[ActionMap gen] Raw output: {str(raw)[:500]}")
         return None
+
+
+# ═══════════════════════════════════════════
+#  DeepSeek 云 API 直调（替换 Hermes 子进程）
+# ═══════════════════════════════════════════
+
+def call_deepseek_chat(
+    messages: list[dict],
+    model: str = "flash",
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+    route: str = "medium",
+) -> str | None:
+    """直调 DeepSeek API（非流式），返回完整回复文本
+
+    Args:
+        messages: OpenAI 格式的消息列表
+        model: 'flash' 或 'pro'
+        temperature: 温度
+        max_tokens: 最大 token 数
+        route: 路由名（用于读取 settings 覆盖）
+
+    Returns:
+        完整回复文本，失败返回 None
+    """
+    # 从 settings 读取覆盖参数
+    try:
+        route_cfg = get_settings(route)
+        model_key = route_cfg.get("model", f"deepseek-v4-{model}")
+        _model = DEEPSEEK_MODEL_MAP.get(model, "deepseek-chat")
+        temp = route_cfg.get("temperature", temperature)
+        mt = route_cfg.get("max_tokens", max_tokens)
+    except Exception:
+        _model = DEEPSEEK_MODEL_MAP.get(model, "deepseek-chat")
+        temp = temperature
+        mt = max_tokens
+
+    if not DEEPSEEK_API_KEY:
+        _ai_log.warning("[DeepSeek] API key 未配置")
+        return None
+
+    try:
+        resp = requests.post(
+            f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": _model,
+                "messages": messages,
+                "temperature": temp,
+                "max_tokens": mt,
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        _ai_log.error(f"[DeepSeek chat] {e}")
+        return None
+
+
+def call_deepseek_stream(
+    messages: list[dict],
+    model: str = "flash",
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+    route: str = "medium",
+):
+    """直调 DeepSeek API（流式），逐 token yield
+
+    Args:
+        同上 call_deepseek_chat
+
+    Yields:
+        str: token 文本
+        None: 出错时 yield None
+    """
+    try:
+        route_cfg = get_settings(route)
+        model_key = route_cfg.get("model", f"deepseek-v4-{model}")
+        _model = DEEPSEEK_MODEL_MAP.get(model, "deepseek-chat")
+        temp = route_cfg.get("temperature", temperature)
+        mt = route_cfg.get("max_tokens", max_tokens)
+    except Exception:
+        _model = DEEPSEEK_MODEL_MAP.get(model, "deepseek-chat")
+        temp = temperature
+        mt = max_tokens
+
+    if not DEEPSEEK_API_KEY:
+        print("[DeepSeek] API key 未配置")
+        yield None
+        return
+
+    try:
+        resp = requests.post(
+            f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": _model,
+                "messages": messages,
+                "temperature": temp,
+                "max_tokens": mt,
+                "stream": True,
+            },
+            timeout=120,
+            stream=True,
+        )
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode("utf-8").strip()
+            if not line_str.startswith("data: "):
+                continue
+            data_str = line_str[6:]
+            if data_str == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data_str)
+                token = chunk["choices"][0]["delta"].get("content", "")
+                if token:
+                    yield token
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
+    except Exception as e:
+        _ai_log.error(f"[DeepSeek stream] {e}")
+        yield None
 
 
 # ═══ Hermes 子进程调用 ═══
@@ -1104,13 +1259,10 @@ type 可选：url / command / file。
 - 输出纯 JSON，不要 markdown 代码块包裹"""
 
 
-def call_hermes_action_map(think_node_id: str, db: Session, model: str = "deepseek-v4-flash"):
-    """通过 Hermes 子进程生成 Action Map（流式生成器）。
+def call_hermes_action_map(think_node_id: str, db: Session, model: str = "flash"):
+    """通过 DeepSeek API 生成 Action Map（流式生成器，替换 Hermes 子进程）。
 
-    在 call_hermes_stream 基础上包装：
-    - 构建 prompt
-    - 透传 hermes_log 日志事件
-    - 完成后解析 JSON 并 yield result
+    直接在 Agent Core 中调用 cloud API，不再 spawn 子进程。
 
     Yields:
         {"type": "hermes_log", "line": "..."}
@@ -1163,20 +1315,19 @@ def call_hermes_action_map(think_node_id: str, db: Session, model: str = "deepse
 ## 任务
 请为「{node.label}」生成一个 Action Map。先分析需要哪些研究和决策步骤，再决定执行方案。"""
 
-    full_text = ""
-    for event in call_hermes_stream(prompt, model=model):
-        if event["type"] in ("hermes_log", "status"):
-            yield event
-        elif event["type"] == "result":
-            full_text = event["text"]
-        elif event["type"] == "error":
-            yield event
-            return
+    yield {"type": "status", "line": f"⚡ 调用 DeepSeek API 生成 Action Map..."}
 
-    # 解析 JSON
-    if not full_text.strip():
-        yield {"type": "error", "message": "Hermes 返回空内容"}
+    messages = [
+        {"role": "system", "content": HERMES_ACTION_MAP_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+
+    full_text = call_deepseek_chat(messages, model=model, temperature=0.3, route="medium")
+    if full_text is None:
+        yield {"type": "error", "message": "DeepSeek API 调用失败"}
         return
+
+    yield {"type": "status", "line": "✅ DeepSeek 返回完成，解析 JSON..."}
 
     # 写原始输出到文件以便调试
     import os as _os
@@ -1192,8 +1343,8 @@ def call_hermes_action_map(think_node_id: str, db: Session, model: str = "deepse
         parsed = _extract_json_from_text(full_text)
         yield {"type": "result", "action_map": parsed}
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"[Hermes ActionMap] JSON parse error: {e}")
-        print(f"[Hermes ActionMap] Raw output (first 800): {full_text[:800]}")
+        _ai_log.error(f"[DeepSeek ActionMap] JSON parse error: {e}")
+        _ai_log.error(f"[DeepSeek ActionMap] Raw output: {full_text[:800]}")
         yield {"type": "error", "message": f"JSON 解析失败: {e}"}
 
 
@@ -1395,8 +1546,8 @@ def call_hermes_execute_node(
 
 # ═══ 工具自文档化 ═══
 
-def call_hermes_generate_skill(tool_path: str, model: str = "deepseek-v4-flash") -> str | None:
-    """读取工具代码，调 Hermes 生成 SKILL.md 使用说明书。
+def call_hermes_generate_skill(tool_path: str, model: str = "flash") -> str | None:
+    """读取工具代码，调 DeepSeek API 生成 SKILL.md 使用说明书（替换 Hermes 子进程）。
 
     Args:
         tool_path: 工具文件的绝对路径
@@ -1407,14 +1558,14 @@ def call_hermes_generate_skill(tool_path: str, model: str = "deepseek-v4-flash")
     import os as _os
 
     if not _os.path.isfile(tool_path):
-        print(f"[ToolDocs] 文件不存在: {tool_path}")
+        _ai_log.warning(f"[ToolDocs] 文件不存在: {tool_path}")
         return None
 
     try:
         with open(tool_path, "r") as f:
             code = f.read()
     except Exception as e:
-        print(f"[ToolDocs] 读取失败: {e}")
+        _ai_log.error(f"[ToolDocs] 读取失败: {e}")
         return None
 
     tool_name = _os.path.splitext(_os.path.basename(tool_path))[0]
@@ -1457,45 +1608,13 @@ category: tools
 
 输出纯 markdown，不要用代码块包裹整个文档。"""
 
-    # 文档生成不给任何工具，纯推理输出
-    import os as __os
-    cmd = [
-        HERMES_BIN, "chat",
-        "-q", prompt,
-        "--model", model,
-        "--toolsets", "",
-        "--yolo",
-        "-Q",
+    # 文档生成：直接调 DeepSeek API（替换 Hermes 子进程）
+    messages = [
+        {"role": "system", "content": "你是一个技术文档专家。根据工具代码生成使用说明书（SKILL.md）。"},
+        {"role": "user", "content": prompt},
     ]
-
-    full_text = ""
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-        all_lines = []
-        for line in proc.stdout:
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            if line.startswith("session_id:"):
-                continue
-            all_lines.append(line)
-        proc.wait(timeout=120)
-        if proc.returncode == 0:
-            full_text = "\n".join(all_lines)
-        else:
-            print(f"[ToolDocs] Hermes exit code: {proc.returncode}")
-            return None
-    except Exception as e:
-        print(f"[ToolDocs] Hermes error: {e}")
-        return None
-
-    return full_text.strip() if full_text.strip() else None
+    result = call_deepseek_chat(messages, model=model, temperature=0.3, route="medium")
+    return result.strip() if result and result.strip() else None
 
 
 def scan_and_document_tools(
@@ -1550,11 +1669,11 @@ def scan_and_document_tools(
             continue
 
         # 生成说明书
-        print(f"[ToolDocs] 生成文档: {tool_name}")
+        _ai_log.info(f"[ToolDocs] 生成文档: {tool_name}")
         skill_content = call_hermes_generate_skill(fpath)
 
         if not skill_content:
-            print(f"[ToolDocs] 文档生成失败: {tool_name}")
+            _ai_log.error(f"[ToolDocs] 文档生成失败: {tool_name}")
             continue
 
         # 保存说明书
@@ -1583,7 +1702,7 @@ def scan_and_document_tools(
         registry["tools"].append(tool_entry)
         new_tools.append(tool_entry)
 
-        print(f"[ToolDocs] ✓ {tool_name} → {skill_path}")
+        _ai_log.info(f"[ToolDocs] ✓ {tool_name} → {skill_path}")
 
     # 保存注册表
     if new_tools:
@@ -1591,3 +1710,74 @@ def scan_and_document_tools(
             _json.dump(registry, f, ensure_ascii=False, indent=2)
 
     return new_tools
+
+
+# ═══════════════════════════════════════════
+#  Phase 3: 缺工具提案（轻量判定 + 生成提案）
+# ═══════════════════════════════════════════
+
+TOOL_PROPOSAL_JUDGE_PROMPT = """你是一个工具判断专家。分析用户的查询和系统回复，判断是否需要创建一个新的可复用工具。
+
+## 判断标准
+当用户查询符合以下**全部**条件时，才建议创建工具：
+1. 用户反复需要某个"通用能力"（如IP定位城市、温度单位换算、文件格式转换）
+2. 该能力可通过写一个Python函数实现（1-2个参数，无复杂依赖）
+3. 坐山客系统的现有工具（天气、推荐、装备清单、web_search）不足以直接满足
+4. **不**建议创建工具的场景：纯知识问答、一次性任务、需要第3方API注册的、需要系统级权限的
+
+## 输出格式（纯JSON）
+{
+  "need_tool": false,
+  "tool_name": "",
+  "reason": "",
+  "complexity": "simple"
+}
+
+如果 need_tool=true：
+- tool_name: 建议的工具名（英文，比如 ip_to_city, unit_converter）
+- reason: 一句话说明为什么需要这个工具
+- complexity: 固定为 "simple"
+"""
+
+
+def propose_tool(query: str, ai_reply: str, tool_was_used: bool = False) -> dict:
+    """轻量判断是否需要创建新工具
+
+    Args:
+        query: 用户原始查询
+        ai_reply: AI 的回复内容
+        tool_was_used: 本轮是否使用了工具
+
+    Returns:
+        {"need_tool": false} 或
+        {"need_tool": true, "tool_name": "...", "reason": "...", "complexity": "simple"}
+    """
+    # 如果已经用了工具，且回复充分，大概率不需要新工具
+    if tool_was_used and len(ai_reply) > 50:
+        return {"need_tool": False}
+
+    try:
+        messages = [
+            {"role": "system", "content": TOOL_PROPOSAL_JUDGE_PROMPT},
+            {"role": "user", "content": (
+                f"## 用户查询\n{query}\n\n"
+                f"## AI 回复\n{ai_reply[:500]}\n\n"
+                f"## 工具使用情况\n{'已使用 web_search 搜索' if tool_was_used else '未使用任何工具'}\n\n"
+                f"请判断是否需要创建新工具。"
+            )},
+        ]
+        result = call_qwen_chat(messages, temperature=0.1, route="extraction")
+        if result:
+            import json as _json
+            parsed = _json.loads(result)
+            if isinstance(parsed, dict) and parsed.get("need_tool"):
+                return {
+                    "need_tool": True,
+                    "tool_name": parsed.get("tool_name", "unknown"),
+                    "reason": parsed.get("reason", ""),
+                    "complexity": parsed.get("complexity", "simple"),
+                }
+        return {"need_tool": False}
+    except Exception as e:
+        _ai_log.error(f"[tool_proposal] 判断失败: {e}")
+        return {"need_tool": False}

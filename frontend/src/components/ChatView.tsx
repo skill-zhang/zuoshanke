@@ -3,7 +3,7 @@ import { useStore } from '../stores/appStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { Message, ToolCard } from '../api/client';
+import type { Message, ToolCard, ToolLog } from '../api/client';
 import { getActionMap } from '../api/client';
 
 // ══════════════════════════════════════════════════
@@ -198,12 +198,41 @@ function ToolCardsRenderer({ cards }: { cards: ToolCard[] }) {
 
 
 // ══════════════════════════════════════════════════
+//  工具执行记录条（纯前端，不存库）
+// ══════════════════════════════════════════════════
+
+function ToolLogBar({ logs }: { logs: ToolLog[] }) {
+  if (!logs || logs.length === 0) return null;
+  const last = logs[logs.length - 1];
+  const icon = last.status === 'running'
+    ? (last.tool === '_analysis' ? '🤔' : '⏳')
+    : last.status === 'error' ? '❌' : (last.success ? '✅' : '⚠️');
+  return (
+    <div className="tool-log-bar">
+      {logs.map((log, i) => (
+        <div key={i} className={`tool-log-item tool-log-${log.status}`}>
+          <span className="tool-log-icon">
+            {log.status === 'running'
+              ? (log.tool === '_analysis' ? '🤔' : '⏳')
+              : log.status === 'error' ? '❌' : (log.success ? '✅' : '⚠️')}
+          </span>
+          <span className="tool-log-label">{log.tool === '_analysis' ? '' : `[${log.tool}] `}</span>
+          <span className="tool-log-msg">{log.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════════
 //  消息气泡
 // ══════════════════════════════════════════════════
 
-function MessageBubble({ msg, toolCards, onDelete, onRegenerate, onOpenActionMap, selectMode, selected, onToggleSelect }: {
+function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpenActionMap, selectMode, selected, onToggleSelect }: {
   msg: Message;
   toolCards?: ToolCard[];
+  toolLogs?: ToolLog[];
   onDelete: (id: string) => void;
   onRegenerate: (id: string) => void;
   onOpenActionMap: (actionMapId: string) => void;
@@ -232,6 +261,10 @@ function MessageBubble({ msg, toolCards, onDelete, onRegenerate, onOpenActionMap
         {/* 工具卡片（AI 消息渲染在 markdown 上方） */}
         {msg.role === 'ai' && toolCards && toolCards.length > 0 && (
           <ToolCardsRenderer cards={toolCards} />
+        )}
+        {/* 工具执行记录（仅临时消息显示） */}
+        {msg.id.startsWith('temp-ai-') && toolLogs && toolLogs.length > 0 && (
+          <ToolLogBar logs={toolLogs} />
         )}
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -328,6 +361,7 @@ export function ChatView() {
     isGenerating,
     currentModelName,
     currentToolCards,
+    currentToolLogs,
     userContext, saveUserContext,
   } = useStore();
 
@@ -676,6 +710,12 @@ export function ChatView() {
                 msg.role === 'ai'
                   && idx === displayMessages.length - 1
                   ? (msg.toolCards || currentToolCards)
+                  : undefined
+              }
+              // 工具执行记录（仅临时消息）
+              toolLogs={
+                msg.id.startsWith('temp-ai-')
+                  ? currentToolLogs
                   : undefined
               }
               onDelete={handleDelete}

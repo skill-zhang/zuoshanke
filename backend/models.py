@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, Text, ForeignKey, JSON
+    Column, String, Integer, Boolean, DateTime, Text, ForeignKey, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -338,3 +338,25 @@ class AgentMemory(Base):
     source = Column(String, nullable=True)  # 记忆来源（auto | llm | user）
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ═══ 多平台网关会话 ═══
+class GatewaySession(Base):
+    """网关会话 — 记录外部平台用户的当前上下文状态"""
+    __tablename__ = "gateway_sessions"
+
+    id = Column(String, primary_key=True)
+    platform = Column(String, nullable=False)                # weixin | telegram | ...
+    platform_user_id = Column(String, nullable=False)         # 外部平台的用户 ID
+    mode = Column(String, nullable=False, default="channel")  # channel | scene
+    channel_id = Column(String, ForeignKey("channels.id"), nullable=True)  # 当前绑定频道
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=True)      # 当前场景（mode=scene 时）
+    scene_name = Column(String, nullable=True)                # 缓存场景名
+    platform_username = Column(String, nullable=True)         # 缓存用户昵称
+    last_active_at = Column(DateTime, default=utcnow)         # 最后活跃时间
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("platform", "platform_user_id", name="uq_platform_user"),
+    )

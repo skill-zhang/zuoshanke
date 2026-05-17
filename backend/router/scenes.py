@@ -21,6 +21,7 @@ from ai_engine import (
 from agent_core.core import agent_core_light_stream
 from agent_core.tool_executor import detect_and_preexecute
 from agent_core.memory_manager import MemoryManager
+from agent_core.memory_extractor import MemoryExtractor
 from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
 
@@ -506,12 +507,58 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         MODEL_MAP = {"light": "Qwen3.5 本地", "medium": "DeepSeek Flash", "heavy": "DeepSeek Pro"}
         user_ctx = scene.user_context
 
-        # ── 预执行：在路由决策前先检测工具意图 ──
-        tool_results = detect_and_preexecute(data.content)
+        # ── 预执行：工具检测与执行（实时流式输出状态） ──
+        tool_results = None
+
+        # Step 1: 分析工具需求
+        yield sse_event("tool_status", tool="_analysis", status="running", message="正在分析工具需求...")
+        pre_results = detect_and_preexecute(data.content)
+
+        if pre_results:
+            # 有工具匹配 → 逐个报告结果
+            tool_results = pre_results
+            for r in pre_results:
+                t = r.get("tool", "unknown")
+                if r.get("success"):
+                    yield sse_event("tool_status", tool=t, status="done",
+                                    success=True, message="已完成")
+                else:
+                    yield sse_event("tool_status", tool=t, status="error",
+                                    success=False, message=str(r.get("result", "执行失败")))
+        else:
+            # Step 2: 无工具匹配 → web_search 兜底
+            yield sse_event("tool_status", tool="web_search", status="running",
+                            message="正在搜索互联网...")
+            try:
+                import sys as _sys, os as _os
+                _tp = _os.path.expanduser("~/zuoshanke/tools")
+                if _tp not in _sys.path:
+                    _sys.path.insert(0, _tp)
+                from web_search import web_search as _ws
+                _log.info(f"[web_search] 开始搜索: {data.content[:60]}...")
+                _sres = _ws(data.content, max_results=5)
+                if _sres:
+                    tool_results = [{
+                        "tool": "web_search",
+                        "params": {"query": data.content},
+                        "result": _sres[:5],
+                        "success": True,
+                    }]
+                    yield sse_event("tool_status", tool="web_search", status="done",
+                                    success=True, message=f"找到 {len(_sres)} 条结果")
+                    _log.info(f"[web_search] 成功: {len(_sres)} 条结果")
+                else:
+                    yield sse_event("tool_status", tool="web_search", status="done",
+                                    success=False, message="未找到相关结果")
+                    _log.info("[web_search] 无结果")
+            except Exception as _e:
+                _log.warning(f"[web_search fallback] {_e}")
+                yield sse_event("tool_status", tool="web_search", status="error",
+                                success=False, message=str(_e))
 
         # ── 路由决策 ──
         if tool_results:
-            # 有预执行结果 → 直接走 Light 路由（系统数据够用，无需追问）
+            # 有预执行结果（含 web_search 兜底结果）→ 走 Light 路由（系统数据够用，无需追问）
             ai_stream = agent_core_light_stream(
                 data.content, history_messages, scene_id, db,
                 user_context=user_ctx, tool_results=tool_results,
@@ -536,17 +583,23 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # 4. 流式收回复
         full_reply, changes = "", []
-        for token in ai_stream:
-            if isinstance(token, dict):
-                if token.get("_error"):
-                    yield sse_event("error", message=token["message"])
-                    return
-                if token.get("_done"):
-                    full_reply = token["reply"]
-                    changes = token.get("changes", [])
-                break
-            full_reply += token
-            yield sse_event("token", token=token)
+        try:
+            for token in ai_stream:
+                if isinstance(token, dict):
+                    if token.get("_error"):
+                        yield sse_event("error", message=token["message"])
+                        return
+                    if token.get("_done"):
+                        full_reply = token["reply"]
+                        changes = token.get("changes", [])
+                        break
+                elif token is not None:
+                    full_reply += token
+                    yield sse_event("token", token=token)
+        except Exception as e:
+            _log.error(f"[scene stream] 迭代异常: {e}")
+            yield sse_event("error", message=f"AI 响应生成异常: {e}")
+            return
 
         # 5. 保存 AI 消息（独立 DB session）
         ai_msg_id = make_id("msg")
@@ -564,21 +617,51 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                             created_at=ai_msg.created_at.isoformat(),
                             changes=changes, model=model_name)
 
-            # ── 6. 自动提取记忆 ──
+            # ── 6. 自动提取记忆（双通道） ──
             try:
-                mm = MemoryManager(db)
-                # 收集本轮对话作为提取素材
+                # 收集本轮对话
                 extract_msgs = [
                     {"role": m.role, "content": m.content}
                     for m in scene_history
                 ]
                 extract_msgs.append({"role": "user", "content": data.content})
                 extract_msgs.append({"role": "ai", "content": full_reply})
-                mem_results = mm.auto_extract_from_conversation(extract_msgs)
+
+                # 双通道提取：快速关键词 + LLM 智能提取
+                extractor = MemoryExtractor(db)
+                mem_results = extractor.extract(extract_msgs, data.content)
                 if mem_results:
-                    print(f"[memory] auto-extract: {json.dumps(mem_results, ensure_ascii=False)}")
+                    print(f"[memory] extract: {json.dumps(mem_results, ensure_ascii=False)}")
             except Exception as e:
-                print(f"[memory] auto-extract error: {e}")
+                print(f"[memory] extract error: {e}")
+
+            # ── 7. 缺工具提案（仅当使用了 web_search 兜底时） ──
+            try:
+                _was_web_search = any(
+                    r.get("tool") == "web_search" for r in (tool_results or [])
+                )
+                if _was_web_search:
+                    from ai_engine import propose_tool
+                    proposal = propose_tool(data.content, full_reply, tool_was_used=True)
+                    if proposal.get("need_tool"):
+                        tool_msg = Message(
+                            id=make_id("msg"),
+                            scene_id=scene_id,
+                            role="system",
+                            content=(
+                                f"🔧 **系统检测到你可能需要一个工具**\n\n"
+                                f"你问「{data.content}」时，系统发现缺少一个名为 "
+                                f"**{proposal['tool_name']}** 的通用能力。\n\n"
+                                f"> {proposal['reason']}\n\n"
+                                f"我已生成了一个工具创建方案，前往 **工坊 → 工具提案** 查看并决定是否创建。"
+                            ),
+                            session_id=data.session_id,
+                        )
+                        new_db.add(tool_msg)
+                        new_db.commit()
+                        yield sse_event("tool_proposal", **proposal)
+            except Exception as e:
+                print(f"[tool_proposal] 生成失败: {e}")
         except Exception as e:
             print(f"[scene stream save error] {e}")
             yield sse_event("error", message="AI 回复保存失败")

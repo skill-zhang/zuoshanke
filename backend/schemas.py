@@ -347,3 +347,21 @@ class ServiceStatusOut(BaseModel):
     is_sleeping: Optional[bool] = None
     slots: int = 0
     processing: bool = False
+
+
+# ═══ 多平台网关 ═══
+class GatewayChatRequest(BaseModel):
+    """网关消息请求"""
+    platform: str = "weixin"
+    platform_user_id: str
+    platform_username: Optional[str] = None
+    content: str
+
+
+class GatewayChatResponse(BaseModel):
+    """网关消息回复"""
+    reply: str
+    mode: str  # channel | scene
+    scene_id: Optional[str] = None
+    scene_name: Optional[str] = None
+    switch_hint: Optional[str] = None  # 场景切换提示

@@ -17,6 +17,8 @@ import random
 import time
 import requests
 from typing import Optional
+from logger import get_logger as _get_logger
+_log = _get_logger("weather")
 
 # ── 缓存 ──
 _cache: dict[str, dict] = {}         # city_key → {"data": {...}, "ts": float}
@@ -103,7 +105,7 @@ def _parse_wttr_json(raw: dict) -> Optional[dict]:
             "wind": wind,
         }
     except (IndexError, KeyError, TypeError) as e:
-        print(f"[weather] JSON 解析失败: {e}")
+        _log.error(f"[weather] JSON 解析失败: {e}")
         return None
 
 
@@ -246,11 +248,11 @@ def get_weather(city: str, forecast_days: int = 0) -> dict:
                 _cache[key] = {"data": parsed, "ts": _now()}
             return parsed
         else:
-            print(f"[weather] wttr.in 返回格式异常，尝试回退")
+            _log.warning("[weather] wttr.in 返回格式异常，尝试回退")
     except requests.exceptions.RequestException as e:
-        print(f"[weather] API 请求失败: {e}")
+        _log.error(f"[weather] API 请求失败: {e}")
     except json.JSONDecodeError as e:
-        print(f"[weather] JSON 解码失败: {e}")
+        _log.error(f"[weather] JSON 解码失败: {e}")
 
     # 3. 回退到本地数据
     fallback = FALLBACK_WEATHER.get(key, FALLBACK_DEFAULT).copy()

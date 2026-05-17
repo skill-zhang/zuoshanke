@@ -44,7 +44,6 @@ export default function App() {
 
   const handleCreateScene = () => {
     setCreateName('');
-    setCreateIcon('📦');
     setCreateCategory('other');
     setCreateNewCategory('');
     setCreateUseNewCategory(false);

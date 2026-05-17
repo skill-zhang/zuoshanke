@@ -11,6 +11,8 @@ from router.tools import router as tools_router
 from router.settings import router as settings_router
 from router.memory import router as memory_router      # 🆕 Schema v0.5
 from router.skills import router as skills_router       # 🆕 Schema v0.5
+from router.gateway import router as gateway_router     # 🆕 多平台网关
+from router.gateway_config import router as gateway_config_router  # 🆕 网关配置
 
 
 def register_all_routers(app: FastAPI):
@@ -25,3 +27,5 @@ def register_all_routers(app: FastAPI):
     app.include_router(settings_router)
     app.include_router(memory_router)     # 🆕
     app.include_router(skills_router)      # 🆕
+    app.include_router(gateway_router)     # 🆕 多平台网关
+    app.include_router(gateway_config_router)  # 🆕 网关配置

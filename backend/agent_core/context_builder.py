@@ -109,14 +109,23 @@ def build_scene_context(
         system_parts.append(tools_text)
 
     # ── 5. 使用说明 ──
-    system_parts.append("## 使用说明\n"
-        "系统已自动执行了相关工具并附上结果。\n"
-        "你无需输出【工具调用】标记，只需基于提供的真实数据回复用户。\n"
-        "如果结果中有错误，如实告知用户即可。\n"
-        "天气表格请严格使用以下 6 列固定格式（不要增减列）：\n"
-        "| 日期 | 天气 | 温度 | 湿度 | 风力风向 | 描述 |\n"
-        "天气列用 ☀/🌧/☁/🌤 等 emoji 图标代替纯文字。"
-    )
+    usage_parts = [
+        "## 使用说明",
+        "系统已自动执行了相关工具并附上结果。",
+        "你无需输出【工具调用】标记，只需基于提供的真实数据回复用户。",
+        "如果结果中有错误，如实告知用户即可。",
+    ]
+    # 仅当工具结果包含天气数据时才加表格格式要求
+    _has_weather = False
+    if tool_results:
+        _has_weather = any(r.get("tool") == "get_weather" for r in tool_results)
+    if _has_weather:
+        usage_parts.append(
+            "天气表格请严格使用以下 6 列固定格式（不要增减列）：\n"
+            "| 日期 | 天气 | 温度 | 湿度 | 风力风向 | 描述 |\n"
+            "天气列用 ☀/🌧/☁/🌤 等 emoji 图标代替纯文字。"
+        )
+    system_parts.append("\n".join(usage_parts))
 
     messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 

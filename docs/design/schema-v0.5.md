@@ -636,6 +636,65 @@ Memory = 用户的事实知识（what）
  两者互补：Memory 告诉 AI "用户是谁"
            Skills 告诉 AI "遇到 XX 情况怎么做"
 ```
+### 设计：记忆提取器（Memory Extractor）
+```
+聊天完成 → 提取器(配置的轻量模型) → 结构化记忆操作 → 入库
+```
+#### 提取器身份 + Prompt 核心
+```python
+MEMORY_EXTRACTOR_PROMPT = """你是记忆提取专家。你的任务是从对话中提取值得长期记住的信息。
+
+## 提取原则
+只提取以下类型的信息：
+- 用户身份：姓名、年龄、职业、所在地等
+- 用户偏好：喜欢的/不喜欢的风格、颜色、温度等
+- 用户习惯：常用的工作方式、工具偏好
+- 项目约束：交付要求、技术限制、业务规则
+- 重要事实：需要长期记住的上下文
+
+不要提取以下内容：
+- 一次性问答（"今天天气怎么样"）
+- 工具调用结果（API返回的数据）
+- 闲聊寒暄
+- 当前会话的临时状态
+
+## 输出格式
+返回 JSON 数组，每条格式：
+{"action": "create|reinforce|update|ignore",
+ "key": "唯一标识（英文小写）",
+ "content": "记忆内容",
+ "category": "user|agent",
+ "tags": ["标签1", "标签2"],
+ "confidence": 0.0-1.0}
+
+confidence ≥ 0.8 直接入库
+confidence < 0.8 标记待确认
+action=ignore 表示本条无需处理
+"""
+```
+#### 架构方案
+不是开 Docker sandbox，而是**在坐山客后端内部做一个独立的提取模块**，类似一个「小 Agent」：
+```
+┌─ stream_scene_message ─────────────────────┐
+│                                             │
+│  ① AI 回复完成                              │
+│  ② yield sse_event("done")                  │
+│  ③ 调用 memory_extractor.extract(对话)      │
+│     ├─ 专用 system prompt（上述）             │
+│     ├─ 调用配置的轻量模型                      │
+│     │  默认: http://localhost:8083 (Qwen3.5) │
+│     │  可配: 任意 OpenAI 兼容端点             │
+│     └─ 解析 JSON → 入库                      │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+**可配置的点：**
+- `memory_extractor.endpoint` — 默认 Qwen3.5 本地，用户可改
+- `memory_extractor.model` — 默认 `qwen3.5-9b`
+- `memory_extractor.enabled` — 开/关
+- 甚至可以配成 DeepSeek Flash 等远程模型
+**为什么不硬编码 Qwen3.5？** 你的系统里 `_stream_qwen()` 已经在调本地 8083 端口的模型了，提取记忆也走同一个端口就行。如果用户没部署本地模型，可以配成跟聊天一样的模型，甚至关掉这层，只靠「对话中 Agent 主动保存」。
+
 ### 注入策略（核心创新点）
 ```
 不是"全量注入"，而是"三层过滤"：

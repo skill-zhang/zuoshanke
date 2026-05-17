@@ -1420,6 +1420,25 @@ body {
 .equip-item-name { font-size: 13px; color: #c9d1d9; }
 .equip-item-note { font-size: 11px; color: #8b949e; }
 
+/* ═══ 工具执行记录（纯前端，不存库） ═══ */
+.tool-log-bar {
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 8px 0; padding: 8px 10px;
+  background: rgba(88,166,255,0.06);
+  border: 1px solid #30363d; border-radius: 6px;
+  font-size: 12px; font-family: monospace;
+}
+.tool-log-item {
+  display: flex; align-items: center; gap: 6px;
+  color: #8b949e; line-height: 1.5;
+}
+.tool-log-running { color: #58a6ff; }
+.tool-log-done { color: #3fb950; }
+.tool-log-error { color: #f85149; }
+.tool-log-icon { font-size: 14px; }
+.tool-log-label { font-weight: 600; }
+.tool-log-msg { }
+
 /* ═══ 用户输入背景设定面板 ═══ */
 .user-context-panel {
   flex-shrink: 0;

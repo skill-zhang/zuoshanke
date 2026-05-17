@@ -14,7 +14,7 @@ import {
   sendChannelMessage, listChannelMessages, sendChannelMessageStream,
   listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
   Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent, ToolCard,
-  ActionMap as ActionMapType, ActionMapStreamEvent,
+  ActionMap as ActionMapType, ActionMapStreamEvent, ToolLog,
   getSettings, updateSettings, getServiceStatus,
   SettingsData, ServiceStatus, RouteConfig,
 } from '../api/client';
@@ -92,6 +92,7 @@ interface AppState {
   isGenerating: boolean;
   currentModelName: string | null;   // 当前使用的模型名（来自 SSE model_info 事件）
   currentToolCards: ToolCard[];      // 当前 AI 回复的工具卡片数据
+  currentToolLogs: ToolLog[];        // 当前工具执行记录（纯前端，不存库）
 
   // ═══ 消息操作 ═══
   deleteMsg: (messageId: string) => Promise<void>;
@@ -137,6 +138,7 @@ export const useStore = create<AppState>((set, get) => ({
   isGenerating: false,
   currentModelName: null,
   currentToolCards: [],
+  currentToolLogs: [],
 
   // ═══ 项目 ═══
   projects: [],
@@ -265,9 +267,11 @@ export const useStore = create<AppState>((set, get) => ({
       id: tempUserId,
       scene_id: sceneId,
       channel_id: null,
+      session_id: null,
       role: 'user',
       content,
       map_ref: null,
+      model: null,
       created_at: new Date().toISOString(),
     };
 
@@ -276,15 +280,18 @@ export const useStore = create<AppState>((set, get) => ({
       id: tempAiId,
       scene_id: sceneId,
       channel_id: null,
+      session_id: null,
       role: 'ai',
       content: '🤔 正在分析...',
       map_ref: null,
+      model: null,
       created_at: new Date().toISOString(),
     };
 
     set({
       isGenerating: true,
       currentToolCards: [],
+      currentToolLogs: [],
       messages: [...get().messages, tempUserMsg, tempAiMsg],
     });
 
@@ -295,6 +302,15 @@ export const useStore = create<AppState>((set, get) => ({
       for await (const event of stream) {
         if (event.type === 'tool_cards') {
           set({ currentToolCards: event.cards });
+        } else if (event.type === 'tool_status') {
+          set(state => ({
+            currentToolLogs: [...state.currentToolLogs, {
+              tool: event.tool,
+              status: event.status,
+              success: event.success,
+              message: event.message,
+            }],
+          }));
         } else if (event.type === 'model_info') {
           set({ currentModelName: event.model });
         } else if (event.type === 'user_msg') {
@@ -330,6 +346,7 @@ export const useStore = create<AppState>((set, get) => ({
           set(state => ({
             isGenerating: false,
             currentToolCards: [],
+            currentToolLogs: [],
             messages: state.messages.map(m =>
               m.id === tempAiId
                 ? { ...m, content: `❌ ${event.message}` }
@@ -409,9 +426,11 @@ export const useStore = create<AppState>((set, get) => ({
       id: tempUserId,
       scene_id: null,
       channel_id: channelId,
+      session_id: null,
       role: 'user',
       content,
       map_ref: null,
+      model: null,
       created_at: new Date().toISOString(),
     };
 
@@ -421,9 +440,11 @@ export const useStore = create<AppState>((set, get) => ({
       id: tempAiId,
       scene_id: null,
       channel_id: channelId,
+      session_id: null,
       role: 'ai',
       content: '',
       map_ref: null,
+      model: null,
       created_at: new Date().toISOString(),
     };
 

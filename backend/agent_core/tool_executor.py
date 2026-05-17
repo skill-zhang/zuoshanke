@@ -221,7 +221,55 @@ def detect_and_preexecute(query: str) -> list[dict]:
     # ── 链式工具：如果触发了装备清单但没有天气数据，先查天气 ──
     _maybe_chain_weather_for_equipment(results, query)
 
+    # ── 兜底：所有数据工具都返回了空数据或错误 → 用 web_search 做最后尝试 ──
+    if results and not _has_useful_data(results):
+        # 全部数据工具无有效数据 → web_search 兜底
+        ws_result = execute_tool("web_search", {"query": query, "max_results": 5})
+        if ws_result.get("success"):
+            results.append({
+                "tool": "web_search",
+                "params": {"query": query, "max_results": 5},
+                "result": ws_result["result"],
+                "success": True,
+            })
+
     return results
+
+
+def _has_useful_data(results: list[dict]) -> bool:
+    """检查预执行结果中是否有有效数据
+
+    判断标准（任一条满足即可）：
+    1. 工具成功且 result 中有非空的 items/总结果数 > 0
+    2. 工具成功且 result 中不包含 error 字段
+    3. web_search 已有结果（避免重复兜底）
+    """
+    # web_search 已有结果 → 不需要再兜底
+    if any(r.get("tool") == "web_search" for r in results):
+        return True
+
+    data_tools = {"get_weather", "recommend_attractions", "get_equipment_checklist",
+                   "geo_search_poi", "geo_route", "web_search"}
+    for r in results:
+        if r.get("tool") not in data_tools:
+            continue
+        if r.get("success"):
+            result = r.get("result", {})
+            # 纯字符串结果 > 0 字符 → 有用
+            if isinstance(result, str) and len(result) > 20:
+                return True
+            # dict 结果：没有 error 字段且有内容 → 有用
+            if isinstance(result, dict):
+                if "error" not in result and len(str(result)) > 50:
+                    return True
+                # 有 items 字段且非空 → 有用
+                items = result.get("items", []) if isinstance(result, dict) else []
+                if len(items) > 0:
+                    return True
+            # list 结果有内容 → 有用
+            if isinstance(result, list) and len(result) > 0:
+                return True
+    return False
 
 
 def _matches_triggers(query: str, triggers: list[str]) -> bool:
@@ -235,9 +283,13 @@ def _matches_triggers(query: str, triggers: list[str]) -> bool:
 def _extract_params(tool_name: str, query: str) -> Optional[dict]:
     """根据工具名从查询中提取参数
 
+    v0.6 增强：支持通用参数提取。
+    对于已知工具做精确参数提取；未知工具尝试从 registry 参数定义自动提取。
+
     Returns:
         dict: 参数字典，或 None（表示参数不足，跳过预执行）
     """
+    # ── 已知工具的精确提取 ──
     if tool_name == "get_weather":
         city = _extract_city(query)
         if not city:
@@ -251,21 +303,137 @@ def _extract_params(tool_name: str, query: str) -> Optional[dict]:
         return {"city": city}
 
     elif tool_name == "get_equipment_checklist":
-        # 先从已有weather结果或查询中获取天气分类
         weather_cat = None
         city = _extract_city(query)
         if city:
             weather_cat = _get_weather_category_for_city(city)
         if not weather_cat:
-            # 用户可能直接问装备，没问天气，尝试拿当前城市天气
-            return None  # 没有天气分类，跳过（后续链式补偿）
+            return None
         scene_type = _extract_scene_type(query)
         params = {"weather_category": weather_cat}
         if scene_type:
             params["scene_type"] = scene_type
         return params
 
-    return None
+    elif tool_name == "geo_search_poi":
+        city = _extract_city(query)
+        if not city:
+            return None
+        # 推断分类
+        cat_map = {
+            "吃": "restaurant", "餐厅": "restaurant", "美食": "restaurant",
+            "买": "shop", "购物": "shop", "逛": "shop",
+            "住": "hotel", "酒店": "hotel",
+            "玩": "attraction", "景点": "attraction", "公园": "park",
+        }
+        category = None
+        for kw, cat in cat_map.items():
+            if kw in query:
+                category = cat
+                break
+        params = {"city": city}
+        if category:
+            params["category"] = category
+        return params
+
+    elif tool_name == "geo_route":
+        # 尝试提取两个地点
+        parts = [p.strip() for p in re.split(r'[到至去>]', query, maxsplit=1)]
+        if len(parts) >= 2 and parts[0] and parts[1]:
+            origin, dest = parts[0], parts[1]
+            # 去掉工具名关键词
+            for kw in ["怎么去", "路线", "怎么走", "导航"]:
+                dest = dest.replace(kw, "").strip()
+            if origin and dest:
+                # 推断出行方式
+                mode = "driving"
+                if "步行" in query or "走路" in query:
+                    mode = "walking"
+                elif "骑车" in query or "骑行" in query or "自行车" in query:
+                    mode = "cycling"
+                return {"origin": origin, "destination": dest, "mode": mode}
+        return None
+
+    elif tool_name == "todo_add":
+        # 提取任务内容 — 去掉触发关键词后的剩余文本
+        triggers = ["添加任务", "新建任务", "记一下", "提醒我", "帮我记"]
+        content = query
+        for t in triggers:
+            content = content.replace(t, "").strip()
+        if not content:
+            return None
+        return {"content": content}
+
+    elif tool_name == "todo_list":
+        # 提取状态过滤
+        status = None
+        if "已完成" in query or "完成" in query:
+            status = "completed"
+        elif "进行中" in query or "正在进行" in query:
+            status = "in_progress"
+        elif "待办" in query or "未完成" in query:
+            status = "pending"
+        if status:
+            return {"status": status}
+        return {}  # 无参数也允许（列出全部）
+
+    elif tool_name == "session_list":
+        return {}  # 无参数，直接返回
+
+    # ── 通用提取：读取 registry 定义，尝试自动匹配参数 ──
+    return _generic_extract_params(tool_name, query)
+
+
+def _generic_extract_params(tool_name: str, query: str) -> Optional[dict]:
+    """通用参数提取 — 根据 registry 参数定义自动匹配
+
+    遍历工具的 parameters 定义，对每个参数尝试从 query 中提取：
+    - type=string → 取参数名或 description 中含有的关键词
+    - type=integer → 从 query 中提取数字
+    - type=number → 提取浮点数
+    """
+    from .tool_registry import get_tool_by_name
+
+    tool_def = get_tool_by_name(tool_name)
+    if not tool_def:
+        return None
+
+    params_def = tool_def.get("parameters", {})
+    if not params_def:
+        return {}  # 无参数工具
+
+    extracted = {}
+    all_found = True
+
+    for param_name, param_info in params_def.items():
+        optional = param_info.get("optional", False)
+        param_type = param_info.get("type", "string")
+
+        if param_type == "string":
+            # 尝试从 query 中匹配参数名或描述关键词
+            desc = param_info.get("description", "")
+            # 检查描述中的关键词是否在 query 中
+            for kw in [param_name, desc[:10]]:
+                if isinstance(kw, str) and kw and kw in query:
+                    # 找到匹配，但无法精确提取值，跳过预执行
+                    pass
+        elif param_type in ("integer", "number"):
+            nums = re.findall(r'(\d+)', query)
+            if nums:
+                extracted[param_name] = int(nums[0])
+
+        # 必填参数无法提取 → 跳过
+        if not optional and param_name not in extracted:
+            # 检查是否是"可选"的（带"optional"标记）
+            desc = param_info.get("description", "")
+            if "optional" not in desc.lower():
+                # 不确定的可选性，保守跳过
+                all_found = False
+
+    if not all_found and not extracted:
+        return None
+
+    return extracted if extracted else {}
 
 
 def _maybe_chain_weather_for_equipment(results: list[dict], query: str):

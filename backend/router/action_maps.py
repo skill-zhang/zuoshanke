@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from logger import get_logger as _get_logger
+_log = _get_logger("router.action_maps")
 
 from database import get_db, SessionLocal
 from models import (
@@ -376,7 +378,7 @@ def execute_action_map(action_map_id: str):
                              line=f"新增 {len(new_tools)} 个工具: {', '.join(t['name'] for t in new_tools)}")
                         yield sse_event("tools_documented", count=len(new_tools), tools=tools_data)
                 except Exception as e:
-                    print(f"[ToolDocs hook] {e}")
+                    _log.error(f"[ToolDocs hook] {e}")
 
             # 创建聊天消息
             try:
@@ -392,7 +394,7 @@ def execute_action_map(action_map_id: str):
                         db.add(msg)
                         db.commit()
             except Exception as e:
-                print(f"[ChatMsg] 创建聊天消息失败: {e}")
+                _log.error(f"[ChatMsg] 创建聊天消息失败: {e}")
 
         except Exception as e:
             yield sse_event("error", message=f"执行异常: {e}")
@@ -482,7 +484,7 @@ def _generate_qwen_report(amap: ActionMap, node_results: list) -> str:
         db = SessionLocal()
         think_node = db.query(ThinkNode).filter(ThinkNode.id == amap.think_node_id).first()
     except Exception as e:
-        print(f"[Qwen report] DB 查询失败: {e}")
+        _log.error(f"[Qwen report] DB 查询失败: {e}")
     finally:
         if 'db' in locals():
             db.close()
@@ -523,7 +525,7 @@ def _generate_qwen_report(amap: ActionMap, node_results: list) -> str:
     try:
         return call_qwen_chat(qwen_messages, temperature=0.3) or ""
     except Exception as e:
-        print(f"[Qwen report] 整理失败: {e}")
+        _log.error(f"[Qwen report] 整理失败: {e}")
         return ""
 
 
@@ -552,5 +554,5 @@ def _verify_constraints(constraints, node_results: list) -> str:
         vr = call_qwen_chat(verify_msg, temperature=0.3)
         return vr.strip() if vr and vr.strip() else ""
     except Exception as e:
-        print(f"[Constraint verify] 失败: {e}")
+        _log.error(f"[Constraint verify] 失败: {e}")
         return ""

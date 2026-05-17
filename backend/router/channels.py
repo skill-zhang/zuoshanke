@@ -1,4 +1,5 @@
 """频道 CRUD + 频道流式"""
+import json
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -9,6 +10,9 @@ from schemas import ChannelCreate, ChannelUpdate, ChannelOut, MessageCreate, Mes
 from ai_engine import ai_channel_chat, ai_channel_chat_stream
 from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
+from agent_core.memory_extractor import MemoryExtractor
+from logger import get_logger as _get_logger
+_log = _get_logger("router.channels")
 
 router = APIRouter(tags=["频道"])
 
@@ -93,6 +97,21 @@ def send_channel_message(channel_id: str, data: MessageCreate, db: Session = Dep
     db.add(ai_msg)
     db.commit()
     db.refresh(ai_msg)
+
+    # 自动提取记忆（双通道）
+    try:
+        history = _get_channel_history(db, channel_id)
+        extract_msgs = history + [
+            {"role": "user", "content": data.content},
+            {"role": "ai", "content": ai_response},
+        ]
+        extractor = MemoryExtractor(db)
+        mem_results = extractor.extract(extract_msgs, data.content)
+        if mem_results:
+            _log.debug(f"[memory] channel extract: {json.dumps(mem_results, ensure_ascii=False)}")
+    except Exception as e:
+        _log.error(f"[memory] channel extract error: {e}")
+
     return msg
 
 
@@ -144,8 +163,21 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_content,
                             created_at=ai_msg.created_at.isoformat(),
                             model="Qwen3.5 本地")
+
+            # ── 5. 自动提取记忆（双通道） ──
+            try:
+                extract_msgs = history_dicts + [
+                    {"role": "user", "content": data.content},
+                    {"role": "ai", "content": full_content},
+                ]
+                extractor = MemoryExtractor(db)
+                mem_results = extractor.extract(extract_msgs, data.content)
+                if mem_results:
+                    print(f"[memory] channel extract: {json.dumps(mem_results, ensure_ascii=False)}")
+            except Exception as e:
+                print(f"[memory] channel extract error: {e}")
         except Exception as e:
-            print(f"[channel stream save error] {e}")
+            _log.error(f"[channel stream save error] {e}")
             yield sse_event("error", message="AI 回复保存失败")
         finally:
             new_db.close()

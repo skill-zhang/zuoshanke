@@ -321,7 +321,17 @@ def recommend_attractions(
             "items": [...]             # 景点列表（按评分排序）
         }
     """
-    # Step 1: 获取实时天气
+    # Step 1: 检查城市是否有景点数据（当前仅天津有硬编码数据）
+    SUPPORTED_CITIES = ["天津"]
+    if city not in SUPPORTED_CITIES:
+        return {
+            "city": city,
+            "error": f"景点数据库当前仅覆盖天津地区，暂不支持{city}的景点推荐。可尝试 web_search",
+            "items": [],
+            "total_matched": 0,
+        }
+
+    # Step 2: 获取实时天气
     weather_data = get_weather(city)
 
     # Step 2: 天气分类

@@ -297,7 +297,8 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
             return Object.entries(catCounts).length === 0 ? (
               <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
             ) : (
-              Object.entries(catCounts)
+              <>
+                {Object.entries(catCounts)
                 .sort((a, b) => b[1] - a[1])
                 .map(([catKey, count]) => {
                   const meta = CATEGORY_META[catKey];
@@ -334,6 +335,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
                 }}
               >➕ 新建类别</span>
             </div>
+            </>
             );
           })()}
         </div>

@@ -55,6 +55,32 @@ def init_db():
     except Exception as e:
         print(f"⚠️  session_id 迁移跳过: {e}")
 
+    # 迁移：gateway_sessions 表（零破坏，仅新增表）
+    try:
+        with engine.connect() as conn:
+            tables = [row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()]
+            if "gateway_sessions" not in tables:
+                conn.execute(text("""
+                    CREATE TABLE gateway_sessions (
+                        id VARCHAR NOT NULL PRIMARY KEY,
+                        platform VARCHAR NOT NULL,
+                        platform_user_id VARCHAR NOT NULL,
+                        mode VARCHAR NOT NULL DEFAULT 'channel',
+                        channel_id VARCHAR,
+                        scene_id VARCHAR,
+                        scene_name VARCHAR,
+                        platform_username VARCHAR,
+                        last_active_at DATETIME,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        UNIQUE (platform, platform_user_id)
+                    )
+                """))
+                conn.commit()
+                print("✅ gateway_sessions 表已创建")
+    except Exception as e:
+        print(f"⚠️  gateway_sessions 表创建跳过: {e}")
+
     # 迁移：Scenes 表新增广场/工坊字段（零破坏）
     NEW_SCENE_COLS = [
         ("icon", "VARCHAR"),

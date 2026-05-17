@@ -18,15 +18,6 @@ from typing import Optional
 # ── 基础工具（永远注入） ──
 BASE_TOOLS = [
     {
-        "name": "web_search",
-        "description": "互联网搜索，搜索并返回摘要结果",
-        "parameters": {
-            "query": {"type": "string", "description": "搜索关键词"}
-        },
-        "returns": "搜索结果列表（标题、摘要、链接）",
-        "category": "search",
-    },
-    {
         "name": "web_fetch",
         "description": "抓取指定 URL 的网页文本内容",
         "parameters": {

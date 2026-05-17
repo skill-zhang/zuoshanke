@@ -1,4 +1,5 @@
 """坐山客 API — FastAPI 应用入口"""
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,7 +20,11 @@ register_all_routers(app)
 
 if __name__ == "__main__":
     import uvicorn
+    from logger import configure_logger
+
+    configure_logger()
+    log = logging.getLogger("main")
 
     init_db()
-    print("✅ 数据库已初始化")
+    log.info("✅ 数据库已初始化")
     uvicorn.run(app, host="0.0.0.0", port=8000)
