@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 — 场景广场+工坊 原型 v2</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg: #0d1117;
+  --sidebar-bg: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --text-muted: #6e7681;
+  --hover-bg: #1c2128;
+  --accent: #58a6ff;
+  --card-bg: #161b22;
+  --card-border: #30363d;
+  --green: #3fb950;
+  --orange: #d29922;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+/* ═══ Sidebar ═══ */
+.sidebar {
+  width: 230px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-list { flex:1; overflow-y:auto; }
+.sidebar-section { padding: 12px 16px 6px; border-bottom:1px solid #21262d; }
+.sidebar-label {
+  font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px;
+}
+.sidebar-label svg { width:16px; height:16px; flex-shrink:0; }
+.sidebar-item {
+  padding: 6px 16px 6px 30px; display: flex; align-items: center; gap: 8px;
+  cursor: pointer; border-left: 2px solid transparent; font-size: 14px; position: relative;
+}
+.sidebar-item:hover { background: var(--hover-bg); }
+.sidebar-item.active { background: var(--hover-bg); border-left-color: var(--accent); }
+.sidebar-item-icon { width:22px; text-align:center; font-size:15px; flex-shrink:0; }
+.sidebar-item-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sidebar-item .badge {
+  margin-left:auto; font-size:11px; background:#30363d; border-radius:10px; padding:1px 8px; color:var(--text-dim); white-space:nowrap;
+}
+.sidebar-action {
+  padding: 6px 16px 6px 30px; color: var(--text-dim); cursor: pointer; display: flex;
+  align-items: center; gap: 8px; font-size: 13px;
+}
+.sidebar-action:hover { color: #c9d1d9; background: var(--hover-bg); }
+.sidebar-nav {
+  padding: 7px 16px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  color: var(--text-dim); font-size: 13px; border-left: 2px solid transparent;
+}
+.sidebar-nav:hover { background: var(--hover-bg); color: var(--text); }
+.sidebar-nav.active { background: var(--hover-bg); color: var(--text); border-left-color: var(--accent); }
+.sidebar-nav .nav-icon { width: 22px; text-align: center; flex-shrink:0; }
+.sidebar-nav .nav-icon svg { width:16px; height:16px; vertical-align:middle; fill:currentColor; }
+.sidebar-category {
+  padding: 5px 16px 5px 30px; display: flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 13px; color: var(--text-dim); border-left: 2px solid transparent;
+  user-select: none;
+}
+.sidebar-category:hover { background: var(--hover-bg); color: var(--text); }
+.sidebar-category .cat-icon { font-size: 14px; width:22px; text-align:center; flex-shrink:0; }
+.sidebar-category .cat-arrow { font-size: 10px; width:14px; text-align:center; flex-shrink:0; color:var(--text-muted); transition:transform .15s; }
+.sidebar-category.collapsed .cat-arrow { transform: rotate(-90deg); }
+.sidebar-category .cat-count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.sidebar-children { }
+.sidebar-children.collapsed { display: none; }
+.sidebar-footer { padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-dim); }
+/* ═══ Main ═══ */
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 44px; border-bottom: 1px solid var(--border); display: flex; align-items: center;
+  padding: 0 20px; gap: 12px; flex-shrink: 0;
+}
+.topbar-title { font-weight: 600; font-size: 15px; }
+.topbar-breadcrumb { color: var(--text-dim); font-size: 13px; }
+.topbar-breadcrumb span { color: var(--text); cursor:pointer; }
+.topbar-breadcrumb span:hover { color: var(--accent); }
+/* ═══ Plaza View ═══ */
+.plaza { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.category-bar {
+  display: flex; gap: 6px; padding: 16px 24px 0; overflow-x: auto; flex-shrink: 0;
+}
+.category-tab {
+  padding: 6px 16px; border-radius: 20px; background: transparent; color: var(--text-dim);
+  cursor: pointer; white-space: nowrap; font-size: 13px; border: 1px solid transparent; transition: all .15s;
+}
+.category-tab:hover { color: var(--text); background: var(--hover-bg); }
+.category-tab.active { background: #1f6feb33; color: var(--accent); border-color: #1f6feb66; }
+.plaza-toolbar {
+  display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; flex-shrink: 0; flex-wrap: wrap; gap: 8px;
+}
+.search-box {
+  display: flex; align-items: center; background: var(--sidebar-bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 12px; width: 280px; gap: 8px;
+}
+.search-box input { background: none; border: none; color: var(--text); font-size: 13px; outline: none; flex: 1; }
+.search-box input::placeholder { color: var(--text-muted); }
+.btn {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: transparent;
+  color: var(--text); cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { background: var(--hover-bg); }
+.btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+.btn-primary:hover { background: #2ea043; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-accent:hover { opacity: .85; }
+.card-grid {
+  flex: 1; overflow-y: auto; padding: 0 24px 24px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; align-content: start;
+}
+.scene-card {
+  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px;
+  padding: 20px; cursor: pointer; transition: all .15s; display: flex; flex-direction: column; position: relative;
+}
+.scene-card:hover {
+  border-color: var(--text-muted); background: #1c2128;
+  transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.scene-card-icon { font-size: 32px; line-height: 1; margin-bottom: 10px; }
+.scene-card-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; display:flex; align-items:center; gap:8px; }
+.scene-card-version {
+  font-size: 11px; color: var(--text-muted); background: #21262d; border-radius: 4px; padding: 1px 6px; font-weight: 400;
+}
+.scene-card-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scene-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid #21262d; font-size: 12px; color: var(--text-muted);
+}
+.scene-card-updated { font-size: 11px; }
+.scene-card-source { font-size: 11px; display:flex; align-items:center; gap:4px; }
+/* ═══ Workshop View ═══ */
+.workshop { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.ws-header {
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.ws-header-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.ws-header-actions { display: flex; gap: 8px; }
+.ws-list { flex:1; overflow-y:auto; padding: 16px 24px 24px; }
+.category-group { margin-bottom: 24px; }
+.category-group:last-child { margin-bottom: 0; }
+.cat-group-header {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0; margin-bottom: 8px;
+  font-size: 14px; font-weight: 500; color: var(--text); border-bottom: 1px solid #21262d; padding-bottom: 8px;
+}
+.cat-group-header .cat-count { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: auto; }
+.ws-scene-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--card-border); background: var(--card-bg); margin-bottom: 8px; cursor: pointer;
+}
+.ws-scene-item:hover { border-color: var(--text-muted); background: #1c2128; }
+.ws-scene-icon { font-size: 28px; flex-shrink:0; }
+.ws-scene-info { flex:1; min-width:0; }
+.ws-scene-name { font-size: 14px; font-weight: 500; display:flex; align-items:center; gap:8px; }
+.ws-scene-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.ws-scene-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.status-badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap;
+}
+.status-published { background: #23863633; color: var(--green); }
+.status-draft { background: #d2992233; color: var(--orange); }
+.ws-scene-actions {
+  display: flex; gap: 2px; opacity: 0; transition: opacity .12s;
+}
+.ws-scene-item:hover .ws-scene-actions { opacity: 1; }
+.ws-scene-actions .btn-sm {
+  padding: 4px 8px; font-size: 12px; border: none; border-radius: 4px;
+  background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.ws-scene-actions .btn-sm:hover { background: var(--hover-bg); color: var(--text); }
+/* ═══ Scene Chat ═══ */
+.scene-chat { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.scene-header { padding: 16px 24px; border-bottom: 1px solid var(--border); flex-shrink:0; }
+.scene-header-top { display: flex; align-items: flex-start; gap: 14px; }
+.scene-header-icon { font-size: 36px; line-height: 1; flex-shrink:0; }
+.scene-header-info { flex:1; }
+.scene-header-name { font-size: 16px; font-weight: 600; display:flex; align-items:center; gap:8px; }
+.scene-header-desc { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+.scene-header-guide {
+  background: #1f6feb15; border: 1px solid #1f6feb33; border-radius: 8px;
+  padding: 12px 16px; font-size: 13px; color: var(--text-dim); margin-top: 10px;
+}
+.scene-header-guide strong { color: var(--accent); }
+.scene-header-guide .examples { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+.example-tag {
+  background: #1f6feb22; padding: 3px 10px; border-radius: 12px; font-size: 12px; color: var(--accent); cursor: pointer;
+}
+.example-tag:hover { background: #1f6feb44; }
+.back-btn {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim);
+  cursor: pointer; font-size: 13px; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px;
+}
+.back-btn:hover { color: var(--text); background: var(--hover-bg); }
+.scene-chat-actions {
+  display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0;
+}
+.chat-messages { flex:1; overflow-y:auto; padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.message { max-width:75%; padding:10px 14px; border-radius:8px; line-height:1.6; font-size:14px; }
+.message.user { background:#1f6feb33; align-self:flex-end; border-bottom-right-radius:4px; }
+.message.ai { background:var(--sidebar-bg); border:1px solid var(--border); align-self:flex-start; border-bottom-left-radius:4px; }
+.message-role { font-size:11px; color:var(--text-dim); margin-bottom:4px; font-weight:500; }
+.chat-input-area { padding:12px 24px 16px; border-top:1px solid var(--border); flex-shrink:0; }
+.chat-input-box {
+  display:flex; gap:8px; align-items:center; background:var(--sidebar-bg);
+  border:1px solid var(--border); border-radius:8px; padding:8px 12px;
+}
+.chat-input-box input { background:none; border:none; color:var(--text); font-size:14px; outline:none; flex:1; }
+.chat-input-box input::placeholder { color:var(--text-muted); }
+.send-btn { background:var(--accent); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:13px; cursor:pointer; }
+.send-btn:hover { opacity:.85; }
+/* ═══ Modals ═══ */
+.modal-overlay {
+  display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center;
+}
+.modal-overlay.show { display:flex; }
+.modal {
+  background:var(--sidebar-bg); border:1px solid var(--border); border-radius:12px;
+  width:540px; max-height:80vh; overflow-y:auto; padding:24px;
+}
+.modal-sm { width:400px; }
+.modal-title { font-size:16px; font-weight:600; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
+.modal-close { background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; padding:4px; }
+.form-group { margin-bottom:14px; }
+.form-label { display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px; font-weight:500; }
+.form-input, .form-select, .form-textarea {
+  width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:8px 12px; color:var(--text); font-size:14px; outline:none; font-family:inherit;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color:var(--accent); }
+.form-textarea { min-height:80px; resize:vertical; }
+.form-row { display:flex; gap:12px; }
+.form-row .form-group { flex:1; }
+.form-hint { font-size:12px; color:var(--text-muted); margin-top: 4px; }
+.modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid #21262d; }
+/* ═══ Scrollbar ═══ */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#30363d; border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:#484f58; }
+/* ═══ Empty state ═══ */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; color:var(--text-muted); grid-column:1/-1; }
+.empty-state-icon { font-size:48px; margin-bottom:16px; }
+.empty-state-text { font-size:15px; margin-bottom:8px; }
+.empty-state-desc { font-size:13px; color:var(--text-dim); }
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<div class="sidebar">
+  <div class="sidebar-list">
+    <!-- 讨论 · 频道 -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">
+        <svg viewBox="0 0 16 16" fill="#58a6ff"><path d="M1.5 2h10a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H7.5l-3 2.5v-2.5H1.5a.5.5 0 0 1-.5-.5v-5a.5.5 0 0 1 .5-.5z"/></svg>
+        讨论 · 频道
+      </div>
+    </div>
+    <div class="sidebar-item">
+      <span class="sidebar-item-icon">💬</span>
+      <span class="sidebar-item-name">默认频道</span>
+    </div>
+    <div class="sidebar-item">
+      <span class="sidebar-item-icon">#</span>
+      <span class="sidebar-item-name">技术闲聊</span>
+    </div>
+    <div class="sidebar-action">+ 新建频道</div>
+
+    <!-- 场景广场 — 点击直接进入（一级菜单） -->
+    <div class="sidebar-section" onclick="showPlaza()" style="cursor:pointer;margin-top:4px;border-bottom:1px solid #21262d;">
+      <div class="sidebar-label">
+        <svg viewBox="0 0 16 16" fill="#58a6ff"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3ZM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3ZM2.5 9.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM9 2.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3ZM10.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM9 10.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3ZM10.5 9.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3Z"/></svg>
+        场景广场
+      </div>
+    </div>
+
+    <!-- 工坊 -->
+    <div class="sidebar-section" style="margin-top:4px;">
+      <div class="sidebar-label">
+        <svg viewBox="0 0 16 16" fill="#58a6ff"><path d="M4.5 1.5A2.5 2.5 0 0 0 2 4v2.5c0 .69.56 1.25 1.25 1.25h7.5c.69 0 1.25-.56 1.25-1.25V4a2.5 2.5 0 0 0-2.5-2.5h-5Z"/><path d="M1.5 9.5v3a2.5 2.5 0 0 0 2.5 2.5h4a.5.5 0 0 0 .5-.5v-7H5a.5.5 0 0 0-.5.5v1a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5Z"/><path d="M11 9.5v.5h2.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H11a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z"/></svg>
+        工坊
+      </div>
+    </div>
+    <div class="sidebar-nav" onclick="showWorkshop()">
+      <span class="nav-icon">
+        <svg viewBox="0 0 16 16" fill="#58a6ff"><path d="M4.5 1.5A2.5 2.5 0 0 0 2 4v2.5c0 .69.56 1.25 1.25 1.25h7.5c.69 0 1.25-.56 1.25-1.25V4a2.5 2.5 0 0 0-2.5-2.5h-5Z"/><path d="M1.5 9.5v3a2.5 2.5 0 0 0 2.5 2.5h4a.5.5 0 0 0 .5-.5v-7H5a.5.5 0 0 0-.5.5v1a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5Z"/><path d="M11 9.5v.5h2.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H11a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z"/></svg>
+      </span>
+      <span>创作空间</span>
+      <span class="badge">6</span>
+    </div>
+    <!-- 生活 类别 -->
+    <div class="sidebar-category" onclick="toggleCategory(this); showWorkshop('life')">
+      <span class="cat-arrow">▼</span>
+      <span class="cat-icon">🌿</span> 生活 <span class="cat-count">2</span>
+    </div>
+    <div class="sidebar-children" id="ch-life">
+      <div class="sidebar-item" onclick="enterSceneById(1)" title="❄ 天气查询 v2.0 已发布">
+        <span class="sidebar-item-icon">❄</span>
+        <span class="sidebar-item-name">天气查询</span>
+        <span class="badge" style="background:#23863633;color:#3fb950;">v2.0</span>
+      </div>
+      <div class="sidebar-item" onclick="enterSceneById(2)" title="✈ 旅游出行 v1.0 已发布">
+        <span class="sidebar-item-icon">✈</span>
+        <span class="sidebar-item-name">旅游出行</span>
+        <span class="badge" style="background:#23863633;color:#3fb950;">v1.0</span>
+      </div>
+    </div>
+    <!-- 电商 类别 -->
+    <div class="sidebar-category collapsed" onclick="toggleCategory(this); showWorkshop('ecommerce')">
+      <span class="cat-arrow">▼</span>
+      <span class="cat-icon">🛒</span> 电商 <span class="cat-count">3</span>
+    </div>
+    <div class="sidebar-children collapsed" id="ch-ecommerce">
+      <div class="sidebar-item" onclick="enterSceneById(3)" title="👗 女装推荐 v1.0 已发布">
+        <span class="sidebar-item-icon">👗</span>
+        <span class="sidebar-item-name">女装推荐</span>
+        <span class="badge" style="background:#23863633;color:#3fb950;">v1.0</span>
+      </div>
+      <div class="sidebar-item" onclick="enterSceneById(4)" title="🚗 二手车评估 v1.1 已发布">
+        <span class="sidebar-item-icon">🚗</span>
+        <span class="sidebar-item-name">二手车评估</span>
+        <span class="badge" style="background:#23863633;color:#3fb950;">v1.1</span>
+      </div>
+      <div class="sidebar-item" onclick="enterSceneById(11)" title="🛒 商品比价 草稿">
+        <span class="sidebar-item-icon">🛒</span>
+        <span class="sidebar-item-name">商品比价</span>
+        <span class="badge" style="background:#d2992233;color:#d29922;">草稿</span>
+      </div>
+    </div>
+    <!-- 工作 类别 -->
+    <div class="sidebar-category collapsed" onclick="toggleCategory(this); showWorkshop('work')">
+      <span class="cat-arrow">▼</span>
+      <span class="cat-icon">💼</span> 工作 <span class="cat-count">1</span>
+    </div>
+    <div class="sidebar-children collapsed" id="ch-work">
+      <div class="sidebar-item" onclick="enterSceneById(5)" title="📊 数据报表 v1.0 已发布">
+        <span class="sidebar-item-icon">📊</span>
+        <span class="sidebar-item-name">数据报表</span>
+        <span class="badge" style="background:#23863633;color:#3fb950;">v1.0</span>
+      </div>
+    </div>
+    <div class="sidebar-action">+ 新建场景</div>
+    <div class="sidebar-action"><svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16" style="flex-shrink:0;"><path d="M1.5 3h4a.5.5 0 0 1 .5.5v1a.5.5 0 0 0 .5.5h8a.5.5 0 0 1 .5.5V13a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 1 13V4.5A1.5 1.5 0 0 1 2.5 3Z"/></svg> 管理类别</div>
+  </div>
+  <div class="sidebar-footer">
+    <span style="cursor:pointer;">坐山客 v0.2 · 本地</span>
+  </div>
+</div>
+
+<!-- ═══ Main ═══ -->
+<div class="main-content">
+  <div class="topbar">
+    <div class="topbar-title" id="topbarTitle">🏪 场景广场</div>
+    <div class="topbar-breadcrumb" id="topbarBreadcrumb" style="display:none;">
+      <span onclick="showPlaza()">场景广场</span>  >  <span id="breadcrumbSceneName">天气查询</span>
+    </div>
+  </div>
+
+  <!-- ═══ Plaza View ═══ -->
+  <div id="plazaView" class="plaza">
+    <div class="category-bar">
+      <div class="category-tab active" data-cat="all" onclick="filterCategory(this,'all')">🔍 全部</div>
+      <div class="category-tab" data-cat="life" onclick="filterCategory(this,'life')">🌿 生活</div>
+      <div class="category-tab" data-cat="ecommerce" onclick="filterCategory(this,'ecommerce')">🛒 电商</div>
+      <div class="category-tab" data-cat="work" onclick="filterCategory(this,'work')">💼 工作</div>
+      <div class="category-tab" data-cat="learn" onclick="filterCategory(this,'learn')">📚 学习</div>
+      <div class="category-tab" data-cat="create" onclick="filterCategory(this,'create')">🎨 创作</div>
+      <div class="category-tab" data-cat="finance" onclick="filterCategory(this,'finance')">📈 金融</div>
+      <div class="category-tab" data-cat="media" onclick="filterCategory(this,'media')">💬 自媒体</div>
+    </div>
+    <div class="plaza-toolbar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="搜索场景..." oninput="searchPlazaScenes(this.value)">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="simulateImport()">📥 导入场景</button>
+        <button class="btn btn-accent" onclick="showCreateModal()">✨ 创建场景</button>
+      </div>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </div>
+
+  <!-- ═══ Workshop View ═══ -->
+  <div id="workshopView" class="workshop" style="display:none;">
+    <div class="ws-header">
+      <div class="ws-header-title">🛠 工坊 · <span id="wsCategoryLabel">全部类别</span></div>
+      <div class="ws-header-actions">
+        <button class="btn" onclick="showCreateModal()">✨ 新建场景</button>
+        <button class="btn">📁 管理类别</button>
+      </div>
+    </div>
+    <div class="ws-list" id="wsList"></div>
+  </div>
+
+  <!-- ═══ Scene Chat View ═══ -->
+  <div id="sceneChatView" class="scene-chat" style="display:none;">
+    <div class="scene-header">
+      <div class="back-btn" onclick="backFromChat()">← 返回</div>
+      <div class="scene-header-top">
+        <div class="scene-header-icon" id="chatSceneIcon">❄️</div>
+        <div class="scene-header-info">
+          <div class="scene-header-name">
+            <span id="chatSceneName">天气查询</span>
+            <span class="scene-card-version" id="chatSceneVersion">v2.0</span>
+            <span class="status-badge status-published" id="chatSceneStatus" style="font-size:11px;">已发布</span>
+          </div>
+          <div class="scene-header-desc" id="chatSceneDesc">查天气拿出行建议</div>
+          <div class="scene-header-guide" id="chatSceneGuide">
+            <strong>📋 输入城市和时间，帮你查天气</strong>
+            <div class="examples">
+              <span class="example-tag">北京明天</span>
+              <span class="example-tag">上海 五一</span>
+              <span class="example-tag">深圳 周末</span>
+            </div>
+          </div>
+          <div class="scene-chat-actions" id="chatSceneActions">
+            <button class="btn btn-accent" style="font-size:12px;padding:4px 12px;" onclick="showPublishModal()">📦 发布</button>
+            <button class="btn" style="font-size:12px;padding:4px 12px;" onclick="showVersionModal()">🔄 发布新版本</button>
+            <button class="btn" style="font-size:12px;padding:4px 12px;" onclick="alert('导出场景 JSON 文件')">📤 导出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="chat-messages">
+      <div class="message ai">
+        <div class="message-role">坐山客 🌤</div>
+        <div>Hi！我可以帮你查任意城市未来几天的天气。试试输入城市名 + 时间，比如「北京明天」或「上海 五一」。</div>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <div class="chat-input-box">
+        <input type="text" placeholder="输入城市和时间，例如：北京明天..." id="chatInput">
+        <button class="send-btn" onclick="sendChat()">发送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Create Modal ═══ -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-title">
+      创建新场景
+      <button class="modal-close" onclick="hideCreateModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">图标</label>
+      <input class="form-input" value="❄️" placeholder="输入 emoji 图标">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">场景名称</label>
+        <input class="form-input" placeholder="例：天气查询" value="天气查询">
+      </div>
+      <div class="form-group">
+        <label class="form-label">类别</label>
+        <select class="form-select">
+          <option>生活</option>
+          <option>电商</option>
+          <option>工作</option>
+          <option>学习</option>
+          <option>创作</option>
+          <option>金融</option>
+          <option>自媒体</option>
+          <option>其他</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">简介</label>
+      <input class="form-input" value="查天气拿出行建议">
+    </div>
+    <div class="form-group">
+      <label class="form-label">引导语</label>
+      <textarea class="form-textarea" placeholder="用户进入场景看到的提示">输入城市和时间，帮你查天气</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">初始版本号</label>
+      <input class="form-input" value="1.0" placeholder="首次发布时的版本号">
+      <div class="form-hint">先保存草稿，准备好后再发布</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hideCreateModal()">取消</button>
+      <button class="btn" onclick="hideCreateModal()">保存草稿</button>
+      <button class="btn btn-primary" onclick="hideCreateModal()">保存并发布</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Publish Modal ═══ -->
+<div class="modal-overlay" id="publishModal">
+  <div class="modal modal-sm">
+    <div class="modal-title">
+      发布场景 <span id="publishSceneName">商品比价</span>
+      <button class="modal-close" onclick="hidePublishModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">发布版本号</label>
+      <input class="form-input" id="publishVersion" value="1.0" placeholder="如 1.0 / 1.1 / 2.0">
+      <div class="form-hint">必须大于当前版本 <span id="publishCurrentVersion" style="color:var(--orange);">0.0</span></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">更新说明（可选）</label>
+      <textarea class="form-textarea" placeholder="本次更新内容..." style="min-height:60px;">首次发布</textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hidePublishModal()">取消</button>
+      <button class="btn btn-primary" onclick="doPublish()">确认发布</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Version Update Modal ═══ -->
+<div class="modal-overlay" id="versionModal">
+  <div class="modal modal-sm">
+    <div class="modal-title">
+      发布新版本 — <span id="versionSceneName">二手车评估</span>
+      <button class="modal-close" onclick="hideVersionModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">新版本号</label>
+      <input class="form-input" id="newVersionInput" value="1.2" placeholder="如 2.0 / 1.1">
+      <div class="form-hint">当前版本 <span id="versionCurrentVersion" style="color:var(--green);">1.0</span>，新版本必须更大</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">更新内容</label>
+      <textarea class="form-textarea" placeholder="描述本次更新..." style="min-height:60px;">优化了数据源，支持更多城市</textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hideVersionModal()">取消</button>
+      <button class="btn btn-primary" onclick="doVersionUpdate()">确认更新</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ Data ═══
+const scenes = [
+  { id:1, icon:'❄️', name:'天气查询', desc:'查天气拿出行建议', cat:'life', catLabel:'生活', author:'坐山客', source:'system', version:'2.0', status:'published', updated:'3天前', guide:'输入城市和时间，帮你查天气', examples:['北京明天','上海 五一','深圳 周末'] },
+  { id:2, icon:'✈️', name:'旅游出行', desc:'规划完整行程，推荐景点美食交通', cat:'life', catLabel:'生活', author:'坐山客', source:'system', version:'1.0', status:'published', updated:'7天前', guide:'输入目的地和时间，帮你规划旅行', examples:['云南 7天','杭州 周末'] },
+  { id:3, icon:'👗', name:'女装推荐', desc:'当前最热女装款式价格卖家渠道查询', cat:'ecommerce', catLabel:'电商', author:'张清泉', source:'self', version:'1.0', status:'published', updated:'2天前', guide:'告诉我你的需求，帮你找最热女装', examples:['Top20 女装','春季连衣裙'] },
+  { id:4, icon:'🚗', name:'二手车评估', desc:'二手车估价车况分析市场行情对比', cat:'ecommerce', catLabel:'电商', author:'张清泉', source:'self', version:'1.1', status:'published', updated:'1天前', guide:'输入车型年份里程，帮你估价', examples:['宝马X5 2020','特斯拉 Model 3'] },
+  { id:5, icon:'📊', name:'数据报表', desc:'一句话生成数据报表支持图表可视化', cat:'work', catLabel:'工作', author:'坐山客', source:'import', version:'1.0', status:'published', updated:'5天前', guide:'告诉我你想看什么数据', examples:['本月销售趋势','用户增长曲线'] },
+  { id:6, icon:'📝', name:'AI写作助手', desc:'文案文章报告等各类写作需求', cat:'create', catLabel:'创作', author:'李四', source:'import', version:'2.1', status:'published', updated:'1小时前', guide:'告诉我你要写什么', examples:['产品介绍','活动文案'] },
+  { id:7, icon:'📈', name:'金融行情', desc:'实时股票基金行情查询分析', cat:'finance', catLabel:'金融', author:'坐山客', source:'system', version:'1.0', status:'published', updated:'10天前', guide:'输入股票名称或代码', examples:['贵州茅台','特斯拉'] },
+  { id:8, icon:'💬', name:'自媒体助手', desc:'热点追踪内容策划标题优化', cat:'media', catLabel:'自媒体', author:'坐山客', source:'system', version:'1.0', status:'published', updated:'6天前', guide:'输入你的领域或主题' },
+  { id:9, icon:'📚', name:'学习助手', desc:'知识问答论文辅助学习计划制定', cat:'learn', catLabel:'学习', author:'坐山客', source:'system', version:'1.0', status:'published', updated:'4天前', guide:'告诉我想学什么' },
+  { id:10, icon:'🧪', name:'竞品分析', desc:'多维度竞品对比分析报告生成', cat:'work', catLabel:'工作', author:'张清泉', source:'self', version:'0.0', status:'draft', updated:'刚刚', guide:'输入竞品名称' },
+  { id:11, icon:'🛒', name:'商品比价', desc:'跨平台商品价格对比找最优渠道', cat:'ecommerce', catLabel:'电商', author:'张清泉', source:'self', version:'0.0', status:'draft', updated:'30分钟前', guide:'输入商品名称或链接' },
+];
+
+const catIcons = { life:'🌿', ecommerce:'🛒', work:'💼', learn:'📚', create:'🎨', finance:'📈', media:'💬', other:'📦' };
+const catLabels = { life:'生活', ecommerce:'电商', work:'工作', learn:'学习', create:'创作', finance:'金融', media:'自媒体', other:'其他' };
+const sourceLabels = { system:'坐山客系统', self:'你', import:'导入' };
+
+let currentCategory = 'all', searchQuery = '', currentChatScene = null, currentView = 'plaza';
+
+// ═══ Plaza ═══
+function renderPlaza() {
+  let list = scenes.filter(s => s.status === 'published');
+  if (currentCategory !== 'all') list = list.filter(s => s.cat === currentCategory);
+  if (searchQuery) { const q=searchQuery.toLowerCase(); list = list.filter(s => s.name.toLowerCase().includes(q) || (s.desc||'').toLowerCase().includes(q)); }
+  const grid = document.getElementById('cardGrid');
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">暂无已发布的场景</div><div class="empty-state-desc">去工坊发布一个场景，或换个分类看看</div></div>`;
+    return;
+  }
+  grid.innerHTML = list.map(s => `
+    <div class="scene-card" onclick="enterScene(${s.id},'plaza')">
+      <div class="scene-card-icon">${s.icon}</div>
+      <div class="scene-card-name">${s.name} <span class="scene-card-version">v${s.version}</span></div>
+      <div class="scene-card-desc">${s.desc}</div>
+      <div class="scene-card-footer">
+        <span class="scene-card-source">${sourceLabels[s.source] || s.author}</span>
+        <span class="scene-card-updated">${s.updated}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterCategory(el, cat) {
+  document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentCategory = cat;
+  renderPlaza();
+}
+
+function searchPlazaScenes(q) { searchQuery = q; renderPlaza(); }
+
+// ═══ Workshop ═══
+let wsFilterCat = null;
+
+function showWorkshop(cat) {
+  wsFilterCat = cat || null;
+  currentView = 'workshop';
+  document.getElementById('plazaView').style.display = 'none';
+  document.getElementById('workshopView').style.display = 'flex';
+  document.getElementById('sceneChatView').style.display = 'none';
+  document.getElementById('topbarTitle').style.display = 'block';
+  document.getElementById('topbarTitle').textContent = '🛠 工坊';
+  document.getElementById('topbarBreadcrumb').style.display = 'none';
+  document.querySelectorAll('.sidebar-nav').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.sidebar-nav')[1].classList.add('active');
+  renderWorkshop();
+}
+
+function renderWorkshop() {
+  const container = document.getElementById('wsList');
+  const grouped = {};
+  scenes.forEach(s => {
+    if (wsFilterCat && s.cat !== wsFilterCat) return;
+    if (!grouped[s.cat]) grouped[s.cat] = [];
+    grouped[s.cat].push(s);
+  });
+  document.getElementById('wsCategoryLabel').textContent = wsFilterCat ? catLabels[wsFilterCat] : '全部类别';
+
+  const catOrder = ['生活','电商','工作','学习','创作','金融','自媒体','其他'];
+  const catKey = { '生活':'life','电商':'ecommerce','工作':'work','学习':'learn','创作':'create','金融':'finance','自媒体':'media','其他':'other' };
+  const reverseCat = Object.fromEntries(Object.entries(catLabels).map(([k,v]) => [v,k]));
+
+  container.innerHTML = catOrder.filter(c => grouped[reverseCat[c]]).map(c => {
+    const k = reverseCat[c];
+    const items = grouped[k];
+    return `
+      <div class="category-group">
+        <div class="cat-group-header">
+          <span>${catIcons[k]} ${c}</span>
+          <span class="cat-count">${items.length} 个场景</span>
+        </div>
+        ${items.map(s => `
+          <div class="ws-scene-item" onclick="enterScene(${s.id},'workshop')">
+            <div class="ws-scene-icon">${s.icon}</div>
+            <div class="ws-scene-info">
+              <div class="ws-scene-name">
+                ${s.name}
+                <span class="scene-card-version">v${s.version}</span>
+                <span class="status-badge ${s.status === 'published' ? 'status-published' : 'status-draft'}">${s.status === 'published' ? '已发布' : '草稿'}</span>
+              </div>
+              <div class="ws-scene-desc">${s.desc} · ${s.updated}</div>
+            </div>
+            <div class="ws-scene-actions">
+              <button class="btn-sm" onclick="event.stopPropagation();enterScene(${s.id},'workshop')">✏️</button>
+              <button class="btn-sm" onclick="event.stopPropagation();${s.status === 'published' ? 'showVersionModalFor('+s.id+')' : 'showPublishModalFor('+s.id+')'}">${s.status === 'published' ? '🔄' : '📦'}</button>
+              <button class="btn-sm" onclick="event.stopPropagation();alert('导出 JSON')">📤</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('') || `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-state-icon">📭</div><div class="empty-state-text">该类别下暂无场景</div><div class="empty-state-desc">创建一个新场景吧</div></div>`;
+}
+
+// ═══ Enter Scene Chat ═══
+function enterScene(id, from) {
+  const s = scenes.find(x => x.id === id);
+  if (!s) return;
+  currentChatScene = s;
+  currentView = 'chat';
+
+  document.getElementById('plazaView').style.display = 'none';
+  document.getElementById('workshopView').style.display = 'none';
+  document.getElementById('sceneChatView').style.display = 'flex';
+  document.getElementById('topbarTitle').style.display = 'none';
+  document.getElementById('topbarBreadcrumb').style.display = 'block';
+
+  const fromLabel = from === 'plaza' ? '场景广场' : '工坊';
+  document.getElementById('breadcrumbSceneName').textContent = `${s.icon} ${s.name}`;
+  document.getElementById('topbarBreadcrumb').innerHTML = `<span onclick="showPlaza()">场景广场</span>  /  <span onclick="${from === 'plaza' ? 'showPlaza()' : 'showWorkshop()'}">${fromLabel}</span>  /  <span>${s.icon} ${s.name}</span>`;
+
+  document.getElementById('chatSceneIcon').textContent = s.icon;
+  document.getElementById('chatSceneName').textContent = s.name;
+  document.getElementById('chatSceneVersion').textContent = 'v' + s.version;
+  document.getElementById('chatSceneDesc').textContent = s.desc;
+
+  const statusEl = document.getElementById('chatSceneStatus');
+  statusEl.textContent = s.status === 'published' ? '已发布' : '草稿';
+  statusEl.className = 'status-badge ' + (s.status === 'published' ? 'status-published' : 'status-draft');
+
+  const guide = document.getElementById('chatSceneGuide');
+  guide.innerHTML = `<strong>📋 ${s.guide || '输入你的需求'}</strong>`;
+  if (s.examples && s.examples.length) {
+    guide.innerHTML += `<div class="examples">${s.examples.map(e => `<span class="example-tag">${e}</span>`).join('')}</div>`;
+  }
+
+  // Show/hide actions based on source
+  const isOwn = s.source === 'self';
+  document.getElementById('chatSceneActions').style.display = isOwn ? 'flex' : 'none';
+  // Also show for system if user wants to publish their own version
+  // For prototype: always show
+  document.getElementById('chatSceneActions').style.display = 'flex';
+
+  document.getElementById('chatInput').placeholder = `输入${s.guide ? s.guide.replace('帮你','').replace('帮你查','查') : '你的需求'}...`;
+}
+
+function enterSceneById(id) { enterScene(id, 'workshop'); }
+
+function backFromChat() {
+  if (currentView === 'chat') {
+    // go back to wherever we came from
+    showPlaza();
+  }
+}
+
+// ═══ Plaza show ═══
+function showPlaza() {
+  currentView = 'plaza';
+  document.getElementById('plazaView').style.display = 'flex';
+  document.getElementById('workshopView').style.display = 'none';
+  document.getElementById('sceneChatView').style.display = 'none';
+  document.getElementById('topbarTitle').style.display = 'block';
+  document.getElementById('topbarTitle').textContent = '🏪 场景广场';
+  document.getElementById('topbarBreadcrumb').style.display = 'none';
+  document.querySelectorAll('.sidebar-nav').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.sidebar-nav')[0].classList.add('active');
+  renderPlaza();
+}
+
+// ═══ Modals ═══
+function showCreateModal() { document.getElementById('createModal').classList.add('show'); }
+function hideCreateModal() { document.getElementById('createModal').classList.remove('show'); }
+
+function showPublishModal() {
+  const s = currentChatScene;
+  document.getElementById('publishSceneName').textContent = s.name;
+  document.getElementById('publishCurrentVersion').textContent = s.version;
+  document.getElementById('publishVersion').value = s.version === '0.0' ? '1.0' : s.version;
+  document.getElementById('publishModal').classList.add('show');
+}
+function showPublishModalFor(id) {
+  const s = scenes.find(x => x.id === id);
+  if (!s) return;
+  currentChatScene = s;
+  showPublishModal();
+}
+function hidePublishModal() { document.getElementById('publishModal').classList.remove('show'); }
+function doPublish() {
+  const v = document.getElementById('publishVersion').value;
+  const s = currentChatScene;
+  if (!s) return;
+  s.version = v;
+  s.status = 'published';
+  s.updated = '刚刚';
+  hidePublishModal();
+  renderWorkshop();
+  renderPlaza();
+  if (currentView === 'chat') enterScene(s.id, 'workshop');
+  alert(`✅ 已发布 v${v}！场景广场已更新`);
+}
+
+function showVersionModal() {
+  const s = currentChatScene;
+  document.getElementById('versionSceneName').textContent = s.name;
+  document.getElementById('versionCurrentVersion').textContent = s.version;
+  // Suggest next version
+  const parts = s.version.split('.').map(Number);
+  document.getElementById('newVersionInput').value = `${parts[0]}.${(parts[1]||0)+1}`;
+  document.getElementById('versionModal').classList.add('show');
+}
+function showVersionModalFor(id) {
+  const s = scenes.find(x => x.id === id);
+  if (!s) return;
+  currentChatScene = s;
+  showVersionModal();
+}
+function hideVersionModal() { document.getElementById('versionModal').classList.remove('show'); }
+function doVersionUpdate() {
+  const v = document.getElementById('newVersionInput').value;
+  const s = currentChatScene;
+  if (!s) return;
+  if (v <= s.version) { alert('版本号必须大于当前版本！'); return; }
+  s.version = v;
+  s.updated = '刚刚';
+  hideVersionModal();
+  renderWorkshop();
+  renderPlaza();
+  if (currentView === 'chat') enterScene(s.id, 'workshop');
+  alert(`✅ 已更新至 v${v}！场景广场同步`);
+}
+
+function simulateImport() {
+  alert('📥 导入场景\n\n选择一个 .json 文件导入场景。\n支持从其他坐山客用户导出的场景文件。');
+}
+
+// ═══ Category collapse/expand ═══
+function toggleCategory(el) {
+  // Find the next sibling that's a sidebar-children div
+  let sibling = el.nextElementSibling;
+  while (sibling && !sibling.classList.contains('sidebar-children')) {
+    sibling = sibling.nextElementSibling;
+  }
+  if (!sibling) return;
+  const wasCollapsed = el.classList.contains('collapsed');
+  if (wasCollapsed) {
+    el.classList.remove('collapsed');
+    sibling.classList.remove('collapsed');
+  } else {
+    el.classList.add('collapsed');
+    sibling.classList.add('collapsed');
+  }
+}
+
+// ═══ Chat ═══
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  if (!input.value.trim()) return;
+  const msg = input.value.trim();
+  input.value = '';
+  const container = document.querySelector('.chat-messages');
+  container.innerHTML += `<div class="message user"><div class="message-role">你</div>${msg}</div>`;
+  container.scrollTop = container.scrollHeight;
+  setTimeout(() => {
+    container.innerHTML += `<div class="message ai"><div class="message-role">坐山客</div>收到！这是「${msg}」的结果…</div>`;
+    container.scrollTop = container.scrollHeight;
+  }, 600);
+}
+
+// ═══ Init ═══
+showPlaza();
+document.getElementById('createModal').addEventListener('click', function(e) { if (e.target === this) hideCreateModal(); });
+document.getElementById('publishModal').addEventListener('click', function(e) { if (e.target === this) hidePublishModal(); });
+document.getElementById('versionModal').addEventListener('click', function(e) { if (e.target === this) hideVersionModal(); });
+</script>
+</body>
+</html>
