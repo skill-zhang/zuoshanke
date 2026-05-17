@@ -24,7 +24,6 @@ export default function App() {
   } = useStore();
 
   const [createName, setCreateName] = useState('');
-  const [createIcon, setCreateIcon] = useState('📦');
   const [createCategory, setCreateCategory] = useState('other');
   const [createNewCategory, setCreateNewCategory] = useState('');  // 新建类别时输入
   const [createUseNewCategory, setCreateUseNewCategory] = useState(false);  // 是否使用新类别
@@ -99,7 +98,6 @@ export default function App() {
       }
       const category = createUseNewCategory ? createNewCategory.trim() : createCategory;
       const scene = await createScene(projects[0].id, createName.trim(), {
-        icon: createIcon || undefined,
         description: createDescription.trim() || undefined,
         category: category || 'other',
       });
@@ -174,10 +172,6 @@ export default function App() {
           <div className="modal-title">
             创建新场景
             <button className="modal-close" onClick={handleCloseCreate}>✕</button>
-          </div>
-          <div className="form-group">
-            <label className="form-label">图标</label>
-            <input className="form-input" value={createIcon} onChange={e => setCreateIcon(e.target.value)} placeholder="输入 emoji 图标" />
           </div>
           <div className="form-row">
             <div className="form-group">
