@@ -230,7 +230,7 @@ export function Sidebar() {
             </div>
 
             <div className="sidebar-action" onClick={() => setView('projects')}>
-              <span className="sidebar-item-icon">📁</span>
+              <ProjectFolderSvg />
               管理项目
             </div>
           </>

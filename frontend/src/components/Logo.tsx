@@ -46,7 +46,7 @@ export function BrainSvg() {
 export function ProjectFolderSvg() {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16">
-      <path d="M1 3a1 1 0 011-1h4l2 2h7a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V3z" fill="none" stroke="#8b949e" strokeWidth="1.2"/>
+      <path d="M1 3a1 1 0 011-1h4l2 2h7a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V3z" fill="none" stroke="#58a6ff" strokeWidth="1.2"/>
     </svg>
   );
 }
