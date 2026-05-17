@@ -26,6 +26,83 @@ from router.shared import sse_event, sse_response
 router = APIRouter(tags=["场景"])
 
 
+# ═══ 智能图标匹配引擎 ═══
+# 根据场景名称自动匹配 emoji 图标，无需用户手动选择
+
+ICON_RULES = [
+    # ── 知名品牌 / APP ──
+    (["京东", "JD"], "🐶"),
+    (["淘宝", "天猫", "淘特"], "🐱"),
+    (["拼多多", "拼团"], "🛍️"),
+    (["微信", "WeChat", "微商"], "💬"),
+    (["抖音", "TikTok", "短视频"], "🎵"),
+    (["小红书", "RED"], "📕"),
+    (["B站", "哔哩哔哩", "bilibili"], "📺"),
+    (["知乎", "问答"], "❓"),
+    (["微博", "weibo"], "📢"),
+    (["美团", "大众点评", "外卖"], "🛵"),
+    (["滴滴", "打车", "出行"], "🚕"),
+    (["支付宝", "Alipay"], "💳"),
+    (["QQ", "腾讯"], "🐧"),
+    (["百度", "Baidu"], "🔍"),
+    (["谷歌", "Google"], "🌐"),
+    (["GitHub", "Github"], "🐙"),
+    (["微信读书", "读书"], "📖"),
+    (["网易云", "云音乐", "音乐"], "🎵"),
+    (["钉钉", "DingTalk"], "📌"),
+    (["飞书", "Feishu", "Lark"], "📎"),
+    (["企业微信", "企微"], "🏢"),
+    # ── 按名称长度降序排列（长词优先匹配） ──
+    (["旅游出行", "旅行规划", "旅游攻略", "行程规划"], "✈️"),
+    (["商品比价", "价格对比", "购物比价"], "🛒"),
+    (["天气预报", "天气查询", "气象预报"], "🌤️"),
+    (["数据报表", "数据分析", "数据大屏"], "📊"),
+    (["金融行情"], "📈"),
+    (["二手车", "新车评估", "汽车评估"], "🚗"),
+    (["AI编程", "代码助手", "编程助手"], "💻"),
+    (["学习助手", "学习计划"], "📚"),
+    (["工作安排", "工作计划", "任务管理"], "💼"),
+    (["美食推荐", "食谱推荐"], "🍜"),
+    (["电影推荐", "影视推荐"], "🎬"),
+    # ── 通用短关键词 ──
+    (["天气", "气象", "气温", "预报", "温度", "湿度"], "❄️"),
+    (["旅游", "旅行", "出行", "度假", "景点", "酒店", "机票", "导航"], "✈️"),
+    (["车", "汽车", "驾驶", "加油", "停车", "电动车"], "🚗"),
+    (["商品", "比价", "价格", "购物", "订单", "物流", "退货", "电商"], "🛒"),
+    (["女装", "男装", "服装", "鞋子", "衣服", "穿搭"], "👗"),
+    (["股票", "基金", "理财", "投资", "保险", "税务", "金融"], "📈"),
+    (["报表", "数据", "图表"], "📊"),
+    (["工作", "办公", "项目", "任务", "会议", "文档", "邮件"], "💼"),
+    (["学习", "教育", "考试", "课程", "培训", "知识", "阅读", "图书"], "📚"),
+    (["创作", "设计", "写作", "文案", "内容", "视频", "图片", "编辑"], "🎨"),
+    (["自媒体", "社交", "运营", "账号", "粉丝", "公众号", "小红书"], "💬"),
+    (["AI", "代码", "编程", "开发", "部署", "算法", "数据库", "系统", "运维"], "💻"),
+    (["健康", "医疗", "医生", "医院", "药物", "体检", "运动", "健身"], "🏥"),
+    (["美食", "食谱", "菜谱", "餐厅", "外卖", "做饭"], "🍜"),
+    (["电影", "影视", "电视剧", "娱乐"], "🎬"),
+    (["日历", "时间", "提醒", "日程"], "📅"),
+    # 测试放最后（仅当无其他匹配时生效）
+    (["测试", "实验", "验证", "试用"], "🧪"),
+]
+
+
+def auto_detect_icon(name: str) -> str:
+    """从场景名称自动匹配 emoji 图标
+
+    策略：关键词 OR 匹配 + 长词优先。
+    遍历规则，名称包含规则中任一关键词即触发，返回第一个匹配。
+    """
+    if not name:
+        return None
+    name_lower = name.lower()
+
+    for keywords, emoji in ICON_RULES:
+        if any(kw.lower() in name_lower for kw in keywords):
+            return emoji
+
+    return None
+
+
 # ═══ 场景 CRUD ═══
 
 @router.post("/api/scenes", response_model=SceneOut)
@@ -39,8 +116,8 @@ def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
         category=data.category or "other",
         guide_text=data.guide_text or None,
     )
-    if data.icon:
-        scene.icon = data.icon
+    # 有显式图标用显式，否则根据名称自动匹配
+    scene.icon = data.icon or auto_detect_icon(data.name) or "📦"
     db.add(scene)
     db.commit()
     db.refresh(scene)
@@ -124,8 +201,7 @@ def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
         version="0.0",  # 导入后变为草稿
         source="imported",
     )
-    if s.icon:
-        scene.icon = s.icon
+    scene.icon = s.icon or auto_detect_icon(s.name) or "📦"
     db.add(scene)
     db.commit()
     db.refresh(scene)
@@ -156,12 +232,17 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
     scene = _get_scene_or_404(db, scene_id)
     if data.name is not None:
         scene.name = data.name
+        # 重命名时自动匹配新图标（除非显式传了 icon）
+        if data.icon is None:
+            detected = auto_detect_icon(data.name)
+            if detected:
+                scene.icon = detected
     if data.pinned is not None:
         scene.pinned = data.pinned
     if data.user_context is not None:
         scene.user_context = data.user_context.strip() or None
     if data.icon is not None:
-        scene.icon = data.icon or None
+        scene.icon = data.icon or "📦"
     if data.description is not None:
         scene.description = data.description or ""
     if data.category is not None:
@@ -519,6 +600,58 @@ def list_scene_sessions(scene_id: str, db: Session = Depends(get_db)):
         {"session_id": r[0], "last_active": r[1].isoformat() if r[1] else None, "message_count": r[2]}
         for r in rows
     ]
+
+
+# ═══ 类别管理 ═══
+
+CATEGORY_ICONS = {
+    "life": "🌿", "ecommerce": "🛒", "work": "💼", "learn": "📚",
+    "create": "🎨", "finance": "📈", "media": "💬", "other": "📦",
+}
+
+CATEGORY_LABELS = {
+    "life": "生活", "ecommerce": "电商", "work": "工作", "learn": "学习",
+    "create": "创作", "finance": "金融", "media": "自媒体", "other": "其他",
+}
+
+
+@router.get("/api/categories")
+def list_categories(db: Session = Depends(get_db)):
+    """返回所有类别及其场景数量、图标、中文名"""
+    from sqlalchemy import func
+    rows = (
+        db.query(Scene.category, func.count(Scene.id))
+        .group_by(Scene.category)
+        .all()
+    )
+    categories = []
+    for cat_name, count in rows:
+        categories.append({
+            "name": cat_name,
+            "label": CATEGORY_LABELS.get(cat_name, cat_name),
+            "icon": CATEGORY_ICONS.get(cat_name, "📦"),
+            "count": count,
+        })
+    # 按预定义顺序排序
+    order = list(CATEGORY_ICONS.keys())
+    categories.sort(key=lambda c: order.index(c["name"]) if c["name"] in order else 999)
+    return categories
+
+
+@router.put("/api/categories/{name}")
+def rename_category(name: str, data: dict, db: Session = Depends(get_db)):
+    """重命名类别（更新该类别下所有场景的 category 字段）"""
+    new_name = data.get("new_name", "").strip()
+    if not new_name:
+        raise HTTPException(400, "新类别名不能为空")
+    if new_name == name:
+        raise HTTPException(400, "新旧名称相同")
+
+    count = db.query(Scene).filter(Scene.category == name).update(
+        {"category": new_name}, synchronize_session=False
+    )
+    db.commit()
+    return {"ok": True, "updated": count, "old_name": name, "new_name": new_name}
 
 
 # ═══ 辅助函数 ═══

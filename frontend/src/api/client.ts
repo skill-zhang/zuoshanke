@@ -500,3 +500,16 @@ export const updateSettings = (data: Record<string, any>) =>
   request<SettingsData>('/settings', { method: 'PATCH', body: JSON.stringify(data) });
 
 export const getServiceStatus = () => request<ServiceStatus>('/settings/service');
+
+// ═══ 类别管理 ═══
+export interface Category {
+  name: string;
+  label: string;
+  icon: string;
+  count: number;
+}
+export const listCategories = () => request<Category[]>('/categories');
+export const renameCategory = (oldName: string, newName: string) =>
+  request<{ ok: boolean; updated: number }>(`/categories/${encodeURIComponent(oldName)}`, {
+    method: 'PUT', body: JSON.stringify({ new_name: newName }),
+  });

@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories, renameCategory } from '../api/client';
 import { ChannelSvg } from './Logo';
 
 const CATEGORIES = [
@@ -134,6 +134,17 @@ export function Sidebar() {
     setMenuOpen(menuOpen === id ? null : id);
   };
 
+  const handleRenameCategory = async (catKey: string, currentLabel: string) => {
+    const name = prompt('新类别名称：', currentLabel);
+    if (!name || name === currentLabel) return;
+    try {
+      await renameCategory(catKey, name);
+      loadWorkshopScenes(); // 刷新后 category 已变
+    } catch (e: any) {
+      alert('重命名失败: ' + (e.message || ''));
+    }
+  };
+
   // 按类别统计工坊场景
   const catCounts: Record<string, number> = {};
   workshopScenes.forEach(s => {
@@ -257,6 +268,10 @@ export function Sidebar() {
                 <span className="cat-icon">{cat.icon}</span>
                 {cat.label}
                 <span className="cat-count">{count}</span>
+                <span className="sidebar-menu-btn" style={{ fontSize: 13, opacity: 0.5 }}
+                  onClick={(e) => { e.stopPropagation(); handleRenameCategory(cat.key, cat.label); }}
+                  title="重命名类别"
+                >✏️</span>
               </div>
               <div className={`sidebar-children${isCollapsed ? ' collapsed' : ''}`}>
                 {workshopScenes
