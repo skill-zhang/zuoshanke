@@ -445,6 +445,7 @@ def ai_scene_chat_stream(
     db: Session,
     complexity: str = "medium",
     history_messages: list[dict] | None = None,
+    user_context: str | None = None,
 ):
     """场景分析流式生成器（两段式真流式）。
 
@@ -494,9 +495,13 @@ def ai_scene_chat_stream(
             "- 主动追问模糊点\n"
             "- 直接输出回复内容，不要用JSON包裹，不要输出actions"
         )},
-        *history_api,
-        {"role": "user", "content": f"{_weather_prefix}{tree_ctx}\n\n用户说: {user_content}\n\n请分析并回复。"},
     ]
+    if user_context:
+        reply_messages.append({"role": "system", "content": (
+            f"=== 用户输入背景设定 ===\n{user_context}\n====================="
+        )})
+    reply_messages.extend(history_api or [])
+    reply_messages.append({"role": "user", "content": f"{_weather_prefix}{tree_ctx}\n\n用户说: {user_content}\n\n请分析并回复。"})
 
     full_reply = ""
     for token in _stream_qwen(reply_messages, temperature=0.7):
@@ -527,14 +532,18 @@ def ai_scene_chat_stream(
         )
     actions_messages = [
         {"role": "system", "content": actions_system},
-        *history_api,
-        {"role": "user", "content": (
-            f"{tree_ctx}\n\n"
-            f"用户说: {user_content}\n\n"
-            f"AI回复(摘要): {full_reply[:400]}\n\n"
-            f"请输出actions JSON数组。"
-        )},
     ]
+    if user_context:
+        actions_messages.append({"role": "system", "content": (
+            f"=== 用户输入背景设定 ===\n{user_context}\n====================="
+        )})
+    actions_messages.extend(history_api or [])
+    actions_messages.append({"role": "user", "content": (
+        f"{tree_ctx}\n\n"
+        f"用户说: {user_content}\n\n"
+        f"AI回复(摘要): {full_reply[:400]}\n\n"
+        f"请输出actions JSON数组。"
+    )})
 
     actions_result = call_qwen_chat(actions_messages, temperature=0.3)
     actions = []
@@ -707,6 +716,7 @@ def ai_scene_ask_missing_stream(
     missing_info: list[str],
     history_messages: list[dict],
     db: Session,
+    user_context: str | None = None,
 ):
     """约束追问路径：告诉用户还缺什么信息，不建树。
 
@@ -727,13 +737,17 @@ def ai_scene_ask_missing_stream(
     ]
     messages = [
         {"role": "system", "content": system},
-        *history_api,
-        {"role": "user", "content": (
-            f"用户说: {user_content}\n\n"
-            f"我还需要确认以下信息才能完整答复：\n{questions}\n\n"
-            "请用自然的语气问用户这些问题。"
-        )},
     ]
+    if user_context:
+        messages.append({"role": "system", "content": (
+            f"=== 用户输入背景设定 ===\n{user_context}\n====================="
+        )})
+    messages.extend(history_api)
+    messages.append({"role": "user", "content": (
+        f"用户说: {user_content}\n\n"
+        f"我还需要确认以下信息才能完整答复：\n{questions}\n\n"
+        "请用自然的语气问用户这些问题。"
+    )})
 
     full_reply = ""
     for token in _stream_qwen(messages, temperature=0.7):
@@ -751,6 +765,7 @@ def ai_scene_light_chat_stream(
     user_content: str,
     history_messages: list[dict],
     db: Session,
+    user_context: str | None = None,
 ):
     """轻量路径：Qwen 直答，不建树不更新 Thinking Map。
 
@@ -778,9 +793,13 @@ def ai_scene_light_chat_stream(
             "- 不需要拆解任务、不需要创建思维导图\\n"
             "- 直接输出回复内容，不要JSON包裹"
         )},
-        *history_api,
-        {"role": "user", "content": f"{_weather_prefix}{user_content}"},
     ]
+    if user_context:
+        messages.append({"role": "system", "content": (
+            f"=== 用户输入背景设定 ===\n{user_context}\n====================="
+        )})
+    messages.extend(history_api)
+    messages.append({"role": "user", "content": f"{_weather_prefix}{user_content}"})
 
     full_reply = ""
     for token in _stream_qwen(messages, temperature=0.7):

@@ -1,11 +1,13 @@
 """Context 构造器 — 为 LLM 构建完整的"世界视图"
 
 每次调用 LLM 前，按固定结构组装 prompt：
-  1. System prompt（角色定义 + 工具协议说明）
-  2. 工具列表（基础工具 + 匹配工具）
-  3. 对话历史（最近 N 条 + role 映射）
-  4. 当前用户消息
-  5. 工具执行结果（如果在循环中）
+  1. System prompt（角色定义 + 使用说明）
+  2. 工具列表
+  3. 工具执行结果（如已预执行）
+  4. 对话历史（最近 N 条 + role 映射）
+  5. 当前用户消息
+
+预执行模式：工具结果先于历史消息注入，LLM 直接基于真实数据回复。
 """
 
 import json
@@ -14,11 +16,11 @@ from typing import Optional
 from .tool_registry import match_tools, format_tools_for_prompt
 
 
-# ── 场景聊天的 System Prompt（区别于频道闲聊） ──
+# ── 场景聊天的 System Prompt（v0.5 预执行模式） ──
 SCENE_SYSTEM_PROMPT = (
     "你是一个专业的AI架构顾问，同时也是坐山客AI工作台的智能助手。\n"
-    "你可以使用工具获取实时数据。当用户需要查天气、搜网页等实时信息时，\n"
-    "先用【工具调用】标记调工具获取真实数据，再基于数据回复。\n"
+    "系统已自动为你获取了实时数据（天气、景点推荐、装备建议等），数据附在下方。\n"
+    "请基于提供的真实数据回复用户，不要编造或猜测数据。\n"
     "用Markdown格式回复，每次回复50-300字，充分且直接。\n"
     "不要拆解任务、不需要创建思维导图。"
 )
@@ -30,6 +32,7 @@ def build_scene_context(
     matched_tools: Optional[list[dict]] = None,
     tool_results: Optional[list[dict]] = None,
     weather_context: Optional[str] = None,
+    user_context: Optional[str] = None,
 ) -> list[dict]:
     """构建场景聊天的 LLM 消息列表
 
@@ -48,6 +51,10 @@ def build_scene_context(
     # ── 1. System prompt ──
     system_parts = [SCENE_SYSTEM_PROMPT]
 
+    # ── 1.5 用户输入背景设定 ──
+    if user_context:
+        system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
+
     # ── 2. 工具列表 ──
     if matched_tools is None:
         matched_tools = match_tools(user_content)
@@ -55,37 +62,40 @@ def build_scene_context(
     if tools_text:
         system_parts.append(tools_text)
 
-    # ── 3. 工具调用协议说明 ──
-    system_parts.append(
-        "## 工具调用说明\n"
-        "当你需要获取实时数据时，请先调用工具，拿到结果后再回复。\n"
-        "示例：用户问「北京天气」→ 你输出【工具调用】→ 系统执行 → 你基于结果回复。\n"
-        "不要假装知道实时数据，先调工具。"
+    # ── 3. 使用说明 ──
+    system_parts.append("## 使用说明\n"
+        "系统已自动执行了相关工具并附上结果。\n"
+        "你无需输出【工具调用】标记，只需基于提供的真实数据回复用户。\n"
+        "如果结果中有错误，如实告知用户即可。\n"
+        "天气数据建议用表格呈现，并用 ☀/🌧/☁/🌤 等 emoji 图标代替纯文字描述。"
     )
 
     messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 
-    # ── 4. 对话历史（role 映射） ──
-    if history_messages:
-        for m in history_messages:
-            role = "assistant" if m["role"] == "ai" else m["role"]
-            messages.append({"role": role, "content": m["content"]})
-
-    # ── 5. 天气桥接上下文 ──
-    user_parts = []
-    if weather_context:
-        user_parts.append(weather_context)
-    user_parts.append(user_content)
-    user_msg = "\n\n".join(user_parts)
-
-    # ── 6. 工具结果上下文 ──
+    # ── 4. 工具结果上下文（用 assistant 角色，llama.cpp 不允许多条 system） ──
     if tool_results:
         results_block = "## 以下是已执行的工具返回结果，请基于这些数据回复用户：\n"
         for r in tool_results:
             results_block += f"\n### 工具: {r.get('tool', 'unknown')}"
             results_block += f"\n参数: {json.dumps(r.get('params', {}), ensure_ascii=False)}"
-            results_block += f"\n结果: {json.dumps(r.get('result', ''), ensure_ascii=False)[:2000]}"
-        messages.append({"role": "system", "content": results_block})
+            if r.get("success"):
+                results_block += f"\n结果: {json.dumps(r.get('result', ''), ensure_ascii=False)[:2000]}"
+            else:
+                results_block += f"\n错误: {json.dumps(r.get('result', '未知错误'), ensure_ascii=False)}"
+        messages.append({"role": "assistant", "content": results_block})
+
+    # ── 5. 对话历史（role 映射） ──
+    if history_messages:
+        for m in history_messages:
+            role = "assistant" if m["role"] == "ai" else m["role"]
+            messages.append({"role": role, "content": m["content"]})
+
+    # ── 6. 天气桥接上下文 ──
+    user_parts = []
+    if weather_context:
+        user_parts.append(weather_context)
+    user_parts.append(user_content)
+    user_msg = "\n\n".join(user_parts)
 
     messages.append({"role": "user", "content": user_msg})
 
@@ -96,14 +106,16 @@ def build_light_context(
     user_content: str,
     history_messages: Optional[list[dict]] = None,
     weather_context: Optional[str] = None,
+    tool_results: Optional[list[dict]] = None,
+    user_context: Optional[str] = None,
 ) -> list[dict]:
     """构建 light 路径的简化 context（用于场景快速直答）"""
-    # 自动匹配工具
     matched = match_tools(user_content)
     return build_scene_context(
         user_content=user_content,
         history_messages=history_messages,
         matched_tools=matched,
-        tool_results=None,
+        tool_results=tool_results,
         weather_context=weather_context,
+        user_context=user_context,
     )

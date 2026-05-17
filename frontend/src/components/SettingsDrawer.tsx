@@ -27,6 +27,11 @@ export function SettingsDrawer() {
   const [editedRoutes, setEditedRoutes] = useState<Record<string, EditingRoute>>({});
   const [statusTimer, setStatusTimer] = useState<ReturnType<typeof setInterval> | null>(null);
 
+  // 系统人设编辑
+  const [editedChannelPrompt, setEditedChannelPrompt] = useState<string | undefined>(undefined);
+  const [editedScenePrompt, setEditedScenePrompt] = useState<string | undefined>(undefined);
+  const [savingPrompts, setSavingPrompts] = useState(false);
+
   // 打开时加载数据
   useEffect(() => {
     if (settingsDrawerOpen) {
@@ -38,6 +43,8 @@ export function SettingsDrawer() {
       // 关闭时清空编辑状态
       setDirty(false);
       setEditedRoutes({});
+      setEditedChannelPrompt(undefined);
+      setEditedScenePrompt(undefined);
     }
     return () => {
       if (statusTimer) clearInterval(statusTimer);
@@ -71,6 +78,29 @@ export function SettingsDrawer() {
       setDirty(false);
       setEditedRoutes({});
     }
+  };
+
+  // 保存人设
+  const handlePromptSave = async () => {
+    setSavingPrompts(true);
+    const payload: Record<string, any> = {};
+    if (editedChannelPrompt !== undefined || editedScenePrompt !== undefined) {
+      payload.system_prompts = {};
+      if (editedChannelPrompt !== undefined) payload.system_prompts.channel = editedChannelPrompt.trim();
+      if (editedScenePrompt !== undefined) payload.system_prompts.scene = editedScenePrompt.trim();
+    }
+    const ok = await updateSettingsPartial(payload);
+    setSavingPrompts(false);
+    if (ok) {
+      setEditedChannelPrompt(undefined);
+      setEditedScenePrompt(undefined);
+    }
+  };
+
+  // 恢复默认人设
+  const handlePromptReset = () => {
+    setEditedChannelPrompt(settingsData?.system_prompts?.channel || '');
+    setEditedScenePrompt(settingsData?.system_prompts?.scene || '');
   };
 
   // 重置
@@ -214,23 +244,41 @@ export function SettingsDrawer() {
 
               {/* ── ③ 人设/能力层 ── */}
               <section className="settings-section">
-                <h3 className="settings-section-title">③ 系统人设 <span className="badge-locked">🔒 预览</span></h3>
+                <h3 className="settings-section-title">③ 系统人设</h3>
                 <div className="settings-prompts">
                   <div className="prompt-card">
                     <div className="prompt-card-header">
                       <span className="prompt-route-label">频道人设</span>
-                      <span className="badge-locked">暂不可编辑</span>
                     </div>
-                    <pre className="prompt-content">{settingsData?.system_prompts?.channel || '-'}</pre>
+                    <textarea
+                      className="settings-prompt-textarea"
+                      value={editedChannelPrompt ?? (settingsData?.system_prompts?.channel || '')}
+                      onChange={e => setEditedChannelPrompt(e.target.value)}
+                      rows={3}
+                      maxLength={500}
+                    />
                   </div>
                   <div className="prompt-card">
                     <div className="prompt-card-header">
                       <span className="prompt-route-label">场景人设</span>
-                      <span className="badge-locked">暂不可编辑</span>
                     </div>
-                    <pre className="prompt-content">{settingsData?.system_prompts?.scene || '-'}</pre>
+                    <textarea
+                      className="settings-prompt-textarea"
+                      value={editedScenePrompt ?? (settingsData?.system_prompts?.scene || '')}
+                      onChange={e => setEditedScenePrompt(e.target.value)}
+                      rows={3}
+                      maxLength={500}
+                    />
                   </div>
                 </div>
+                {(editedChannelPrompt !== undefined || editedScenePrompt !== undefined) && (
+                  <div className="settings-actions" style={{ marginTop: 8 }}>
+                    <button className="btn-primary" onClick={handlePromptSave} disabled={savingPrompts}>
+                      {savingPrompts ? '💾 保存中…' : '💾 保存人设'}
+                    </button>
+                    <button className="btn-sm" onClick={handlePromptReset}>↩ 恢复默认</button>
+                  </div>
+                )}
               </section>
 
               {/* ── 特性开关 ── */}

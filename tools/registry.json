@@ -11,20 +11,50 @@
       },
       "returns": "天气数据（温度、湿度、风力、天气描述、未来预报）",
       "category": "data",
-      "verified": true
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["天气", "温度", "下雨", "下雪", "刮风", "气温", "weather"],
+        "requires_city": true
+      }
     },
     {
       "name": "recommend_attractions",
       "description": "根据天气分类推荐适合的景点和活动",
       "file": "tools/recommend.py",
-      "function": "recommend",
+      "function": "recommend_attractions",
       "parameters": {
         "city": {"type": "string", "description": "城市名"},
-        "weather_category": {"type": "string", "description": "天气分类(sunny/rainy等)", "optional": true}
+        "limit": {"type": "integer", "description": "返回景点数", "optional": true}
       },
       "returns": "推荐景点列表（含名称、适合天气、室内/室外）",
       "category": "data",
-      "verified": false
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["推荐景点", "去哪玩", "去哪儿玩", "好玩的地方", "景点推荐", "有什么好玩的", "推荐活动", "哪里好玩",
+                     "推荐的景点", "推荐一下", "推荐去", "有什么推荐的", "推荐几个", "值得去", "去哪儿逛"],
+        "requires_city": true
+      }
+    },
+    {
+      "name": "get_equipment_checklist",
+      "description": "根据天气分类获取户外活动装备建议清单",
+      "file": "tools/equipment_checklist.py",
+      "function": "get_checklist",
+      "parameters": {
+        "weather_category": {"type": "string", "description": "天气分类(sunny/overcast/rainy/snowy/hot_and_humid/cold)"},
+        "scene_type": {"type": "string", "description": "场景类型(通用/滨水/山地/公园/休闲)", "optional": true}
+      },
+      "returns": "装备清单列表（含名称、必要程度、备注）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["装备", "带什么", "准备什么", "物品清单", "出行清单", "需要带", "装备建议",
+                     "出行准备", "要带什么", "需要准备", "必备物品", "带哪些"],
+        "requires_city": true
+      }
     }
   ]
 }

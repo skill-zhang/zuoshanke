@@ -30,13 +30,14 @@ export interface Scene {
   complexity: string | null;
   constraints: any[] | null;
   constraints_locked: boolean;
+  user_context: string | null;
   created_at: string; updated_at: string;
 }
 export const listScenes = (projectId?: string) =>
   request<Scene[]>(`/scenes${projectId ? '?project_id=' + projectId : ''}`);
 export const createScene = (projectId: string, name: string) =>
   request<Scene>('/scenes', { method: 'POST', body: JSON.stringify({ project_id: projectId, name }) });
-export const updateScene = (sceneId: string, data: { name?: string; pinned?: boolean }) =>
+export const updateScene = (sceneId: string, data: { name?: string; pinned?: boolean; user_context?: string | null }) =>
   request<Scene>(`/scenes/${sceneId}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteScene = (id: string) =>
   request(`/scenes/${id}`, { method: 'DELETE' });
@@ -70,6 +71,7 @@ export interface Message {
   session_id: string | null;
   role: 'user' | 'ai' | 'system';
   content: string; map_ref: string | null; model: string | null; created_at: string;
+  toolCards?: ToolCard[];
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
@@ -160,8 +162,14 @@ export const listChannelMessages = (channelId: string) =>
 
 
 // ═══ 流式 SSE 类型 ═══
+export interface ToolCard {
+  type: 'weather' | 'attractions' | 'equipment';
+  data: Record<string, any>;
+}
+
 export type StreamEvent =
   | { type: 'user_msg'; id: string; role: 'user'; content: string; created_at: string }
+  | { type: 'tool_cards'; cards: ToolCard[] }
   | { type: 'model_info'; model: string; complexity: string | null }
   | { type: 'token'; token: string }
   | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string; model?: string }

@@ -37,6 +37,7 @@ class Scene(Base):
     complexity = Column(String, nullable=True)  # light | medium | heavy
     constraints = Column(JSON, nullable=True)    # 约束提取结果
     constraints_locked = Column(Boolean, default=False)
+    user_context = Column(Text, nullable=True, default=None)  # 用户自定义背景设定
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

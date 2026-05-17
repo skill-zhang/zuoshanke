@@ -3,12 +3,207 @@ import { useStore } from '../stores/appStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { Message } from '../api/client';
+import type { Message, ToolCard } from '../api/client';
 import { getActionMap } from '../api/client';
 
-/** 单条消息气泡（支持多选模式） */
-function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap, selectMode, selected, onToggleSelect }: {
+// ══════════════════════════════════════════════════
+//  工具卡片组件
+// ══════════════════════════════════════════════════
+
+/** 天气卡片 */
+function WeatherCard({ data }: { data: Record<string, any> }) {
+  const { city, desc, temp, humidity, wind, hourly } = data;
+  // 当前日期（展示用）
+  const now = new Date();
+  const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日`;
+  const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+  const weekday = weekDays[now.getDay()];
+
+  // hourly 柱状图计算
+  let minT = 0, maxT = 40;
+  if (hourly && hourly.length > 0) {
+    const temps = hourly.map((h: any) => parseFloat(h.temp_c)).filter((t: number) => !isNaN(t));
+    if (temps.length > 0) {
+      minT = Math.min(...temps);
+      maxT = Math.max(...temps);
+      // 留点余量，让柱子有差异感
+      if (maxT - minT < 5) { const mid = (maxT + minT) / 2; minT = mid - 5; maxT = mid + 5; }
+    }
+  }
+  const barMin = 36, barMax = 100;
+
+  const getTempColor = (t: number) => {
+    if (t >= 30) return '#ff8c00';      // 🔥 炎热 → 橙色
+    if (t >= 20) return '#ffd93d';      // ☀️ 温暖 → 浅黄
+    if (t >= 10) return '#fdf0cc';      // 🌿 清凉 → 米白偏黄
+    return '#b8d4f0';                   // ❄️ 冰 → 浅蓝偏白
+  };
+
+  const descToIcon = (d: string) => {
+    if (d.includes('晴') || d.includes('Sunny')) return '☀';
+    if (d.includes('雨') || d.includes('Rain')) return '🌧';
+    if (d.includes('云') || d.includes('Cloud') || d.includes('阴')) return '☁';
+    if (d.includes('雾') || d.includes('Mist') || d.includes('Fog')) return '🌫';
+    return '🌤';
+  };
+
+  return (
+    <div className="tool-card tool-card-weather">
+      <div className="weather-card-body">
+        <div className="weather-current">
+          <div className="tool-card-header">
+            <span className="tool-card-icon">🌤</span>
+            <span className="tool-card-title">天气 · {city || '未知城市'}</span>
+          </div>
+          <div className="weather-date">{dateLabel} 周{weekday}</div>
+          <div className="weather-main">
+            <span className="weather-temp">{temp || 'N/A'}</span>
+            <span className="weather-desc">{desc || ''}</span>
+          </div>
+          <div className="weather-details">
+            {humidity && <span>💧 湿度 {humidity}</span>}
+            {wind && <span>🌬 风力 {wind}</span>}
+          </div>
+        </div>
+        {hourly && hourly.length > 0 && (
+          <div className="weather-hourly">
+            <div className="hourly-chart">
+              {hourly.map((h: any, i: number) => {
+                const t = parseFloat(h.temp_c);
+                const hVal = isNaN(t) ? 50 : barMin + ((t - minT) / (maxT - minT || 1)) * (barMax - barMin);
+                return (
+                  <div key={i} className="hourly-bar-col">
+                    <span className="hb-icon">{descToIcon(h.desc)}</span>
+                    <div className="hb-bar-wrapper">
+                      <div
+                        className="hb-bar"
+                        style={{ height: `${hVal}px`, background: getTempColor(isNaN(t) ? 20 : t) }}
+                      >
+                        <span className="hb-temp-label">{h.temp.replace('°C', '°')}</span>
+                      </div>
+                    </div>
+                    <span className="hb-time">{h.time}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 景点推荐卡片 */
+function AttractionsCard({ data }: { data: Record<string, any> }) {
+  const items: any[] = data.items || [];
+  return (
+    <div className="tool-card tool-card-attractions">
+      <div className="tool-card-header">
+        <span className="tool-card-icon">🎯</span>
+        <span className="tool-card-title">
+          景点推荐 · {data.city || ''}
+          <span className="tool-card-badge">{data.category_label || ''}</span>
+        </span>
+      </div>
+      <div className="tool-card-subtitle">
+        {data.default_category && <>推荐类型: {data.default_category}</>}
+        {data.total_matched != null && <> · 匹配 {data.total_matched} 个景点</>}
+      </div>
+      {items.length > 0 && (
+        <div className="attractions-list">
+          {items.slice(0, 6).map((item, i) => (
+            <div key={i} className="attraction-item">
+              <span className={`attraction-icon ${item.indoor ? 'indoor' : 'outdoor'}`}>
+                {item.indoor ? '🏠' : '🌳'}
+              </span>
+              <div className="attraction-info">
+                <span className="attraction-name">{item.name}</span>
+                {item.note && <span className="attraction-note">{item.note}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 装备清单卡片 */
+function EquipmentCard({ data }: { data: Record<string, any> }) {
+  const items: any[] = data.items || [];
+  const getNecessityColor = (n: string) => {
+    if (n === '必带') return '#f85149';
+    if (n === '推荐') return '#d29922';
+    return '#8b949e';
+  };
+  const grouped = items.reduce((acc: Record<string, any[]>, item) => {
+    const key = item.necessity || '可选';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+  const necessityOrder = ['必带', '推荐', '可选'];
+
+  return (
+    <div className="tool-card tool-card-equipment">
+      <div className="tool-card-header">
+        <span className="tool-card-icon">{data.icon || '🎒'}</span>
+        <span className="tool-card-title">
+          装备建议 · {data.label || ''}
+          <span className="tool-card-badge">{data.default_category || ''}</span>
+        </span>
+      </div>
+      <div className="tool-card-subtitle">
+        共 {data.total || 0} 项 · 
+        <span style={{ color: '#f85149' }}>必带 {data.must_have || 0}</span> · 
+        <span style={{ color: '#d29922' }}>推荐 {data.recommended || 0}</span> · 
+        <span style={{ color: '#8b949e' }}>可选 {data.optional || 0}</span>
+      </div>
+      {necessityOrder.map(key => {
+        const group = grouped[key];
+        if (!group || group.length === 0) return null;
+        return (
+          <div key={key} className="equip-group">
+            <div className="equip-group-title" style={{ color: getNecessityColor(key) }}>
+              {key === '必带' ? '🔴' : key === '推荐' ? '🟡' : '⚪'} {key} ({group.length})
+            </div>
+            {group.slice(0, 8).map((item, i) => (
+              <div key={i} className="equip-item">
+                <span className="equip-item-name">{item.name}</span>
+                {item.note && <span className="equip-item-note">{item.note}</span>}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 工具卡片渲染器 */
+function ToolCardsRenderer({ cards }: { cards: ToolCard[] }) {
+  if (!cards || cards.length === 0) return null;
+  return (
+    <div className="tool-cards-container">
+      {cards.map((card, i) => {
+        if (card.type === 'weather') return <WeatherCard key={i} data={card.data} />;
+        if (card.type === 'attractions') return <AttractionsCard key={i} data={card.data} />;
+        if (card.type === 'equipment') return <EquipmentCard key={i} data={card.data} />;
+        return null;
+      })}
+    </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════════
+//  消息气泡
+// ══════════════════════════════════════════════════
+
+function MessageBubble({ msg, toolCards, onDelete, onRegenerate, onOpenActionMap, selectMode, selected, onToggleSelect }: {
   msg: Message;
+  toolCards?: ToolCard[];
   onDelete: (id: string) => void;
   onRegenerate: (id: string) => void;
   onOpenActionMap: (actionMapId: string) => void;
@@ -34,6 +229,10 @@ function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap, selectMod
         </div>
       )}
       <div className="chat-msg-content">
+        {/* 工具卡片（AI 消息渲染在 markdown 上方） */}
+        {msg.role === 'ai' && toolCards && toolCards.length > 0 && (
+          <ToolCardsRenderer cards={toolCards} />
+        )}
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
@@ -128,13 +327,61 @@ export function ChatView() {
     sessions, loadSceneSessions, switchSceneSession,
     isGenerating,
     currentModelName,
+    currentToolCards,
+    userContext, saveUserContext,
   } = useStore();
 
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [uploadMenu, setUploadMenu] = useState(false);
+  // 用户输入背景设定
+  const [ucExpanded, setUcExpanded] = useState(false);
+  const [ucText, setUcText] = useState('');
+  const [ucSaving, setUcSaving] = useState(false);
+  const ucSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ucTextareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputAreaRef = useRef<HTMLDivElement>(null);
+
+  // 输入区折叠状态
+  const [inputCollapsed, setInputCollapsed] = useState(false);
+
+  // ═══ 输入框拖拽调整高度 ═══
+  const [inputHeight, setInputHeight] = useState(72);
+  const resizingInput = useRef(false);
+  const startResizeY = useRef(0);
+  const startResizeH = useRef(72);
+
+  const onInputResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingInput.current = true;
+    startResizeY.current = e.clientY;
+    startResizeH.current = textareaRef.current?.offsetHeight || 72;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizingInput.current || !textareaRef.current) return;
+      const dy = e.clientY - startResizeY.current;
+      const newH = Math.max(72, Math.min(400, startResizeH.current + dy));
+      textareaRef.current.style.height = newH + 'px';
+      setInputHeight(newH);
+    };
+    const onUp = () => {
+      resizingInput.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
 
   // 多选模式
   const [selectMode, setSelectMode] = useState(false);
@@ -179,14 +426,68 @@ export function ChatView() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [displayMessages]);
 
-  // 自动调整 textarea 高度
+  // 自动调整 textarea 高度（仅当内容超出现有高度时，不覆盖手动拖拽）
   useEffect(() => {
     const ta = textareaRef.current;
-    if (ta) {
-      ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+    if (!ta || resizingInput.current) return;
+    const curH = ta.offsetHeight;
+    ta.style.height = '0px';
+    const scrollH = ta.scrollHeight;
+    ta.style.height = curH + 'px';
+    if (scrollH > curH + 4) {
+      ta.style.height = Math.min(scrollH, 400) + 'px';
     }
   }, [input]);
+
+  // ═══ 用户背景设定：同步 store → local ═══
+  useEffect(() => {
+    setUcText(userContext || '');
+  }, [userContext]);
+
+  // 组件卸载时清除防抖定时器
+  useEffect(() => {
+    return () => {
+      if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
+    };
+  }, []);
+
+  // ═══ 用户背景设定：失焦自动保存 ═══
+  const ucDoSave = useCallback(async (text: string) => {
+    if (!currentScene) return;
+    setUcSaving(true);
+    await saveUserContext(currentScene.id, text);
+    setUcSaving(false);
+  }, [currentScene, saveUserContext]);
+
+  const handleUcChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setUcText(val);
+    // 防抖自动保存：1.5s 无输入后触发
+    if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
+    ucSaveTimer.current = setTimeout(() => {
+      ucDoSave(val);
+    }, 1500);
+  }, [ucDoSave]);
+
+  const handleUcBlur = useCallback(() => {
+    if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
+    ucDoSave(ucText);
+  }, [ucDoSave, ucText]);
+
+  const handleUcSave = useCallback(() => {
+    if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
+    ucDoSave(ucText);
+  }, [ucDoSave, ucText]);
+
+  const handleUcDelete = useCallback(async () => {
+    if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
+    setUcText('');
+    if (currentScene) {
+      setUcSaving(true);
+      await saveUserContext(currentScene.id, '');
+      setUcSaving(false);
+    }
+  }, [currentScene, saveUserContext]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -366,10 +667,17 @@ export function ChatView() {
         {/* 消息列表 */}
         <div className="chat-messages">
           {displayMessages.length === 0 && <EmptyState isChannel={isChannel} />}
-          {displayMessages.map((msg) => (
+          {displayMessages.map((msg, idx) => (
             <MessageBubble
               key={msg.id}
               msg={msg}
+              // 流式生成中的最后一条 AI 消息显示当前工具卡片
+              toolCards={
+                msg.role === 'ai'
+                  && idx === displayMessages.length - 1
+                  ? (msg.toolCards || currentToolCards)
+                  : undefined
+              }
               onDelete={handleDelete}
               onRegenerate={handleRegenerate}
               onOpenActionMap={handleOpenActionMap}
@@ -381,67 +689,118 @@ export function ChatView() {
           <div ref={bottomRef} />
         </div>
 
-        {/* 输入区 */}
-        <div className="chat-input-area">
-          <div className="chat-input-wrapper">
-            <textarea
-              ref={textareaRef}
-              className="chat-input"
-              placeholder={
-                isChannel
-                  ? '随便聊聊...'
-                  : '输入消息...（说「梳理需求」让 AI 帮你分析）'
-              }
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={sending || isGenerating}
-              rows={2}
-            />
-            <div className="chat-input-toolbar">
-              <div className="chat-toolbar-left">
-                <button
-                  className="chat-toolbar-btn"
-                  onClick={() => setUploadMenu(!uploadMenu)}
-                  title="上传文件"
-                >
-                  📎 文件
-                </button>
-                <button
-                  className="chat-toolbar-btn"
-                  onClick={() => setUploadMenu(!uploadMenu)}
-                  title="上传图片"
-                >
-                  🖼 图片
-                </button>
-                {uploadMenu && (
-                  <div className="chat-upload-menu">
-                    <div className="chat-upload-item" onClick={() => { alert('文件上传功能即将支持'); setUploadMenu(false); }}>
-                      📄 上传文件
-                    </div>
-                    <div className="chat-upload-item" onClick={() => { alert('图片上传功能即将支持'); setUploadMenu(false); }}>
-                      🖼 上传图片
-                    </div>
+        {/* ═══ 用户输入背景设定 ═══ */}
+        {!isChannel && currentScene && (
+          <div className="user-context-panel">
+            <div className="user-context-header" onClick={() => setUcExpanded(!ucExpanded)}>
+              <span>📝 用户输入背景设定</span>
+              <span className="user-context-header-right">
+                {ucText ? <span className="user-context-badge">已保存 {ucText.length} 字</span> : <span className="user-context-badge-empty">空</span>}
+                <span className="user-context-chevron">{ucExpanded ? '▼' : '▶'}</span>
+              </span>
+            </div>
+            {ucExpanded && (
+              <div className="user-context-body">
+                <textarea
+                  ref={ucTextareaRef}
+                  className="user-context-textarea"
+                  value={ucText}
+                  onChange={handleUcChange}
+                  onBlur={handleUcBlur}
+                  placeholder="在此输入你想让 AI 在本次对话中始终遵循的指令或背景信息，例如「每条推荐附具体链接」「用表格输出」「重点关注性价比选项」等"
+                  maxLength={2000}
+                  rows={4}
+                />
+                <div className="user-context-toolbar">
+                  <span className="user-context-count">字数: {ucText.length}/2000</span>
+                  <div className="user-context-actions">
+                    <button className="uc-btn" onClick={handleUcDelete} title="清空内容">🗑 删除</button>
+                    <button className="uc-btn uc-btn-primary" onClick={handleUcSave} disabled={ucSaving}>
+                      {ucSaving ? '⏳' : '💾'} 保存
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
-              <button
-                className="chat-send-btn"
-                onClick={handleSend}
-                disabled={sending || isGenerating || !input.trim()}
-              >
-                {sending || isGenerating ? '⏳' : '发送'}
-              </button>
+            )}
+          </div>
+        )}
+
+        {/* 输入区 */}
+        <div className="chat-input-area" ref={inputAreaRef}>
+          <div className="chat-input-collapse-bar">
+            <div className="chat-input-collapse-bar-left" />
+            <div className="chat-input-collapse-bar-center" onClick={() => setInputCollapsed(!inputCollapsed)} title={inputCollapsed ? '展开输入区' : '收起输入区'}>
+              <span className={`chat-input-chevron ${inputCollapsed ? 'collapsed' : ''}`}>▼</span>
+            </div>
+            <div className="chat-input-collapse-bar-right">
+              <div className="chat-resize-handle" onMouseDown={onInputResizeStart} title="拖拽调整高度">
+                <span className="chat-resize-dots">⠿</span>
+              </div>
             </div>
           </div>
-          <div className="chat-input-hint">
-            {displayModel && (
-              <span>
-                <strong>当前模型:</strong> <strong><span className="chat-model-name">{displayModel}</span></strong>
-              </span>
-            )}
-            {displayModel ? ' · ' : ''}Enter 发送 · Shift+Enter 换行
-          </div>
+          {!inputCollapsed && (
+            <>
+              <div className="chat-input-wrapper">
+                <textarea
+                  ref={textareaRef}
+                  className="chat-input"
+                  placeholder={
+                    isChannel
+                      ? '随便聊聊...'
+                      : '输入消息...（说「梳理需求」让 AI 帮你分析）'
+                  }
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={sending || isGenerating}
+                  rows={2}
+                />
+                <div className="chat-input-toolbar">
+                  <div className="chat-toolbar-left">
+                    <button
+                      className="chat-toolbar-btn"
+                      onClick={() => setUploadMenu(!uploadMenu)}
+                      title="上传文件"
+                    >
+                      📎 文件
+                    </button>
+                    <button
+                      className="chat-toolbar-btn"
+                      onClick={() => setUploadMenu(!uploadMenu)}
+                      title="上传图片"
+                    >
+                      🖼 图片
+                    </button>
+                    {uploadMenu && (
+                      <div className="chat-upload-menu">
+                        <div className="chat-upload-item" onClick={() => { alert('文件上传功能即将支持'); setUploadMenu(false); }}>
+                          📄 上传文件
+                        </div>
+                        <div className="chat-upload-item" onClick={() => { alert('图片上传功能即将支持'); setUploadMenu(false); }}>
+                          🖼 上传图片
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    className="chat-send-btn"
+                    onClick={handleSend}
+                    disabled={sending || isGenerating || !input.trim()}
+                  >
+                    {sending || isGenerating ? '⏳' : '发送'}
+                  </button>
+                </div>
+              </div>
+              <div className="chat-input-hint">
+                {displayModel && (
+                  <span>
+                    <strong>当前模型:</strong> <strong><span className="chat-model-name">{displayModel}</span></strong>
+                  </span>
+                )}
+                {displayModel ? ' · ' : ''}Enter 发送 · Shift+Enter 换行
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

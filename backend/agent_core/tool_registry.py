@@ -5,6 +5,9 @@
   2. 读取 tools/registry.json 中的注册工具
   3. 按需匹配工具（根据用户查询语义匹配）
   4. 提供格式化工具列表供 context 注入
+
+v0.5：预执行模式 — LLM 不再需要手动输出【工具调用】标记，
+工具由系统在回答前自动执行。
 """
 
 import json
@@ -155,15 +158,19 @@ def get_tool_by_name(name: str) -> Optional[dict]:
 
 
 def format_tools_for_prompt(tools: list[dict]) -> str:
-    """将工具列表格式化为 prompt 可读文本"""
+    """将工具列表格式化为 prompt 可读文本
+
+    预执行模式：工具由系统自动执行，LLM 只需基于结果回复即可。
+    """
     if not tools:
         return ""
 
-    lines = ["## 可用工具\n",
-             "你可以通过【工具调用】标记使用以下工具。格式：",
-             "【工具调用】",
-             '{"tool": "工具名", "params": {...}}',
-             "【/工具调用】\n"]
+    lines = [
+        "## 可用工具",
+        "",
+        "以下工具系统会在需要时自动执行，你无需输出【工具调用】标记：",
+        "",
+    ]
 
     # 分组
     base_names = {t["name"] for t in BASE_TOOLS}
@@ -176,7 +183,7 @@ def format_tools_for_prompt(tools: list[dict]) -> str:
             params_desc = ", ".join(
                 f'{k}({v.get("type","str")})' for k, v in t.get("parameters", {}).items()
             )
-            lines.append(f'- `{t["name"]}({params_desc})` — {t["description"]}')
+            lines.append(f"- `{t['name']}({params_desc})` - {t['description']}")
         lines.append("")
 
     if extra:
@@ -185,11 +192,13 @@ def format_tools_for_prompt(tools: list[dict]) -> str:
             params_desc = ", ".join(
                 f'{k}({v.get("type","str")})' for k, v in t.get("parameters", {}).items()
             )
-            lines.append(f'- `{t["name"]}({params_desc})` — {t["description"]}')
+            lines.append(f"- `{t['name']}({params_desc})` - {t['description']}")
         lines.append("")
 
-    lines.append("### 如果工具列表里没有你要的")
-    lines.append("用【缺工具】标记告诉系统你需要什么工具，系统会尝试帮你找到或创建。")
+    lines.append("### 注意事项")
+    lines.append("- 所有数据工具（天气、推荐、装备清单等）由系统自动执行并附上结果。")
+    lines.append("- 你只需基于系统提供的真实数据回复用户，不需要自己编造数据。")
+    lines.append("- 如果系统没有提供所需数据，如实告知用户即可。")
     lines.append("")
 
     return "\n".join(lines)

@@ -34,6 +34,7 @@ class SceneOut(BaseModel):
     complexity: Optional[str] = None
     constraints: Optional[list] = None
     constraints_locked: bool = False
+    user_context: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -43,6 +44,7 @@ class SceneOut(BaseModel):
 class SceneUpdate(BaseModel):
     name: Optional[str] = None
     pinned: Optional[bool] = None
+    user_context: Optional[str] = None
 
 
 # ═══ Thinking Map ═══

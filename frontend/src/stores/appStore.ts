@@ -12,7 +12,7 @@ import {
   listChannels, createChannel, updateChannel, deleteChannel, clearChannelMessages,
   sendChannelMessage, listChannelMessages, sendChannelMessageStream,
   listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
-  Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent,
+  Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent, ToolCard,
   ActionMap as ActionMapType, ActionMapStreamEvent,
   getSettings, updateSettings, getServiceStatus,
   SettingsData, ServiceStatus, RouteConfig,
@@ -33,6 +33,11 @@ interface AppState {
   setCurrentProject: (p: Project | null) => void;
   currentScene: Scene | null;
   setCurrentScene: (s: Scene | null) => void;
+
+  // ═══ 用户输入背景设定 ═══
+  userContext: string;
+  loadUserContext: (sceneId: string) => Promise<void>;
+  saveUserContext: (sceneId: string, content: string) => Promise<void>;
 
   // ═══ Thinking Map ═══
   thinkingMap: ThinkingMap | null;
@@ -85,6 +90,7 @@ interface AppState {
   // ═══ 流式状态 ═══
   isGenerating: boolean;
   currentModelName: string | null;   // 当前使用的模型名（来自 SSE model_info 事件）
+  currentToolCards: ToolCard[];      // 当前 AI 回复的工具卡片数据
 
   // ═══ 消息操作 ═══
   deleteMsg: (messageId: string) => Promise<void>;
@@ -108,6 +114,7 @@ export const useStore = create<AppState>((set, get) => ({
   setView: (v) => set({ view: v }),
   isGenerating: false,
   currentModelName: null,
+  currentToolCards: [],
 
   // ═══ 项目 ═══
   projects: [],
@@ -128,7 +135,28 @@ export const useStore = create<AppState>((set, get) => ({
   currentProject: null,
   setCurrentProject: (p) => set({ currentProject: p, currentScene: null, messages: [] }),
   currentScene: null,
-  setCurrentScene: (s) => set({ currentScene: s, messages: [] }),
+  setCurrentScene: (s) => { set({ currentScene: s, messages: [] }); if (s) get().loadUserContext(s.id); },
+  userContext: '',
+  loadUserContext: async (sceneId) => {
+    try {
+      const scenes = await listScenes();
+      const scene = scenes.find(s => s.id === sceneId);
+      if (scene) {
+        set({ userContext: scene.user_context || '' });
+      }
+    } catch (e) {
+      console.error('[store] loadUserContext failed:', e);
+    }
+  },
+  saveUserContext: async (sceneId, content) => {
+    try {
+      const trimmed = content.trim();
+      const scene = await updateScene(sceneId, { user_context: trimmed || null });
+      set({ userContext: scene.user_context || '' });
+    } catch (e) {
+      console.error('[store] saveUserContext failed:', e);
+    }
+  },
 
   // ═══ Thinking Map ═══
   thinkingMap: null,
@@ -234,6 +262,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     set({
       isGenerating: true,
+      currentToolCards: [],
       messages: [...get().messages, tempUserMsg, tempAiMsg],
     });
 
@@ -242,7 +271,9 @@ export const useStore = create<AppState>((set, get) => ({
       const stream = sendSceneMessageStream(sceneId, content, sessionId || undefined);
 
       for await (const event of stream) {
-        if (event.type === 'model_info') {
+        if (event.type === 'tool_cards') {
+          set({ currentToolCards: event.cards });
+        } else if (event.type === 'model_info') {
           set({ currentModelName: event.model });
         } else if (event.type === 'user_msg') {
           set(state => ({
@@ -267,7 +298,7 @@ export const useStore = create<AppState>((set, get) => ({
             isGenerating: false,
             messages: state.messages.map(m =>
               m.id === tempAiId
-                ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null }
+                ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null, toolCards: state.currentToolCards }
                 : m
             ),
           }));
@@ -276,6 +307,7 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'error') {
           set(state => ({
             isGenerating: false,
+            currentToolCards: [],
             messages: state.messages.map(m =>
               m.id === tempAiId
                 ? { ...m, content: `❌ ${event.message}` }
@@ -487,7 +519,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   switchSceneSession: (sessionId) => {
-    set({ currentSessionId: sessionId, messages: [] });
+    set({ currentSessionId: sessionId, messages: [], currentToolCards: [] });
     const state = get();
     if (state.currentScene) {
       state.loadSceneMessages(state.currentScene.id);

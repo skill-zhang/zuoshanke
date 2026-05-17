@@ -18,6 +18,7 @@ from ai_engine import (
     ai_scene_ask_missing_stream, extract_and_classify,
 )
 from agent_core.core import agent_core_light_stream
+from agent_core.tool_executor import detect_and_preexecute
 from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
 
@@ -68,6 +69,8 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
         scene.name = data.name
     if data.pinned is not None:
         scene.pinned = data.pinned
+    if data.user_context is not None:
+        scene.user_context = data.user_context.strip() or None
     scene.updated_at = utcnow()
     db.commit()
     db.refresh(scene)
@@ -148,6 +151,83 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# ═══ 工具卡片 ═══
+
+def _build_tool_cards(tool_results: list[dict]) -> list[dict]:
+    """将预执行工具结果转为前端可渲染的卡片数据
+
+    Returns:
+        [{"type": "weather"|"attractions"|"equipment", "data": {...}}, ...]
+    """
+    cards = []
+    for r in tool_results:
+        if not r.get("success") or not r.get("result"):
+            continue
+        tool = r["tool"]
+        res = r["result"]
+
+        if tool == "get_weather" and isinstance(res, dict):
+            cards.append({
+                "type": "weather",
+                "data": {
+                    "city": res.get("city", ""),
+                    "desc": res.get("desc", ""),
+                    "temp": res.get("temp", ""),
+                    "humidity": res.get("humidity", ""),
+                    "wind": res.get("wind", ""),
+                    "forecast": res.get("forecast", []),
+                    "hourly": res.get("hourly", []),
+                },
+            })
+
+        elif tool == "recommend_attractions" and isinstance(res, dict):
+            cards.append({
+                "type": "attractions",
+                "data": {
+                    "city": res.get("city", ""),
+                    "category_label": res.get("category_label", ""),
+                    "default_category": res.get("default_category", ""),
+                    "total_matched": res.get("total_matched", 0),
+                    "items": [
+                        {
+                            "name": it.get("name", ""),
+                            "category": it.get("category", ""),
+                            "tags": it.get("tags", []),
+                            "indoor": it.get("indoor", False),
+                            "note": it.get("note", ""),
+                            "score": it.get("score", 0),
+                        }
+                        for it in (res.get("items", []) or [])
+                    ],
+                },
+            })
+
+        elif tool == "get_equipment_checklist" and isinstance(res, dict):
+            items = res.get("items", []) or []
+            cards.append({
+                "type": "equipment",
+                "data": {
+                    "label": res.get("label", ""),
+                    "icon": res.get("icon", ""),
+                    "default_category": res.get("default_category", ""),
+                    "total": res.get("total", 0),
+                    "must_have": res.get("must_have", 0),
+                    "recommended": res.get("recommended", 0),
+                    "optional": res.get("optional", 0),
+                    "items": [
+                        {
+                            "name": it.get("name", ""),
+                            "necessity": it.get("necessity", ""),
+                            "note": it.get("note", ""),
+                        }
+                        for it in items
+                    ],
+                },
+            })
+
+    return cards
+
+
 # ═══ 场景流式 ═══
 
 @router.post("/api/scenes/{scene_id}/stream")
@@ -196,15 +276,33 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             missing_info = []
 
         MODEL_MAP = {"light": "Qwen3.5 本地", "medium": "DeepSeek Flash", "heavy": "DeepSeek Pro"}
-        if need_extraction and not constraints_ok and missing_info:
-            ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db)
+        user_ctx = scene.user_context
+
+        # ── 预执行：在路由决策前先检测工具意图 ──
+        tool_results = detect_and_preexecute(data.content)
+
+        # ── 路由决策 ──
+        if tool_results:
+            # 有预执行结果 → 直接走 Light 路由（系统数据够用，无需追问）
+            ai_stream = agent_core_light_stream(
+                data.content, history_messages, scene_id, db,
+                user_context=user_ctx, tool_results=tool_results,
+            )
+            model_name = "Qwen3.5 本地 + Agent Core"
+        elif need_extraction and not constraints_ok and missing_info:
+            ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db, user_context=user_ctx)
             model_name = "Qwen3.5 本地"
         elif complexity == "light":
-            ai_stream = agent_core_light_stream(data.content, history_messages, scene_id, db)
+            ai_stream = agent_core_light_stream(data.content, history_messages, scene_id, db, user_context=user_ctx)
             model_name = "Qwen3.5 本地 + Agent Core"
         else:
-            ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages)
+            ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages, user_context=user_ctx)
             model_name = MODEL_MAP.get(complexity, "Qwen3.5 本地")
+
+        # ── 工具卡片：将预执行结果转为前端可渲染的结构化数据 ──
+        tool_cards = _build_tool_cards(tool_results) if tool_results else []
+        if tool_cards:
+            yield sse_event("tool_cards", cards=tool_cards)
 
         yield sse_event("model_info", model=model_name, complexity=complexity)
 

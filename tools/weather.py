@@ -18,6 +18,7 @@ import json
 import random
 import time
 import re
+import datetime
 import requests
 from typing import Optional
 
@@ -86,9 +87,18 @@ _EN_TO_CN_WEATHER = {
     "cloudy": "阴天", "overcast": "阴天",
     "light rain": "小雨", "light drizzle": "小雨",
     "moderate rain": "中雨", "heavy rain": "大雨",
+    "rain": "雨",
     "patchy rain possible": "阵雨", "patchy rain nearby": "阵雨",
     "mist": "薄雾", "fog": "雾",
     "thunder": "雷阵雨",
+}
+
+# ── 风向缩写→中文映射 ──
+_WIND_DIR_CN = {
+    "N": "北风", "NNE": "东北偏北", "NE": "东北风", "ENE": "东北偏东",
+    "E": "东风", "ESE": "东南偏东", "SE": "东南风", "SSE": "东南偏南",
+    "S": "南风", "SSW": "西南偏南", "SW": "西南风", "WSW": "西南偏西",
+    "W": "西风", "WNW": "西北偏西", "NW": "西北风", "NNW": "西北偏北",
 }
 
 # ── 对话上下文注入：城市列表 ──
@@ -116,9 +126,20 @@ def _now() -> float:
 
 
 def _normalize_desc(desc: str) -> str:
-    """统一天气描述：去空格 + 英文翻译为中文"""
+    """统一天气描述：去空格 + 英文翻译为中文（支持逗号分隔）"""
     desc = desc.strip().lower()
-    return _EN_TO_CN_WEATHER.get(desc, desc)
+    # 先尝试整段匹配
+    if desc in _EN_TO_CN_WEATHER:
+        return _EN_TO_CN_WEATHER[desc]
+    # 逗号分隔逐段翻译
+    parts = [p.strip() for p in desc.split(",")]
+    translated = []
+    for p in parts:
+        if p in _EN_TO_CN_WEATHER:
+            translated.append(_EN_TO_CN_WEATHER[p])
+        else:
+            translated.append(p)
+    return "，".join(translated)
 
 
 def _parse_wttr_json(raw: dict) -> Optional[dict]:
@@ -129,19 +150,58 @@ def _parse_wttr_json(raw: dict) -> Optional[dict]:
         city_name = city_info.get("areaName", [{}])[0].get("value", "未知")
 
         temp = current.get("temp_C", "N/A") + "°C"
-        desc = _normalize_desc(current.get("weatherDesc", [{}])[0].get("value", "未知"))
+        # 当前天气描述：先 normalize 再处理逗号
+        raw_desc = current.get("weatherDesc", [{}])[0].get("value", "未知")
+        desc = _normalize_desc(raw_desc)
         humidity = current.get("humidity", "N/A") + "%"
-        wind_dir = current.get("winddir16Point", "未知")
+        wind_dir_raw = current.get("winddir16Point", "未知")
+        wind_dir_cn = _WIND_DIR_CN.get(wind_dir_raw, wind_dir_raw)
         wind_speed = current.get("windspeedKmph", "0")
-        wind = f"{wind_dir} {wind_speed}km/h"
+        wind = f"{wind_dir_cn} {wind_speed}km/h"
 
-        return {
+        result = {
             "city": city_name,
             "temp": temp,
             "desc": desc,
             "humidity": humidity,
             "wind": wind,
         }
+
+        # 从当前时刻起跨天取 8 个 3 小时间隔时段
+        weather_days = raw.get("weather", [])
+        if weather_days:
+            now = datetime.datetime.now()
+            cur_hour = now.hour
+            # 当前所属的 3 小时间隔起点
+            start_slot = (cur_hour // 3) * 3
+            hourly = []
+            for day_data in weather_days:
+                if len(hourly) >= 8:
+                    break
+                hourly_raw = day_data.get("hourly", [])
+                for h in hourly_raw:
+                    if len(hourly) >= 8:
+                        break
+                    raw_time = h.get("time", "0")
+                    time_val = int(raw_time) if raw_time.isdigit() else 0
+                    hour = time_val // 100
+                    if time_val == 2400:
+                        hour = 0
+                    # 第一天跳过已过时段
+                    if day_data is weather_days[0] and hour < start_slot:
+                        continue
+                    hour_str = f"{hour:02d}:00"
+                    hourly.append({
+                        "time": hour_str,
+                        "temp": h.get("tempC", "N/A") + "°C",
+                        "temp_c": h.get("tempC", "N/A"),
+                        "desc": _normalize_desc(h.get("weatherDesc", [{}])[0].get("value", "未知")),
+                        "humidity": h.get("humidity", "N/A") + "%",
+                        "wind": f"{_WIND_DIR_CN.get(h.get('winddir16Point', '未知'), h.get('winddir16Point', '未知'))} {h.get('windspeedKmph', '0')}km/h",
+                    })
+            result["hourly"] = hourly
+
+        return result
     except (IndexError, KeyError, TypeError) as e:
         print(f"[weather] JSON 解析失败: {e}")
         return None
@@ -172,7 +232,8 @@ def _parse_forecast(raw: dict, city: str, days: int) -> list[dict]:
             if mid_hour else "未知")
         humidity = (mid_hour.get("humidity", "N/A") + "%"
                     if mid_hour else "N/A%")
-        wind_dir = mid_hour.get("winddir16Point", "未知") if mid_hour else "未知"
+        wind_dir_raw = mid_hour.get("winddir16Point", "未知") if mid_hour else "未知"
+        wind_dir = _WIND_DIR_CN.get(wind_dir_raw, wind_dir_raw)
         wind_speed = mid_hour.get("windspeedKmph", "0") if mid_hour else "0"
         wind = f"{wind_dir} {wind_speed}km/h"
 
