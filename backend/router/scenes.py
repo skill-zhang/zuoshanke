@@ -35,11 +35,12 @@ def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
         id=make_id("scene"),
         project_id=data.project_id,
         name=data.name,
-        icon=data.icon or None,
         description=data.description or "",
         category=data.category or "other",
         guide_text=data.guide_text or None,
     )
+    if data.icon:
+        scene.icon = data.icon
     db.add(scene)
     db.commit()
     db.refresh(scene)
@@ -113,7 +114,6 @@ def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
         id=make_id("scene"),
         project_id=data.project_id,
         name=s.name,
-        icon=s.icon or None,
         description=s.description or "",
         category=s.category or "other",
         guide_text=s.guide_text,
@@ -124,6 +124,8 @@ def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
         version="0.0",  # 导入后变为草稿
         source="imported",
     )
+    if s.icon:
+        scene.icon = s.icon
     db.add(scene)
     db.commit()
     db.refresh(scene)

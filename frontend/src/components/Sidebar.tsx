@@ -124,6 +124,12 @@ export function Sidebar() {
     closeMenu();
   };
 
+  const handlePin = async (scene: Scene) => {
+    await updateScene(scene.id, { pinned: !scene.pinned });
+    await loadWorkshopScenes();
+    closeMenu();
+  };
+
   const toggleMenu = (id: string) => {
     setMenuOpen(menuOpen === id ? null : id);
   };
@@ -265,7 +271,7 @@ export function Sidebar() {
                         title={`${s.icon || '📦'} ${s.name} ${isPublished ? `v${s.version}` : '草稿'}`}
                       >
                         <span className="sidebar-item-icon">{s.icon || '📦'}</span>
-                        <span className="sidebar-item-name">{s.name}</span>
+                        <span className="sidebar-item-name" style={s.pinned ? { color: '#d29922' } : undefined}>{s.name}</span>
                         <span
                           className="badge"
                           style={isPublished ? { background: '#23863633', color: '#3fb950' } : { background: '#d2992233', color: '#d29922' }}
@@ -279,6 +285,9 @@ export function Sidebar() {
 
                         {menuOpen === s.id && (
                           <div className="sidebar-dropdown">
+                            <div className="sidebar-dropdown-item"
+                              onClick={(e) => { e.stopPropagation(); handlePin(s); }}
+                            >📌 {s.pinned ? '取消置顶' : '置顶'}</div>
                             <div className="sidebar-dropdown-item"
                               onClick={(e) => { e.stopPropagation(); handleRename(s); }}
                             >✏️ 重命名</div>

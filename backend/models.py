@@ -39,7 +39,7 @@ class Scene(Base):
     constraints_locked = Column(Boolean, default=False)
     user_context = Column(Text, nullable=True, default=None)  # 用户自定义背景设定
     # ── 场景广场／工坊 字段 ──
-    icon = Column(String, nullable=True, default=None)        # emoji 图标
+    icon = Column(String, nullable=False, default="📦")        # emoji 图标（默认📦）
     description = Column(Text, default="", nullable=False)     # 简介
     guide_text = Column(Text, nullable=True, default=None)     # 引导语
     category = Column(String, default="other", nullable=False) # life|ecommerce|work|learn|create|finance|media|other
