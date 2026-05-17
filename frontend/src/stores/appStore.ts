@@ -117,6 +117,16 @@ interface AppState {
   loadPlazaScenes: (params?: { category?: string; q?: string }) => Promise<void>;
   loadWorkshopScenes: (params?: { category?: string; project_id?: string }) => Promise<void>;
   publishSceneVersion: (sceneId: string, version: string, changelog?: string) => Promise<Scene | null>;
+
+  // ═══ 记忆系统抽屉 🆕 ═══
+  memoryDrawerOpen: boolean;
+  openMemoryDrawer: () => void;
+  closeMemoryDrawer: () => void;
+
+  // ═══ 技能系统抽屉 🆕 ═══
+  skillsDrawerOpen: boolean;
+  openSkillsDrawer: () => void;
+  closeSkillsDrawer: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -584,6 +594,14 @@ export const useStore = create<AppState>((set, get) => ({
   openSettingsDrawer: () => set({ settingsDrawerOpen: true }),
 
   closeSettingsDrawer: () => set({ settingsDrawerOpen: false }),
+
+  memoryDrawerOpen: false,
+  openMemoryDrawer: () => set({ memoryDrawerOpen: true, skillsDrawerOpen: false }),
+  closeMemoryDrawer: () => set({ memoryDrawerOpen: false }),
+
+  skillsDrawerOpen: false,
+  openSkillsDrawer: () => set({ skillsDrawerOpen: true, memoryDrawerOpen: false }),
+  closeSkillsDrawer: () => set({ skillsDrawerOpen: false }),
 
   loadSettings: async () => {
     set({ settingsLoading: true });

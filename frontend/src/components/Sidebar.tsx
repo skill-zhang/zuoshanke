@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, listMemories } from '../api/client';
 import { ChannelSvg } from './Logo';
 
 const CATEGORIES = [
@@ -30,6 +30,7 @@ export function Sidebar() {
 
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
+  const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
 
   useEffect(() => { loadChannels(); }, []);
 
@@ -38,6 +39,11 @@ export function Sidebar() {
       loadWorkshopScenes();
     }
   }, [view]);
+
+  // 加载记忆数量（用于 badge）
+  useEffect(() => {
+    listMemories().then(res => setMemories(res.data)).catch(() => {});
+  }, []);
 
   const closeMenu = () => setMenuOpen(null);
 
@@ -309,6 +315,22 @@ export function Sidebar() {
         }}>
           <span className="sidebar-item-icon">+</span>
           新建场景
+        </div>
+
+        {/* ═══ 记忆 & 技能（底部工具） ═══ */}
+        <div className="sidebar-section" style={{ marginTop: 12 }}>
+          <div className="sidebar-label">🧰 系统工具</div>
+        </div>
+
+        <div className="sidebar-nav" onClick={() => useStore.getState().openMemoryDrawer()}>
+          <span className="nav-icon">🧠</span>
+          <span>记忆管理</span>
+          <span className="badge">{memories.length}</span>
+        </div>
+
+        <div className="sidebar-nav" onClick={() => useStore.getState().openSkillsDrawer()}>
+          <span className="nav-icon">📘</span>
+          <span>技能管理</span>
         </div>
       </div>
 

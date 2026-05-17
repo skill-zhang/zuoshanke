@@ -9,6 +9,8 @@ import { ProjectList } from './components/ProjectList';
 import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
 import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { MemoryDrawer } from './components/MemoryDrawer';
+import { SkillsDrawer } from './components/SkillsDrawer';
 import { Scene, createScene, listProjects } from './api/client';
 
 export default function App() {
@@ -153,6 +155,8 @@ export default function App() {
       <ThinkingMapDrawer />
       <ActionMapDrawer />
       <SettingsDrawer />
+      <MemoryDrawer />
+      <SkillsDrawer />
 
       {/* ═══ 创建场景弹窗 ═══ */}
       <div className={`modal-overlay${createModal ? ' show' : ''}`} onClick={() => !creating && setCreateModal(false)}>

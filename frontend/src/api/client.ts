@@ -413,6 +413,47 @@ export const getToolSkill = (toolName: string) =>
   request<{ name: string; content: string }>(`/tools/${toolName}/skill`);
 
 
+// ═══ 记忆系统 🆕 ═══
+export interface AgentMemory {
+  id: string; category: string; key: string; content: string;
+  tags: string[]; priority_level: string; base_weight: number;
+  explicit_boost: number; times_accessed: number; source: string;
+  last_accessed_at: string | null; created_at: string | null;
+  weight?: number;
+}
+export const listMemories = (params?: { category?: string }) => {
+  const qs = params?.category ? '?category=' + encodeURIComponent(params.category) : '';
+  return request<{ success: boolean; data: AgentMemory[] }>(`/memory${qs}`);
+};
+export const createMemory = (data: { key: string; content: string; category?: string; tags?: string[]; base_weight?: number }) =>
+  request<{ success: boolean; data: { id: string; key: string } }>('/memory', { method: 'POST', body: JSON.stringify(data) });
+export const getMemory = (key: string) =>
+  request<{ success: boolean; data: AgentMemory }>('/memory/' + encodeURIComponent(key));
+export const deleteMemory = (key: string) =>
+  request<{ success: boolean }>('/memory/' + encodeURIComponent(key), { method: 'DELETE' });
+export const reinforceMemory = (key: string) =>
+  request<{ success: boolean }>('/memory/' + encodeURIComponent(key) + '/reinforce', { method: 'POST' });
+export const pinMemory = (key: string) =>
+  request<{ success: boolean }>('/memory/' + encodeURIComponent(key) + '/pin', { method: 'POST' });
+
+// ═══ 技能系统 🆕 ═══
+export interface SkillMeta {
+  name: string; description: string; version: string;
+  category: string; triggers: string[];
+}
+export const listSkills = (category?: string) => {
+  const qs = category ? '?category=' + encodeURIComponent(category) : '';
+  return request<{ success: boolean; data: SkillMeta[] }>('/skills' + qs);
+};
+export const getSkill = (name: string) =>
+  request<{ success: boolean; data: SkillMeta & { content: string } }>('/skills/' + encodeURIComponent(name));
+export const createSkill = (data: { name: string; description: string; content: string; triggers?: string[]; category?: string }) =>
+  request<{ success: boolean; data: SkillMeta }>('/skills', { method: 'POST', body: JSON.stringify(data) });
+export const updateSkill = (name: string, data: { description?: string; content?: string; triggers?: string[]; category?: string }) =>
+  request<{ success: boolean }>('/skills/' + encodeURIComponent(name), { method: 'PUT', body: JSON.stringify(data) });
+export const deleteSkill = (name: string) =>
+  request<{ success: boolean }>('/skills/' + encodeURIComponent(name), { method: 'DELETE' });
+
 // ═══ 系统设置 ═══
 export interface RouteConfig {
   model: string;
