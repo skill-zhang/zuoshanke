@@ -31,16 +31,51 @@ export interface Scene {
   constraints: any[] | null;
   constraints_locked: boolean;
   user_context: string | null;
+  icon: string | null;
+  description: string;
+  guide_text: string | null;
+  category: string;
+  version: string;
+  source: string;
+  changelog: string | null;
+  published_at: string | null;
   created_at: string; updated_at: string;
 }
 export const listScenes = (projectId?: string) =>
   request<Scene[]>(`/scenes${projectId ? '?project_id=' + projectId : ''}`);
-export const createScene = (projectId: string, name: string) =>
-  request<Scene>('/scenes', { method: 'POST', body: JSON.stringify({ project_id: projectId, name }) });
-export const updateScene = (sceneId: string, data: { name?: string; pinned?: boolean; user_context?: string | null }) =>
+export const createScene = (projectId: string, name: string, opts?: { icon?: string; description?: string; category?: string }) =>
+  request<Scene>('/scenes', { method: 'POST', body: JSON.stringify({ project_id: projectId, name, ...opts }) });
+export const updateScene = (sceneId: string, data: {
+  name?: string; pinned?: boolean; user_context?: string | null;
+  icon?: string | null; description?: string; category?: string; guide_text?: string | null;
+}) =>
   request<Scene>(`/scenes/${sceneId}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteScene = (id: string) =>
   request(`/scenes/${id}`, { method: 'DELETE' });
+
+// ═══ 场景广场 / 工坊 ═══
+export const listPlazaScenes = (params?: { category?: string; q?: string }) => {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set('category', params.category);
+  if (params?.q) qs.set('q', params.q);
+  const q = qs.toString();
+  return request<Scene[]>(`/scenes/plaza${q ? '?' + q : ''}`);
+};
+export const listWorkshopScenes = (params?: { category?: string; project_id?: string }) => {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set('category', params.category);
+  if (params?.project_id) qs.set('project_id', params.project_id);
+  const q = qs.toString();
+  return request<Scene[]>(`/scenes/workshop${q ? '?' + q : ''}`);
+};
+export const publishScene = (sceneId: string, data: { version: string; changelog?: string }) =>
+  request<Scene>(`/scenes/${sceneId}/publish`, { method: 'POST', body: JSON.stringify(data) });
+export const exportScene = (sceneId: string) =>
+  request<{ name: string; icon?: string; description: string; category: string; guide_text?: string;
+    user_context?: string; complexity?: string; constraints?: any[]; constraints_locked?: boolean;
+    version: string }>(`/scenes/${sceneId}/export`);
+export const importScene = (projectId: string, sceneData: any) =>
+  request<Scene>('/scenes/import', { method: 'POST', body: JSON.stringify({ project_id: projectId, scene: sceneData }) });
 
 // ═══ Thinking Map ═══
 export interface ThinkNode {

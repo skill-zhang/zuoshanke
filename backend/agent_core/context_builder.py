@@ -2,18 +2,20 @@
 
 每次调用 LLM 前，按固定结构组装 prompt：
   1. System prompt（角色定义 + 使用说明）
-  2. 工具列表
-  3. 工具执行结果（如已预执行）
-  4. 对话历史（最近 N 条 + role 映射）
-  5. 当前用户消息
-
-预执行模式：工具结果先于历史消息注入，LLM 直接基于真实数据回复。
+  2. 记忆块 🆕 — 跨会话记忆（权重排序，最多 5 条）
+  3. 技能块 🆕 — 可复用流程知识（触发器匹配，最多 2 条）
+  4. 工具列表
+  5. 工具执行结果（如已预执行）
+  6. 对话历史（最近 N 条 + role 映射）
+  7. 当前用户消息
 """
 
 import json
 from typing import Optional
 
 from .tool_registry import match_tools, format_tools_for_prompt
+from .memory_manager import MemoryManager
+from .skill_manager import SkillManager
 
 
 # ── 场景聊天的 System Prompt（v0.5 预执行模式） ──
@@ -26,6 +28,37 @@ SCENE_SYSTEM_PROMPT = (
 )
 
 
+def _build_memory_block(db, query: str) -> str:
+    """从记忆系统提取相关记忆，格式化为注入文本"""
+    if db is None:
+        return ""
+    mm = MemoryManager(db)
+    memories = mm.get_top_for_context(query, max_count=5)
+    if not memories:
+        return ""
+    lines = ["## 关于用户（跨会话记忆）"]
+    for mem in memories:
+        level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
+        icon = level_icon.get(mem["priority_level"], "📝")
+        lines.append(f"- {icon} {mem['key']}: {mem['content']}")
+    return "\n".join(lines)
+
+
+def _build_skill_block(query: str) -> str:
+    """从技能系统匹配相关 skill，格式化为注入文本"""
+    sm = SkillManager()
+    skills = sm.match_for_context(query, max_count=2)
+    if not skills:
+        return ""
+    lines = ["## 参考技能"]
+    for skill in skills:
+        lines.append(f"### {skill.description}")
+        # 只取前 500 字，避免 token 浪费
+        content = skill.content[:500]
+        lines.append(content)
+    return "\n".join(lines)
+
+
 def build_scene_context(
     user_content: str,
     history_messages: Optional[list[dict]] = None,
@@ -33,6 +66,7 @@ def build_scene_context(
     tool_results: Optional[list[dict]] = None,
     weather_context: Optional[str] = None,
     user_context: Optional[str] = None,
+    db=None,  # 🆕 数据库会话，用于加载记忆
 ) -> list[dict]:
     """构建场景聊天的 LLM 消息列表
 
@@ -42,6 +76,8 @@ def build_scene_context(
         matched_tools: 匹配到的工具列表（None 则自动匹配）
         tool_results: 已执行的工具结果列表
         weather_context: 天气桥接上下文（向后兼容）
+        user_context: 用户自定义背景设定
+        db: 数据库会话（用于 memory 系统）
 
     Returns:
         OpenAI 格式的消息列表
@@ -55,14 +91,24 @@ def build_scene_context(
     if user_context:
         system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
 
-    # ── 2. 工具列表 ──
+    # ── 2. 🆕 记忆块 ──
+    memory_block = _build_memory_block(db, user_content)
+    if memory_block:
+        system_parts.append(memory_block)
+
+    # ── 3. 🆕 技能块 ──
+    skill_block = _build_skill_block(user_content)
+    if skill_block:
+        system_parts.append(skill_block)
+
+    # ── 4. 工具列表 ──
     if matched_tools is None:
         matched_tools = match_tools(user_content)
     tools_text = format_tools_for_prompt(matched_tools)
     if tools_text:
         system_parts.append(tools_text)
 
-    # ── 3. 使用说明 ──
+    # ── 5. 使用说明 ──
     system_parts.append("## 使用说明\n"
         "系统已自动执行了相关工具并附上结果。\n"
         "你无需输出【工具调用】标记，只需基于提供的真实数据回复用户。\n"
@@ -74,7 +120,7 @@ def build_scene_context(
 
     messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 
-    # ── 4. 工具结果上下文（用 assistant 角色，llama.cpp 不允许多条 system） ──
+    # ── 6. 工具结果上下文（用 assistant 角色，llama.cpp 不允许多条 system） ──
     if tool_results:
         results_block = "## 以下是已执行的工具返回结果，请基于这些数据回复用户：\n"
         for r in tool_results:
@@ -86,13 +132,13 @@ def build_scene_context(
                 results_block += f"\n错误: {json.dumps(r.get('result', '未知错误'), ensure_ascii=False)}"
         messages.append({"role": "assistant", "content": results_block})
 
-    # ── 5. 对话历史（role 映射） ──
+    # ── 7. 对话历史（role 映射） ──
     if history_messages:
         for m in history_messages:
             role = "assistant" if m["role"] == "ai" else m["role"]
             messages.append({"role": role, "content": m["content"]})
 
-    # ── 6. 天气桥接上下文 ──
+    # ── 8. 天气桥接上下文 ──
     user_parts = []
     if weather_context:
         user_parts.append(weather_context)
@@ -110,6 +156,7 @@ def build_light_context(
     weather_context: Optional[str] = None,
     tool_results: Optional[list[dict]] = None,
     user_context: Optional[str] = None,
+    db=None,  # 🆕 数据库会话
 ) -> list[dict]:
     """构建 light 路径的简化 context（用于场景快速直答）"""
     matched = match_tools(user_content)
@@ -120,4 +167,5 @@ def build_light_context(
         tool_results=tool_results,
         weather_context=weather_context,
         user_context=user_context,
+        db=db,  # 🆕 透传
     )

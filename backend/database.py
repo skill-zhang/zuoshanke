@@ -55,6 +55,30 @@ def init_db():
     except Exception as e:
         print(f"⚠️  session_id 迁移跳过: {e}")
 
+    # 迁移：Scenes 表新增广场/工坊字段（零破坏）
+    NEW_SCENE_COLS = [
+        ("icon", "VARCHAR"),
+        ("description", "TEXT DEFAULT '' NOT NULL"),
+        ("guide_text", "VARCHAR"),
+        ("category", "VARCHAR DEFAULT 'other' NOT NULL"),
+        ("version", "VARCHAR DEFAULT '0.0' NOT NULL"),
+        ("source", "VARCHAR DEFAULT 'self' NOT NULL"),
+        ("changelog", "VARCHAR"),
+        ("published_at", "DATETIME"),
+    ]
+    try:
+        with engine.connect() as conn:
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(scenes)")).fetchall()]
+            for col_name, col_type in NEW_SCENE_COLS:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE scenes ADD COLUMN {col_name} {col_type}"))
+            conn.commit()
+            added = [c for c, _ in NEW_SCENE_COLS if c not in cols]
+            if added:
+                print(f"✅ scenes 表新增字段: {', '.join(added)}")
+    except Exception as e:
+        print(f"⚠️  scenes 字段迁移跳过: {e}")
+
     # 种子数据：默认闲聊频道
     db = SessionLocal()
     try:

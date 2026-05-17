@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   listProjects, createProject, deleteProject,
   listScenes, createScene, updateScene, deleteScene,
+  listPlazaScenes, listWorkshopScenes, publishScene, exportScene, importScene,
   getThinkingMap, addNode, updateNode, deleteNode,
   sendMessage, listSceneMessages, sendSceneMessageStream,
   deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
@@ -18,7 +19,7 @@ import {
   SettingsData, ServiceStatus, RouteConfig,
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat';
+export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop';
 
 interface AppState {
   view: ViewPage;
@@ -107,6 +108,15 @@ interface AppState {
   loadSettings: () => Promise<void>;
   refreshServiceStatus: () => Promise<void>;
   updateSettingsPartial: (data: Record<string, any>) => Promise<boolean>;
+
+  // ═══ 场景广场 / 工坊 ═══
+  plazaScenes: Scene[];
+  workshopScenes: Scene[];
+  loadingPlaza: boolean;
+  loadingWorkshop: boolean;
+  loadPlazaScenes: (params?: { category?: string; q?: string }) => Promise<void>;
+  loadWorkshopScenes: (params?: { category?: string; project_id?: string }) => Promise<void>;
+  publishSceneVersion: (sceneId: string, version: string, changelog?: string) => Promise<Scene | null>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -523,6 +533,45 @@ export const useStore = create<AppState>((set, get) => ({
     const state = get();
     if (state.currentScene) {
       state.loadSceneMessages(state.currentScene.id);
+    }
+  },
+
+  // ═══ 场景广场 / 工坊 ═══
+  plazaScenes: [],
+  workshopScenes: [],
+  loadingPlaza: false,
+  loadingWorkshop: false,
+  loadPlazaScenes: async (params) => {
+    set({ loadingPlaza: true });
+    try {
+      const scenes = await listPlazaScenes(params);
+      set({ plazaScenes: scenes });
+    } catch (e) {
+      console.error('[store] loadPlazaScenes failed:', e);
+    } finally {
+      set({ loadingPlaza: false });
+    }
+  },
+  loadWorkshopScenes: async (params) => {
+    set({ loadingWorkshop: true });
+    try {
+      const scenes = await listWorkshopScenes(params);
+      set({ workshopScenes: scenes });
+    } catch (e) {
+      console.error('[store] loadWorkshopScenes failed:', e);
+    } finally {
+      set({ loadingWorkshop: false });
+    }
+  },
+  publishSceneVersion: async (sceneId, version, changelog) => {
+    try {
+      const updated = await publishScene(sceneId, { version, changelog });
+      // 同步刷新工坊列表
+      get().loadWorkshopScenes();
+      return updated;
+    } catch (e) {
+      console.error('[store] publishScene failed:', e);
+      return null;
     }
   },
 

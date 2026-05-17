@@ -1,4 +1,4 @@
-"""场景 + Thinking Map CRUD + 场景流式"""
+"""场景 + Thinking Map CRUD + 场景流式 + 场景广场/工坊/发布/导入导出"""
 import json
 import uuid
 from typing import List, Optional
@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
 from models import Scene, ThinkingMap, ThinkNode, Message
 from schemas import (
-    SceneCreate, SceneOut, SceneUpdate,
+    SceneCreate, SceneOut, SceneUpdate, ScenePublishRequest,
+    SceneExportOut, SceneImportIn,
     ThinkNodeCreate, ThinkNodeUpdate, ThinkNodeOut, ThinkingMapOut,
     MessageCreate,
 )
@@ -30,7 +31,15 @@ router = APIRouter(tags=["场景"])
 @router.post("/api/scenes", response_model=SceneOut)
 def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
     _get_project_or_404(db, data.project_id)
-    scene = Scene(id=make_id("scene"), project_id=data.project_id, name=data.name)
+    scene = Scene(
+        id=make_id("scene"),
+        project_id=data.project_id,
+        name=data.name,
+        icon=data.icon or None,
+        description=data.description or "",
+        category=data.category or "other",
+        guide_text=data.guide_text or None,
+    )
     db.add(scene)
     db.commit()
     db.refresh(scene)
@@ -71,6 +80,14 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
         scene.pinned = data.pinned
     if data.user_context is not None:
         scene.user_context = data.user_context.strip() or None
+    if data.icon is not None:
+        scene.icon = data.icon or None
+    if data.description is not None:
+        scene.description = data.description or ""
+    if data.category is not None:
+        scene.category = data.category or "other"
+    if data.guide_text is not None:
+        scene.guide_text = data.guide_text or None
     scene.updated_at = utcnow()
     db.commit()
     db.refresh(scene)
@@ -83,6 +100,132 @@ def delete_scene(scene_id: str, db: Session = Depends(get_db)):
     db.delete(scene)
     db.commit()
     return {"ok": True}
+
+
+# ═══ 场景广场 ═══
+
+@router.get("/api/scenes/plaza", response_model=List[SceneOut])
+def list_plaza_scenes(
+    category: str = None,
+    q: str = None,
+    db: Session = Depends(get_db),
+):
+    """场景广场 — 仅返回已发布场景，支持分类过滤和搜索"""
+    query = db.query(Scene).filter(Scene.version != "0.0")
+    if category:
+        query = query.filter(Scene.category == category)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            db.query(Scene).filter(
+                Scene.name.ilike(like) | Scene.description.ilike(like)
+            ).exists()
+        )
+    return query.order_by(Scene.published_at.desc(), Scene.updated_at.desc()).all()
+
+
+# ═══ 发布 / 版本更新 ═══
+
+@router.post("/api/scenes/{scene_id}/publish", response_model=SceneOut)
+def publish_scene(scene_id: str, data: ScenePublishRequest, db: Session = Depends(get_db)):
+    """发布场景或更新版本。校验 version 必须大于当前版本"""
+    scene = _get_scene_or_404(db, scene_id)
+
+    # 版本号比较（语义化：1.0 < 1.1 < 2.0）
+    def _parse_version(v: str) -> tuple:
+        try:
+            parts = v.strip().split(".")
+            return tuple(int(x) for x in parts)
+        except (ValueError, AttributeError):
+            raise HTTPException(400, f"版本号格式无效: {v}（请使用 x.y 格式）")
+
+    new_ver = _parse_version(data.version)
+    cur_ver = _parse_version(scene.version)
+    if new_ver <= cur_ver:
+        raise HTTPException(400, f"新版本 {data.version} 必须大于当前版本 {scene.version}")
+
+    scene.version = data.version
+    scene.changelog = data.changelog or None
+    scene.published_at = utcnow()
+    scene.updated_at = utcnow()
+    db.commit()
+    db.refresh(scene)
+    return scene
+
+
+# ═══ 导入 / 导出 ═══
+
+@router.get("/api/scenes/{scene_id}/export", response_model=SceneExportOut)
+def export_scene(scene_id: str, db: Session = Depends(get_db)):
+    """导出场景为 JSON（不含消息记录）"""
+    scene = _get_scene_or_404(db, scene_id)
+    return SceneExportOut(
+        name=scene.name,
+        icon=scene.icon,
+        description=scene.description or "",
+        category=scene.category or "other",
+        guide_text=scene.guide_text,
+        user_context=scene.user_context,
+        complexity=scene.complexity,
+        constraints=scene.constraints,
+        constraints_locked=scene.constraints_locked,
+        version="0.0" if scene.version == "0.0" else scene.version,
+    )
+
+
+@router.post("/api/scenes/import", response_model=SceneOut)
+def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
+    """从 JSON 导入场景"""
+    _get_project_or_404(db, data.project_id)
+    s = data.scene
+    scene = Scene(
+        id=make_id("scene"),
+        project_id=data.project_id,
+        name=s.name,
+        icon=s.icon or None,
+        description=s.description or "",
+        category=s.category or "other",
+        guide_text=s.guide_text,
+        user_context=s.user_context,
+        complexity=s.complexity,
+        constraints=s.constraints,
+        constraints_locked=s.constraints_locked,
+        version="0.0",  # 导入后变为草稿
+        source="imported",
+    )
+    db.add(scene)
+    db.commit()
+    db.refresh(scene)
+
+    tmap = ThinkingMap(id=make_id("think"), scene_id=scene.id, title=f"{s.name} · 需求梳理")
+    db.add(tmap)
+    db.commit()
+    db.refresh(tmap)
+
+    root = ThinkNode(
+        id=make_id("n"), map_id=tmap.id,
+        type="root", label=s.name, status="confirmed",
+    )
+    db.add(root)
+    db.commit()
+    return scene
+
+
+# ═══ 工坊 — 全部场景（含草稿） ═══
+
+@router.get("/api/scenes/workshop", response_model=List[SceneOut])
+def list_workshop_scenes(
+    category: str = None,
+    project_id: str = None,
+    db: Session = Depends(get_db),
+):
+    """工坊 — 自己创作的所有场景（含草稿和已发布）"""
+    q = db.query(Scene)
+    if project_id:
+        q = q.filter(Scene.project_id == project_id)
+    if category:
+        q = q.filter(Scene.category == category)
+    return q.order_by(Scene.pinned.desc(), Scene.updated_at.desc()).all()
 
 
 # ═══ Thinking Map ═══

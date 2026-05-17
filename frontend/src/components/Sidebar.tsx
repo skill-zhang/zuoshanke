@@ -1,45 +1,55 @@
-/** 📋 侧边栏 — 频道列表 + 场景列表 */
+/** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, createScene, updateScene, deleteScene, Scene } from '../api/client';
-import { ChannelSvg, ProjectFolderSvg } from './Logo';
+import { listScenes, updateScene, deleteScene, Scene } from '../api/client';
+import { ChannelSvg } from './Logo';
+
+const CATEGORIES = [
+  { key: 'life', icon: '🌿', label: '生活' },
+  { key: 'ecommerce', icon: '🛒', label: '电商' },
+  { key: 'work', icon: '💼', label: '工作' },
+  { key: 'learn', icon: '📚', label: '学习' },
+  { key: 'create', icon: '🎨', label: '创作' },
+  { key: 'finance', icon: '📈', label: '金融' },
+  { key: 'media', icon: '💬', label: '自媒体' },
+  { key: 'other', icon: '📦', label: '其他' },
+];
 
 export function Sidebar() {
   const {
-    setView, currentProject, setCurrentScene,
-    currentScene, loadThinkingMap, loadSceneMessages,
+    setView, view,
+    currentScene, setCurrentScene,
+    currentProject,
+    loadThinkingMap, loadSceneMessages,
     channels, currentChannel, setCurrentChannel,
     loadChannels, loadChannelMessages,
     createChannelAndReload, updateChannelAndReload,
     deleteChannelAndReload, clearChannelHistory,
+    workshopScenes, loadWorkshopScenes,
   } = useStore();
 
-  const [scenes, setScenes] = useState<Scene[]>([]);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
 
   useEffect(() => { loadChannels(); }, []);
 
   useEffect(() => {
-    if (currentProject) {
-      listScenes(currentProject.id).then(s => {
-        setScenes(s.filter(sc => !sc.name.startsWith('_')));
-      }).catch(console.error);
-    } else {
-      setScenes([]);
+    if (view === 'workshop') {
+      loadWorkshopScenes();
     }
-  }, [currentProject]);
-
-  const refreshScenes = async () => {
-    if (!currentProject) return;
-    try {
-      const s = await listScenes(currentProject.id);
-      setScenes(s.filter(sc => !sc.name.startsWith('_')));
-    } catch { /* skip */ }
-  };
+  }, [view]);
 
   const closeMenu = () => setMenuOpen(null);
 
-  // 频道操作
+  const toggleCategory = (key: string) => {
+    setCollapsedCats(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const handleCreateChannel = async () => {
     const name = prompt('频道名称：');
     if (!name) return;
@@ -49,8 +59,9 @@ export function Sidebar() {
   const handleEnterChannel = async (channelId: string) => {
     const ch = channels.find(c => c.id === channelId);
     if (!ch) return;
-    setCurrentChannel(ch);
+    setView('chat');
     setCurrentScene(null);
+    setCurrentChannel(ch);
     await loadChannelMessages(channelId);
   };
 
@@ -79,16 +90,7 @@ export function Sidebar() {
   };
 
   const isChannelActive = (chId: string) =>
-    !currentScene && currentChannel?.id === chId;
-
-  // 场景操作
-  const handleCreateScene = async () => {
-    if (!currentProject) return;
-    const name = prompt('场景名称：');
-    if (!name) return;
-    try { await createScene(currentProject.id, name); await refreshScenes(); }
-    catch (e) { console.error(e); }
-  };
+    view === 'chat' && !currentScene && currentChannel?.id === chId;
 
   const handleEnterScene = async (scene: Scene) => {
     setCurrentScene(scene);
@@ -102,13 +104,7 @@ export function Sidebar() {
     const name = prompt('新名称：', scene.name);
     if (!name) return;
     await updateScene(scene.id, { name });
-    await refreshScenes();
-    closeMenu();
-  };
-
-  const handlePin = async (scene: Scene) => {
-    await updateScene(scene.id, { pinned: !scene.pinned });
-    await refreshScenes();
+    await loadWorkshopScenes();
     closeMenu();
   };
 
@@ -116,13 +112,22 @@ export function Sidebar() {
     if (!confirm(`确定删除场景「${scene.name}」？\n该场景下的所有数据将被永久删除。`)) return;
     await deleteScene(scene.id);
     if (currentScene?.id === scene.id) setCurrentScene(null);
-    await refreshScenes();
+    await loadWorkshopScenes();
     closeMenu();
   };
 
   const toggleMenu = (id: string) => {
     setMenuOpen(menuOpen === id ? null : id);
   };
+
+  // 按类别统计工坊场景
+  const catCounts: Record<string, number> = {};
+  workshopScenes.forEach(s => {
+    catCounts[s.category] = (catCounts[s.category] || 0) + 1;
+  });
+
+  // 当前工坊过滤类别（若有）
+  const activeCat = view === 'workshop' ? null : null;
 
   return (
     <div className="sidebar">
@@ -181,66 +186,134 @@ export function Sidebar() {
           新建频道
         </div>
 
-        {/* ═══ 当前项目 · 场景 ═══ */}
-        <div className="sidebar-section section-gap">
+        {/* ═══ 场景广场 ═══ */}
+        <div
+          className="sidebar-section"
+          onClick={() => setView('plaza')}
+          style={{ cursor: 'pointer', marginTop: 4, borderBottom: '1px solid #21262d' }}
+        >
           <div className="sidebar-label">
-            <ProjectFolderSvg />
-            {currentProject ? `当前项目 · ${currentProject.name}` : '当前项目 · 未选择'}
+            <svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16">
+              <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3ZM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3ZM2.5 9.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM9 2.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3ZM10.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM9 10.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3ZM10.5 9.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3Z"/>
+            </svg>
+            场景广场
           </div>
         </div>
 
-        {!currentProject ? (
-          <div className="sidebar-placeholder" onClick={() => setView('projects')}>
-            选择一个项目开始工作 →
+        {/* ═══ 工坊 ═══ */}
+        <div className="sidebar-section" style={{ marginTop: 4 }}>
+          <div className="sidebar-label">
+            <svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16">
+              <path d="M4.5 1.5A2.5 2.5 0 0 0 2 4v2.5c0 .69.56 1.25 1.25 1.25h7.5c.69 0 1.25-.56 1.25-1.25V4a2.5 2.5 0 0 0-2.5-2.5h-5Z"/>
+              <path d="M1.5 9.5v3a2.5 2.5 0 0 0 2.5 2.5h4a.5.5 0 0 0 .5-.5v-7H5a.5.5 0 0 0-.5.5v1a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5Z"/>
+              <path d="M11 9.5v.5h2.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H11a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z"/>
+            </svg>
+            工坊
           </div>
-        ) : (
-          <>
-            {scenes.map((s) => (
+        </div>
+
+        {/* 工坊入口 — 全部 */}
+        <div
+          className={`sidebar-nav${view === 'workshop' ? ' active' : ''}`}
+          onClick={() => setView('workshop')}
+        >
+          <span className="nav-icon">
+            <svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16">
+              <path d="M4.5 1.5A2.5 2.5 0 0 0 2 4v2.5c0 .69.56 1.25 1.25 1.25h7.5c.69 0 1.25-.56 1.25-1.25V4a2.5 2.5 0 0 0-2.5-2.5h-5Z"/>
+              <path d="M1.5 9.5v3a2.5 2.5 0 0 0 2.5 2.5h4a.5.5 0 0 0 .5-.5v-7H5a.5.5 0 0 0-.5.5v1a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5Z"/>
+              <path d="M11 9.5v.5h2.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H11a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z"/>
+            </svg>
+          </span>
+          <span>创作空间</span>
+          <span className="badge">{workshopScenes.length}</span>
+        </div>
+
+        {/* 分类折叠列表 */}
+        {CATEGORIES.map(cat => {
+          const count = catCounts[cat.key] || 0;
+          if (count === 0) return null;
+          const isCollapsed = collapsedCats.has(cat.key);
+          return (
+            <div key={cat.key}>
               <div
-                key={s.id}
-                className={`sidebar-item indent${currentScene?.id === s.id ? ' active' : ''}`}
-                onClick={() => handleEnterScene(s)}
+                className={`sidebar-category${isCollapsed ? ' collapsed' : ''}`}
+                onClick={() => toggleCategory(cat.key)}
               >
-                <span className="sidebar-item-icon">#</span>
-                <span className="sidebar-item-name">{s.pinned ? '📌 ' : ''}{s.name}</span>
-                <span
-                  className="sidebar-menu-btn"
-                  onClick={(e) => { e.stopPropagation(); toggleMenu(s.id); }}
-                >···</span>
-
-                {menuOpen === s.id && (
-                  <div className="sidebar-dropdown">
-                    <div className="sidebar-dropdown-item"
-                      onClick={(e) => { e.stopPropagation(); handlePin(s); }}
-                    >📌 {s.pinned ? '取消置顶' : '置顶'}</div>
-                    <div className="sidebar-dropdown-item"
-                      onClick={(e) => { e.stopPropagation(); handleRename(s); }}
-                    >✏️ 重命名</div>
-                    <div className="sidebar-dropdown-item danger"
-                      onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
-                    >🗑 删除</div>
-                  </div>
-                )}
+                <span className="cat-arrow">▼</span>
+                <span className="cat-icon">{cat.icon}</span>
+                {cat.label}
+                <span className="cat-count">{count}</span>
               </div>
-            ))}
+              <div className={`sidebar-children${isCollapsed ? ' collapsed' : ''}`}>
+                {workshopScenes
+                  .filter(s => s.category === cat.key)
+                  .map(s => {
+                    const isPublished = s.version !== '0.0';
+                    return (
+                      <div
+                        key={s.id}
+                        className={`sidebar-item indent${currentScene?.id === s.id && view === 'chat' ? ' active' : ''}`}
+                        onClick={() => handleEnterScene(s)}
+                        title={`${s.icon || '📦'} ${s.name} ${isPublished ? `v${s.version}` : '草稿'}`}
+                      >
+                        <span className="sidebar-item-icon">{s.icon || '📦'}</span>
+                        <span className="sidebar-item-name">{s.name}</span>
+                        <span
+                          className="badge"
+                          style={isPublished ? { background: '#23863633', color: '#3fb950' } : { background: '#d2992233', color: '#d29922' }}
+                        >
+                          {isPublished ? `v${s.version}` : '草稿'}
+                        </span>
+                        <span
+                          className="sidebar-menu-btn"
+                          onClick={(e) => { e.stopPropagation(); toggleMenu(s.id); }}
+                        >···</span>
 
-            <div className="sidebar-action" onClick={handleCreateScene}>
-              <span className="sidebar-item-icon">+</span>
-              新建场景
+                        {menuOpen === s.id && (
+                          <div className="sidebar-dropdown">
+                            <div className="sidebar-dropdown-item"
+                              onClick={(e) => { e.stopPropagation(); handleRename(s); }}
+                            >✏️ 重命名</div>
+                            <div className="sidebar-dropdown-item danger"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
+                            >🗑 删除</div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
+          );
+        })}
 
-            <div className="sidebar-action" onClick={() => setView('projects')}>
-              <ProjectFolderSvg />
-              管理项目
-            </div>
-          </>
-        )}
+        <div className="sidebar-action" onClick={() => {
+          setView('workshop');
+          // Small delay to let WorkshopView render, then trigger create
+          setTimeout(() => {
+            const name = prompt('场景名称：');
+            if (!name) return;
+            // We need a project to create scenes. If no currentProject, use the first one.
+            import('../api/client').then(({ listProjects, createScene }) => {
+              listProjects().then(projects => {
+                if (projects.length === 0) {
+                  alert('请先创建一个项目');
+                  return;
+                }
+                createScene(projects[0].id, name, { icon: '📦', category: 'other' }).then(() => {
+                  loadWorkshopScenes();
+                }).catch(alert);
+              });
+            });
+          }, 100);
+        }}>
+          <span className="sidebar-item-icon">+</span>
+          新建场景
+        </div>
       </div>
 
       <div className="sidebar-footer">
-        <span className="link" onClick={() => setView('projects')}>
-          <ProjectFolderSvg /> 切换项目
-        </span>
+        <span style={{ fontSize: 13, color: '#8b949e' }}>坐山客 · {currentProject?.name || '本地'}</span>
       </div>
     </div>
   );

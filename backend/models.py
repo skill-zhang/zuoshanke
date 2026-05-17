@@ -38,6 +38,15 @@ class Scene(Base):
     constraints = Column(JSON, nullable=True)    # 约束提取结果
     constraints_locked = Column(Boolean, default=False)
     user_context = Column(Text, nullable=True, default=None)  # 用户自定义背景设定
+    # ── 场景广场／工坊 字段 ──
+    icon = Column(String, nullable=True, default=None)        # emoji 图标
+    description = Column(Text, default="", nullable=False)     # 简介
+    guide_text = Column(Text, nullable=True, default=None)     # 引导语
+    category = Column(String, default="other", nullable=False) # life|ecommerce|work|learn|create|finance|media|other
+    version = Column(String, default="0.0", nullable=False)    # 版本号（0.0=草稿）
+    source = Column(String, default="self", nullable=False)    # system|self|imported
+    changelog = Column(Text, nullable=True, default=None)      # 最近更新说明
+    published_at = Column(DateTime, nullable=True, default=None) # 最近发布时间
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -266,3 +275,66 @@ class ActionExecutionLog(Base):
     status = Column(String, nullable=True)
     result = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
+
+
+# ════════════════════════════════════════════════
+# Schema v0.5 — 权重驱动的智能记忆系统
+# ════════════════════════════════════════════════
+#
+# 设计哲学：记忆像人一样
+#   - 反复提及的会强化（frequency）
+#   - 最近提过的更容易想起（recency）
+#   - 你说了"记住"会×3倍权重（explicit_boost）
+#   - 不重要的自然淡出，不会永远占位（decay）
+#
+# 权重公式（memory_manager.py 实时计算，不存静态值）:
+#   weight = base_weight × recency × frequency × explicit_boost
+#
+#   其中：
+#     recency   = e^(-λ·days)   λ = ln2/半衰期(14天)
+#     frequency = 1 + log₂(times_accessed + 1)
+#     boost     = explicit_boost
+#
+# 四个等级（自动流转，无需手动维护）:
+#   P0 🔒 (weight ≥ 8) — 永不过期，始终注入
+#   P1 ⭐ (weight 4~8) — 长期保留，高频注入
+#   P2 📝 (weight 2~4) — 中期保留，按需注入
+#   P3 💤 (weight < 2) — 短期保留，自然淡出→删除
+#
+# 自动强化机制:
+#   - 同一话题出现 3次+ → +explicit_boost（×2）
+#   - 用户说"记住"+"这个很重要" → ×3，手动升 P0
+#   - 用户主动纠正 → 覆盖原记忆内容
+#
+# Token 预算:
+#   每次最多注入 Top-5 条（按 weight 实时排序）
+#   P0 预留 1 个名额，其余按权重竞争
+#   总容量上限 500 条，超出时淘汰最低权重的 P3
+#
+# 生命周期:
+#   [用户说某事] → [AI 扫描对话] → [创建记忆, P2 起步]
+#       ↻ 反复提 → [reinforce，explicit_boost ×2] → [weight 升, 可能到 P1]
+#       ↻ 说"记住" → [mark_explicit，explicit_boost ×3] → [weight 升, 可能到 P0]
+#       ↻ 30天不提 → [weight 自然衰减] → [P3 淡出]
+#       ↻ 超 500 条 → [prune, 淘汰最低权重 P3]
+
+class AgentMemory(Base):
+    """跨会话持久记忆 — 权重驱动，像人一样会强化也会遗忘"""
+    __tablename__ = "agent_memory"
+
+    id = Column(String, primary_key=True)
+    category = Column(String, nullable=False, default="user")  # user | agent
+    key = Column(String, unique=True, nullable=False, index=True)  # 唯一标识
+    content = Column(Text, nullable=False)
+    tags = Column(JSON, default=list)  # 关联标签，用于主题匹配
+    # ── 权重相关字段 ──
+    base_weight = Column(Integer, default=2)
+    priority_level = Column(String, default="P2")  # P0 | P1 | P2 | P3
+    explicit_boost = Column(Integer, default=1)  # 用户强调倍率
+    times_accessed = Column(Integer, default=0)  # 被访问次数
+    last_accessed_at = Column(DateTime, nullable=True)  # 最后被注入的时间
+    last_reinforced_at = Column(DateTime, nullable=True)  # 最后被用户强化的时间
+    # ── 元数据 ──
+    source = Column(String, nullable=True)  # 记忆来源（auto | llm | user）
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

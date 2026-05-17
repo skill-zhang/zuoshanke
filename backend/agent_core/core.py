@@ -43,12 +43,13 @@ def agent_core_light_stream(
     if tool_results is None:
         tool_results = detect_and_preexecute(user_content)
 
-    # ── 2. 构建 context（含工具结果，LLM 基于真实数据回复） ──
+    # ── 2. 构建 context（含工具结果、记忆、技能，LLM 基于真实数据回复） ──
     messages = build_light_context(
         user_content=user_content,
         history_messages=history_messages,
         tool_results=tool_results if tool_results else None,
         user_context=user_context,
+        db=db,
     )
 
     # ── 3. 单次流式输出 ──

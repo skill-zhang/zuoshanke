@@ -25,6 +25,10 @@ class ProjectOut(BaseModel):
 class SceneCreate(BaseModel):
     project_id: str
     name: str
+    icon: Optional[str] = None
+    description: str = ""
+    category: str = "other"
+    guide_text: Optional[str] = None
 
 class SceneOut(BaseModel):
     id: str
@@ -35,6 +39,14 @@ class SceneOut(BaseModel):
     constraints: Optional[list] = None
     constraints_locked: bool = False
     user_context: Optional[str] = None
+    icon: Optional[str] = None
+    description: str = ""
+    guide_text: Optional[str] = None
+    category: str = "other"
+    version: str = "0.0"
+    source: str = "self"
+    changelog: Optional[str] = None
+    published_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -45,6 +57,33 @@ class SceneUpdate(BaseModel):
     name: Optional[str] = None
     pinned: Optional[bool] = None
     user_context: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    guide_text: Optional[str] = None
+
+class ScenePublishRequest(BaseModel):
+    version: str
+    changelog: Optional[str] = None
+
+class SceneExportOut(BaseModel):
+    """场景导入导出格式（JSON）"""
+    schema_version: str = "1.0"
+    name: str
+    icon: Optional[str] = None
+    description: str = ""
+    category: str = "other"
+    guide_text: Optional[str] = None
+    user_context: Optional[str] = None
+    complexity: Optional[str] = None
+    constraints: Optional[list] = None
+    constraints_locked: bool = False
+    version: str = "0.0"
+
+class SceneImportIn(BaseModel):
+    """场景导入请求"""
+    project_id: str
+    scene: SceneExportOut
 
 
 # ═══ Thinking Map ═══
