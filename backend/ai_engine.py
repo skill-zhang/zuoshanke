@@ -24,6 +24,43 @@ def _weather_maybe(user_text: str) -> str | None:
 QWEN_API = "http://localhost:8083/v1/chat/completions"
 HERMES_BIN = os.path.expanduser("~/.local/bin/hermes")
 
+# ── 系统设置缓存 ──
+_settings_cache: dict | None = None
+
+def invalidate_settings_cache():
+    """外部调用来刷新缓存（PATCH 设置后调用）"""
+    global _settings_cache
+    _settings_cache = None
+
+def get_settings(route: str = "channel") -> dict:
+    """读取指定路由的设置（带内存缓存）
+
+    Args:
+        route: routing 中的 key（channel/scene/extraction/medium/heavy）
+
+    Returns:
+        {temperature: float, max_tokens: int, repeat_penalty: float, model: str, provider: str}
+        异常时返回默认值（不影响聊天功能）
+    """
+    global _settings_cache
+    if _settings_cache is None:
+        try:
+            from database import SessionLocal
+            from models import Setting, SETTINGS_ID, DEFAULT_ROUTING
+            db = SessionLocal()
+            try:
+                s = db.query(Setting).filter(Setting.id == SETTINGS_ID).first()
+                _settings_cache = s.routing if s else DEFAULT_ROUTING
+            finally:
+                db.close()
+        except Exception:
+            from models import DEFAULT_ROUTING
+            _settings_cache = DEFAULT_ROUTING
+    return _settings_cache.get(route, _settings_cache.get("channel", {
+        "temperature": 0.7, "max_tokens": 4096, "repeat_penalty": 1.0,
+        "model": "qwen3.5-9b", "provider": "local",
+    }))
+
 
 SYSTEM_PROMPT = """你是一个专业的 AI 架构顾问和产品经理搭档。在场景工作模式中，帮用户梳理需求、构建 Thinking Map。
 
@@ -82,7 +119,7 @@ def ai_channel_chat(
     """频道闲聊：纯对话"""
     api_messages = _build_channel_messages(messages, is_default)
 
-    result = call_qwen_chat(api_messages)
+    result = call_qwen_chat(api_messages, route="channel")
     if result is None:
         return "收到～（AI 引擎暂时响应缓慢，请稍候重试）"
     return result
@@ -131,13 +168,14 @@ def ai_channel_chat_stream(messages: list[dict], is_default: bool = False):
     api_messages = _build_channel_messages(messages, is_default)
 
     try:
+        route_cfg = get_settings("channel")
         resp = requests.post(
             QWEN_API,
             json={
                 "model": "qwen",
                 "messages": api_messages,
-                "max_tokens": 4096,
-                "temperature": 0.7,
+                "max_tokens": route_cfg["max_tokens"],
+                "temperature": route_cfg["temperature"],
                 "stream": True,
             },
             timeout=120,
@@ -166,16 +204,24 @@ def ai_channel_chat_stream(messages: list[dict], is_default: bool = False):
         yield None
 
 
-def call_qwen_chat(messages: list[dict], temperature: float = 0.7) -> str | None:
-    """调用 Qwen（非流式），返回完整回复文本"""
+def call_qwen_chat(messages: list[dict], temperature: float | None = None, route: str = "scene") -> str | None:
+    """调用 Qwen（非流式），返回完整回复文本
+
+    Args:
+        messages: 消息列表
+        temperature: 温度（None = 从 settings 读取 route 对应的值）
+        route: 路由名称（channel/scene/extraction/medium/heavy），用于查设置
+    """
+    route_cfg = get_settings(route)
+    temp = temperature if temperature is not None else route_cfg["temperature"]
     try:
         resp = requests.post(
             QWEN_API,
             json={
                 "model": "qwen",
                 "messages": messages,
-                "max_tokens": 4096,
-                "temperature": temperature,
+                "max_tokens": route_cfg["max_tokens"],
+                "temperature": temp,
             },
             timeout=120,
         )
@@ -187,21 +233,28 @@ def call_qwen_chat(messages: list[dict], temperature: float = 0.7) -> str | None
         return None
 
 
-def _stream_qwen(messages: list[dict], temperature: float = 0.7):
+def _stream_qwen(messages: list[dict], temperature: float | None = None, route: str = "scene"):
     """通用流式调用 Qwen，逐 token yield。
+
+    Args:
+        messages: 消息列表
+        temperature: 温度（None = 从 settings 读取 route 对应的值）
+        route: 路由名称
 
     Yields:
         str: token 文本
         None: 出错时 yield None（调用方应停止迭代）
     """
+    route_cfg = get_settings(route)
+    temp = temperature if temperature is not None else route_cfg["temperature"]
     try:
         resp = requests.post(
             QWEN_API,
             json={
                 "model": "qwen",
                 "messages": messages,
-                "max_tokens": 4096,
-                "temperature": temperature,
+                "max_tokens": route_cfg["max_tokens"],
+                "temperature": temp,
                 "stream": True,
             },
             timeout=120,

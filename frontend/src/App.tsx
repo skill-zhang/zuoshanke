@@ -6,6 +6,7 @@ import { ChatView } from './components/ChatView';
 import { ProjectList } from './components/ProjectList';
 import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
 import { ActionMapDrawer } from './components/ActionMapDrawer';
+import { SettingsDrawer } from './components/SettingsDrawer';
 
 export default function App() {
   const { view, loadProjects, currentProject } = useStore();
@@ -38,6 +39,7 @@ export default function App() {
 
       <ThinkingMapDrawer />
       <ActionMapDrawer />
+      <SettingsDrawer />
     </>
   );
 }

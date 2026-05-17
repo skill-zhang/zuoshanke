@@ -645,3 +645,150 @@ def validate_constraints(result_text, constraints):
 | **可选** | rsync 项目到 C 盘（无版本历史） | `rsync -av ~/zuoshanke/ /mnt/c/backup/zuoshanke/` |
 
 建议**至少做每日 git push**，C 盘是 SSD 且和 D 盘物理隔离，D 盘挂了也不会丢。`wsl --export` 可每周跑，但文件较大（整个 WSL 虚拟磁盘）。
+
+---
+
+## 十一、系统设置设计（v0.4 新增 🔥）
+
+> **设计原则：** 坐山客的设置不是「llama-server 参数编辑器」。坐山客是 Agent 工作台，用户对采样参数（Top K / Min P / XTC / DRY）没有直接感知兴趣。设置页只暴露**有业务语义的、不同路由需要不同值的**参数。
+
+### 与 llama-server WebUI Settings 的对比
+
+llama-server 内置 WebUI（`http://localhost:8083/`）有一个 Settings 页面，列出了 20+ 的底层采样参数（Temperature / Top K / Min P / Repeat Penalty / DRY / XTC 等）。它通过 `/props` API 实时写入 `server.webui_settings`，覆盖 `default_generation_settings`，**不修改启动参数，只在当前会话生效**。
+
+**坐山客不做这种设计。** 差异：
+
+| 维度 | llama-server WebUI Settings | 坐山客 Settings |
+|------|----------------------------|-----------------|
+| 面向用户 | 直接聊天的终端用户 | Agent 工作台用户 |
+| 参数粒度 | 底层采样参数（20+ 项） | 业务语义参数（<7 项） |
+| 生效范围 | 所有对话共用一个设置 | **按路由独立**（频道/场景/约束提取各不同） |
+| 修改目的 | 调当前聊天的输出风格 | 调 Agent 行为的可靠性与效率 |
+| 持久化 | 浏览器 localStorage + server 运行时内存 | **持久化到 DB**，重启不丢 |
+
+### 设置不采用的内容
+
+| 类别 | 设置项 | 不采用原因 |
+|------|--------|-----------|
+| llama 采样参数 | Top K / Top P / Min P / XTC / Typical P | 保持默认即可，用户调了看不出效果 |
+| | DRY / Mirostat | 9B 模型不需要额外复杂度 |
+| | Dynamic Temperature | 坐山客每个路由已独立设温，不需要动态调整 |
+| | Backend Sampling | 实验性 |
+| llama 采样顺序 | Samplers order | 保持默认链即可 |
+| llama 惩罚 | Presence / Frequency Penalty | 只保留 `Repeat Penalty` 够用 |
+| WebUI 显示类 | Theme / Always show sidebar / Show microphone | 坐山客有自己的前端 |
+| Developer | MCP servers / Raw output toggle | 坐山客不走这个路径 |
+| 服务安全 | API Key / SSL | 本地开发环境不需要 |
+
+### 设置采用的五项
+
+| # | 设置项 | 来自 llama WebUI | 说明 |
+|---|--------|-----------------|------|
+| 1 | **Temperature** | ✅ 保留，等价 | 每个路由独立值，先内部调好，未来可放开给用户 |
+| 2 | **Repeat Penalty** | ✅ 保留 | 多轮对话防重复，1.0~1.15，不同路由可独立设置 |
+| 3 | **System Prompt** | ✅ 保留但 disable | 可预览当前人设，暂不可编辑。保留交互入口为后续「频道人设自定义」做准备 |
+| 4 | **Max Tokens** | ✅ 等效 | 最大生成长度，每个路由独立 |
+| 5 | **PDF as Image** | ✅ 保留但 disable | 多模态 Vision 预留，等真的支持图片理解时启用 |
+
+> **「保留但 disable」的设计意图：** 功能相关项在界面上可见但不可交互（灰色打底 + lock 图标），让用户知道「这个功能有计划」，而不是根本不存在。等实现后自然解锁。
+
+### 设置架构：三层分层
+
+```
+┌─ ① 服务运维层（只读 + 操作按钮）─────────────┐
+│  llama-server   ✅ 运行中  :8083             │
+│  Flash Attention: on   |   Cache Reuse: 512  │
+│  VRAM: 4.1/11.9 GB   |   上下文: 16384 ctx    │
+│  [重启] [停止] [查看日志]                      │
+│  数据来源: llama-server /health + /slots API  │
+│  不存 DB，每次打开时实时拉取                     │
+└─────────────────────────────────────────────┘
+                        ↕ 松耦合
+┌─ ② 模型路由层（持久化到 DB）──────────────────┐
+│  ┌──────────┬──────────────┬──────┬────────┐ │
+│  │ 路由     │ 模型          │ 温度 │ 最大   │ │
+│  │          │               │      │ Token  │ │
+│  ├──────────┼──────────────┼──────┼────────┤ │
+│  │ 频道闲聊 │ Qwen3.5 本地  │ 0.7  │ 2048   │ │
+│  │ 场景分析 │ Qwen3.5 本地  │ 0.3  │ 4096   │ │
+│  │ 约束提取 │ Qwen3.5 本地  │ 0.1  │ 1024   │ │
+│  │ Medium   │ DeepSeek Flash│ 0.3  │ 4096   │ │
+│  │ Heavy    │ DeepSeek Pro  │ 0.3  │ 8192   │ │
+│  └──────────┴──────────────┴──────┴────────┘ │
+│  数据来源: settings 表（或 config 文件）        │
+│  变更立即生效（下次请求使用新参数）              │
+└─────────────────────────────────────────────┘
+                        ↕ 紧耦合
+┌─ ③ 人设/能力层（预览态）─────────────────────┐
+│  ■ System Prompt（频道人设）                   │
+│  ┌─ 你是坐山客，来自科幻宇宙《吞噬星空》……… ──┐ │
+│  │ [锁定 🔒 — 暂不可编辑]                    │ │
+│  └─────────────────────────────────────────┘ │
+│                                              │
+│  ■ 多模态                                    │
+│  ┌─ PDF as Image  ──────── [OFF] (预留) ──┐  │
+│  └─────────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+### DB 结构（settings 表）
+
+```sql
+CREATE TABLE IF NOT EXISTS settings (
+    id            VARCHAR PRIMARY KEY,
+    -- 模型路由设置
+    routing       JSON NOT NULL DEFAULT '{
+        "channel":    {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.7, "max_tokens": 2048, "repeat_penalty": 1.0},
+        "scene":      {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.3, "max_tokens": 4096, "repeat_penalty": 1.05},
+        "extraction": {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.1, "max_tokens": 1024, "repeat_penalty": 1.0},
+        "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 4096, "repeat_penalty": 1.05},
+        "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "temperature": 0.3, "max_tokens": 8192, "repeat_penalty": 1.05}
+    }',
+    -- 人设（暂不可编辑，但存了备查）
+    system_prompts JSON DEFAULT '{
+        "channel": "你是坐山客，来自科幻宇宙《吞噬星空》的AI智能体……",
+        "scene": "你是 Qwen3.5（通义千问），部署在本地服务器上的 AI 架构顾问……"
+    }',
+    -- 特性开关（预留）
+    features      JSON DEFAULT '{
+        "pdf_as_image": false,
+        "vision_enabled": false
+    }',
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+> **为什么用单行 JSON 不用多表？** 设置项数量稳定（<20 项），JSON 字段可以一次性读写在内存中缓存，不需要多次 join。API 返回直接 `settings.routing` 即可，前端几个 select/input 对号入座。
+
+### API 设计
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| `GET` | `/api/settings` | 读取全部设置（含服务状态） |
+| `PATCH` | `/api/settings` | 部分更新（传什么改什么） |
+| `GET` | `/api/settings/service` | 只读：服务状态（不存 DB，实时拉 llama-server） |
+
+### 代码集成点
+
+设置值在 `ai_engine.py` 的每个入口函数中读取：
+
+```python
+# 启动时加载一次到内存，避免每次请求都查 DB
+settings_cache = None
+
+def get_settings():
+    global settings_cache
+    if settings_cache is None:
+        with Session() as db:
+            s = db.query(Setting).first()
+            settings_cache = json.loads(s.routing) if s else DEFAULT_ROUTING
+    return settings_cache
+
+def call_qwen(messages, route="channel", **kwargs):
+    s = get_settings().get(route, DEFAULT_ROUTING)
+    temperature = kwargs.get("temperature", s["temperature"])
+    max_tokens = kwargs.get("max_tokens", s["max_tokens"])
+    # ...
+```
+
+**变更时刷新缓存**：`PATCH /api/settings` 更新 DB 后设置 `settings_cache = None`，下次请求自动重新加载。

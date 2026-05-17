@@ -1,3 +1,30 @@
 {
-  "tools": []
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "获取城市实时天气及未来预报（3-7天）",
+      "file": "tools/weather.py",
+      "function": "get_weather",
+      "parameters": {
+        "city": {"type": "string", "description": "城市名，如\"北京\""},
+        "forecast_days": {"type": "integer", "description": "预报天数(1-7)", "optional": true}
+      },
+      "returns": "天气数据（温度、湿度、风力、天气描述、未来预报）",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "recommend_attractions",
+      "description": "根据天气分类推荐适合的景点和活动",
+      "file": "tools/recommend.py",
+      "function": "recommend",
+      "parameters": {
+        "city": {"type": "string", "description": "城市名"},
+        "weather_category": {"type": "string", "description": "天气分类(sunny/rainy等)", "optional": true}
+      },
+      "returns": "推荐景点列表（含名称、适合天气、室内/室外）",
+      "category": "data",
+      "verified": false
+    }
+  ]
 }

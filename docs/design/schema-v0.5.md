@@ -198,6 +198,61 @@ function calling 是一个具体实现协议。我们的 Agent Core 可以：
 
 实现路径：先走自定义标记跑通循环，再升级到原生 function calling。
 
+### MCP 适配策略
+
+**坐山客对 MCP 的定位：消费方，不是生产方。**
+
+| 角色 | 做法 | 原因 |
+|------|------|------|
+| **消费 MCP**（连别人的服务器） | Agent Core 内置 MCP 客户端 | 社区已有大量现成 MCP 服务器，拿来即用 |
+| **生产 MCP**（把自己的工具发布成服务器） | ❌ 暂不需要 | 自有工具只有坐山客自己用，走自定义协议零开销、深度集成 |
+
+```
+Agent Core 工具调度
+   │
+   ├── 内部工具（自定义协议）          ← tools/ 目录，直接 Python 调
+   │   ├── Python 函数直接调用          ← 零开销
+   │   └── 深度集成 memory/skill        ← 不走 MCP，内部数据不外泄
+   │
+   └── MCP 客户端适配器（stdio/HTTP）  ← 消费社区现成工具
+       ├── 文件系统 MCP 服务器           ← 不需要自己写
+       ├── 数据库查询 MCP 服务器         ← 不需要自己写
+       ├── 浏览器自动化 MCP 服务器       ← 不需要自己写
+       └── ...（随社区生态增长）
+```
+
+**什么时候需要生产 MCP？**
+
+1. 你想让其他 Agent（Claude Desktop、其他系统）也能调用坐山客的工具
+2. 你想把坐山客的工具发布到社区供他人使用
+
+到那时再加一层网关：`tools/` 目录的每个工具自动暴露为 MCP 服务器。现在没必要。
+
+**MCP 在工具发现层中的位置：**
+
+工具发现层搜索外部来源时，MCP 服务器是候选来源之一（归类于 P2/AI 平台市场）：
+
+```
+P2 搜索来源：
+  ├── GitHub（开源项目）
+  ├── AI 平台工具市场
+  ├── MCP 服务器注册表（如 smithery.ai 等 MCP 集市） ← 新增
+  └── 互联网搜索（免费/付费 API）
+```
+
+配置方式：在坐山客 `config.yaml` 中声明要连接的 MCP 服务器：
+
+```yaml
+mcp_servers:
+  - name: filesystem
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+  - name: database
+    transport: http
+    url: "http://localhost:8001/mcp"
+```
+
 ---
 
 ## 三、工具调用循环
@@ -791,7 +846,8 @@ FastAPI (localhost:8000)
          │
          ├── 工具调度器
          │   ├── 解析【工具调用】
-         │   ├── 执行 Python 函数
+         │   ├── 执行 Python 函数（内部工具）
+         │   ├── MCP 客户端适配器（消费社区 MCP 服务器）
          │   └── 结果回注
          │
          ├── Tool Maker

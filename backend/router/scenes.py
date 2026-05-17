@@ -17,6 +17,7 @@ from ai_engine import (
     ai_scene_chat_stream, ai_scene_light_chat_stream,
     ai_scene_ask_missing_stream, extract_and_classify,
 )
+from agent_core.core import agent_core_light_stream
 from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
 
@@ -199,8 +200,8 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db)
             model_name = "Qwen3.5 本地"
         elif complexity == "light":
-            ai_stream = ai_scene_light_chat_stream(scene_id, data.content, history_messages, db)
-            model_name = "Qwen3.5 本地"
+            ai_stream = agent_core_light_stream(data.content, history_messages, scene_id, db)
+            model_name = "Qwen3.5 本地 + Agent Core"
         else:
             ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages)
             model_name = MODEL_MAP.get(complexity, "Qwen3.5 本地")

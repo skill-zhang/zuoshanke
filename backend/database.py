@@ -71,3 +71,20 @@ def init_db():
             print("✅ 默认「闲聊」频道已创建")
     finally:
         db.close()
+
+    # 种子数据：默认系统设置（单行）
+    db = SessionLocal()
+    try:
+        existing = db.query(models.Setting).filter(models.Setting.id == models.SETTINGS_ID).first()
+        if not existing:
+            setting = models.Setting(
+                id=models.SETTINGS_ID,
+                routing=models.DEFAULT_ROUTING.copy(),
+                system_prompts=models.DEFAULT_SYSTEM_PROMPTS.copy(),
+                features={"pdf_as_image": False, "vision_enabled": False},
+            )
+            db.add(setting)
+            db.commit()
+            print("✅ 默认系统设置已创建")
+    finally:
+        db.close()

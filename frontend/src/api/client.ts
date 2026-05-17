@@ -368,3 +368,51 @@ export const getActionMapLogs = (actionMapId: string) =>
 // ═══ 工具文档 ═══
 export const getToolSkill = (toolName: string) =>
   request<{ name: string; content: string }>(`/tools/${toolName}/skill`);
+
+
+// ═══ 系统设置 ═══
+export interface RouteConfig {
+  model: string;
+  provider: string;
+  temperature: number;
+  max_tokens: number;
+  repeat_penalty: number;
+}
+
+export interface SystemPrompts {
+  channel: string;
+  scene: string;
+}
+
+export interface Features {
+  pdf_as_image: boolean;
+  vision_enabled: boolean;
+}
+
+export interface SettingsData {
+  routing: Record<string, RouteConfig>;
+  system_prompts: SystemPrompts;
+  features: Features;
+  updated_at: string | null;
+}
+
+export interface ServiceStatus {
+  llama_server: string;
+  port: number;
+  flash_attention: string | null;
+  cache_reuse: number | null;
+  context_size: number | null;
+  vram_used_mb: number | null;
+  vram_total_mb: number | null;
+  model_name: string | null;
+  is_sleeping: boolean | null;
+  slots: number;
+  processing: boolean;
+}
+
+export const getSettings = () => request<SettingsData>('/settings');
+
+export const updateSettings = (data: Record<string, any>) =>
+  request<SettingsData>('/settings', { method: 'PATCH', body: JSON.stringify(data) });
+
+export const getServiceStatus = () => request<ServiceStatus>('/settings/service');

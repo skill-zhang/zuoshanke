@@ -247,3 +247,62 @@ class ActionNodeStatusUpdate(BaseModel):
 
 class ActionMapGenerateRequest(BaseModel):
     think_node_id: str
+
+
+# ═══ 系统设置 ═══
+
+class RouteConfig(BaseModel):
+    """单个路由的配置"""
+    model: str
+    provider: str
+    temperature: float
+    max_tokens: int
+    repeat_penalty: float
+
+class SystemPrompts(BaseModel):
+    """人设配置"""
+    channel: str
+    scene: str
+
+class Features(BaseModel):
+    """特性开关"""
+    pdf_as_image: bool = False
+    vision_enabled: bool = False
+
+class SettingsOut(BaseModel):
+    """系统设置（返回）"""
+    routing: dict[str, RouteConfig]
+    system_prompts: SystemPrompts
+    features: Features
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class RoutingUpdate(BaseModel):
+    """某个路由的更新（部分字段）"""
+    model: Optional[str] = None
+    provider: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    repeat_penalty: Optional[float] = None
+
+class SettingsUpdate(BaseModel):
+    """系统设置（更新）—— 传什么改什么，没传的不变"""
+    routing: Optional[dict[str, RoutingUpdate]] = None
+    system_prompts: Optional[SystemPrompts] = None
+    features: Optional[Features] = None
+
+class ServiceStatusOut(BaseModel):
+    """服务状态（只读，不存 DB）"""
+    llama_server: str  # running | stopped | error
+    port: int = 8083
+    flash_attention: Optional[str] = None
+    cache_reuse: Optional[int] = None
+    context_size: Optional[int] = None
+    vram_used_mb: Optional[int] = None
+    vram_total_mb: Optional[int] = None
+    model_name: Optional[str] = None
+    is_sleeping: Optional[bool] = None
+    slots: int = 0
+    processing: bool = False

@@ -53,6 +53,11 @@ export function Topbar() {
           </button>
         </>
       )}
+      <button className="btn settings-btn" title="系统设置" onClick={() => {
+        useStore.getState().openSettingsDrawer();
+      }}>
+        ⚙
+      </button>
     </div>
   );
 }

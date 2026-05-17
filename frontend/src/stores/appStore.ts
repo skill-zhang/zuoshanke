@@ -14,6 +14,8 @@ import {
   listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
   Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent,
   ActionMap as ActionMapType, ActionMapStreamEvent,
+  getSettings, updateSettings, getServiceStatus,
+  SettingsData, ServiceStatus, RouteConfig,
 } from '../api/client';
 
 export type ViewPage = 'projects' | 'chat';
@@ -88,6 +90,17 @@ interface AppState {
   deleteMsg: (messageId: string) => Promise<void>;
   regenerateMsg: (messageId: string) => Promise<void>;
   reloadCurrentMessages: () => Promise<void>;
+
+  // ═══ 系统设置 ═══
+  settingsData: SettingsData | null;
+  serviceStatus: ServiceStatus | null;
+  settingsDrawerOpen: boolean;
+  settingsLoading: boolean;
+  openSettingsDrawer: () => void;
+  closeSettingsDrawer: () => void;
+  loadSettings: () => Promise<void>;
+  refreshServiceStatus: () => Promise<void>;
+  updateSettingsPartial: (data: Record<string, any>) => Promise<boolean>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -478,6 +491,50 @@ export const useStore = create<AppState>((set, get) => ({
     const state = get();
     if (state.currentScene) {
       state.loadSceneMessages(state.currentScene.id);
+    }
+  },
+
+  // ═══ 系统设置 ═══
+  settingsData: null,
+  serviceStatus: null,
+  settingsDrawerOpen: false,
+  settingsLoading: false,
+
+  openSettingsDrawer: () => set({ settingsDrawerOpen: true }),
+
+  closeSettingsDrawer: () => set({ settingsDrawerOpen: false }),
+
+  loadSettings: async () => {
+    set({ settingsLoading: true });
+    try {
+      const [settingsData, serviceStatus] = await Promise.all([
+        getSettings(),
+        getServiceStatus(),
+      ]);
+      set({ settingsData, serviceStatus, settingsLoading: false });
+    } catch (e) {
+      console.error('[store] loadSettings failed:', e);
+      set({ settingsLoading: false });
+    }
+  },
+
+  refreshServiceStatus: async () => {
+    try {
+      const serviceStatus = await getServiceStatus();
+      set({ serviceStatus });
+    } catch {
+      // 静默失败，服务可能已停
+    }
+  },
+
+  updateSettingsPartial: async (data: Record<string, any>) => {
+    try {
+      const settingsData = await updateSettings(data);
+      set({ settingsData });
+      return true;
+    } catch (e) {
+      console.error('[store] updateSettings failed:', e);
+      return false;
     }
   },
 }));
