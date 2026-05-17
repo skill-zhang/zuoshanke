@@ -114,6 +114,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     map_ref: Optional[str]
+    model: Optional[str] = None  # 生成该消息的模型名
     created_at: datetime
 
     class Config:

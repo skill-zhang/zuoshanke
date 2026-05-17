@@ -82,6 +82,7 @@ interface AppState {
 
   // ═══ 流式状态 ═══
   isGenerating: boolean;
+  currentModelName: string | null;   // 当前使用的模型名（来自 SSE model_info 事件）
 
   // ═══ 消息操作 ═══
   deleteMsg: (messageId: string) => Promise<void>;
@@ -93,6 +94,7 @@ export const useStore = create<AppState>((set, get) => ({
   view: 'chat',  // 默认进入聊天视图
   setView: (v) => set({ view: v }),
   isGenerating: false,
+  currentModelName: null,
 
   // ═══ 项目 ═══
   projects: [],
@@ -227,7 +229,9 @@ export const useStore = create<AppState>((set, get) => ({
       const stream = sendSceneMessageStream(sceneId, content, sessionId || undefined);
 
       for await (const event of stream) {
-        if (event.type === 'user_msg') {
+        if (event.type === 'model_info') {
+          set({ currentModelName: event.model });
+        } else if (event.type === 'user_msg') {
           set(state => ({
             messages: state.messages.map(m =>
               m.id === tempUserId
@@ -250,7 +254,7 @@ export const useStore = create<AppState>((set, get) => ({
             isGenerating: false,
             messages: state.messages.map(m =>
               m.id === tempAiId
-                ? { ...m, id: event.id, content: event.content, created_at: event.created_at }
+                ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null }
                 : m
             ),
           }));
@@ -365,7 +369,9 @@ export const useStore = create<AppState>((set, get) => ({
       const stream = sendChannelMessageStream(channelId, content);
 
       for await (const event of stream) {
-        if (event.type === 'user_msg') {
+        if (event.type === 'model_info') {
+          set({ currentModelName: event.model });
+        } else if (event.type === 'user_msg') {
           // 收到服务器确认的用户消息 → 替换临时 ID
           set(state => ({
             channelMessages: state.channelMessages.map(m =>
@@ -391,7 +397,7 @@ export const useStore = create<AppState>((set, get) => ({
             isGenerating: false,
             channelMessages: state.channelMessages.map(m =>
               m.id === tempAiId
-                ? { ...m, id: event.id, content: event.content, created_at: event.created_at }
+                ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null }
                 : m
             ),
           }));

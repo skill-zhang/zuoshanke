@@ -149,6 +149,7 @@ class Message(Base):
     role = Column(String, nullable=False)  # user | ai | system
     content = Column(Text, nullable=False)
     map_ref = Column(String, nullable=True)     # 关联的 map node/drawer 操作
+    model = Column(String, nullable=True)       # 生成该消息的模型名（如 Qwen3.5、DeepSeek Flash）
     created_at = Column(DateTime, default=utcnow)
 
     scene = relationship("Scene", back_populates="messages")

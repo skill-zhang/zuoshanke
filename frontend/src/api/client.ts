@@ -27,6 +27,9 @@ export const deleteProject = (id: string) =>
 // ═══ 场景 ═══
 export interface Scene {
   id: string; project_id: string; name: string; pinned: boolean;
+  complexity: string | null;
+  constraints: any[] | null;
+  constraints_locked: boolean;
   created_at: string; updated_at: string;
 }
 export const listScenes = (projectId?: string) =>
@@ -66,7 +69,7 @@ export interface Message {
   id: string; scene_id: string | null; channel_id: string | null;
   session_id: string | null;
   role: 'user' | 'ai' | 'system';
-  content: string; map_ref: string | null; created_at: string;
+  content: string; map_ref: string | null; model: string | null; created_at: string;
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
@@ -159,8 +162,9 @@ export const listChannelMessages = (channelId: string) =>
 // ═══ 流式 SSE 类型 ═══
 export type StreamEvent =
   | { type: 'user_msg'; id: string; role: 'user'; content: string; created_at: string }
+  | { type: 'model_info'; model: string; complexity: string | null }
   | { type: 'token'; token: string }
-  | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string }
+  | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string; model?: string }
   | { type: 'error'; message: string };
 
 /** 发送频道消息 + 流式接收 AI 回复（SSE） */

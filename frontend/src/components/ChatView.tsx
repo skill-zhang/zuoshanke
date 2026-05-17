@@ -61,6 +61,18 @@ function MessageBubble({ msg, onDelete, onRegenerate, onOpenActionMap, selectMod
             </button>
           </div>
         )}
+        {msg.role === 'ai' && msg.model && (
+          <div style={{
+            marginTop: '8px', fontSize: '11px', color: '#8b949e',
+            display: 'flex', alignItems: 'center', gap: '4px',
+            borderTop: '1px solid rgba(139,148,158,0.15)', paddingTop: '6px',
+          }}>
+            <span style={{
+              background: 'rgba(88,166,255,0.1)', color: '#58a6ff',
+              padding: '1px 6px', borderRadius: '3px', fontSize: '10px',
+            }}>⚙ {msg.model}</span>
+          </div>
+        )}
       </div>
 
       {!selectMode && (
@@ -115,6 +127,7 @@ export function ChatView() {
     batchDeleteMsgs, clearSceneMsgs,
     sessions, loadSceneSessions, switchSceneSession,
     isGenerating,
+    currentModelName,
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -141,6 +154,14 @@ export function ChatView() {
     : currentScene
       ? `🧠 ${currentScene.name} · AI 分析模式`
       : '';
+
+  // 根据当前上下文推算默认模型（显示在输入框下方）
+  const defaultModel = isChannel
+    ? 'Qwen3.5 本地'
+    : currentScene
+      ? ({ 'light': 'Qwen3.5 本地', 'medium': 'DeepSeek Flash', 'heavy': 'DeepSeek Pro' } as Record<string, string>)[currentScene.complexity || ''] || 'Qwen3.5 本地'
+      : null;
+  const displayModel = currentModelName || defaultModel;
 
   // 在场景切换时加载会话列表
   useEffect(() => {
@@ -414,7 +435,12 @@ export function ChatView() {
             </div>
           </div>
           <div className="chat-input-hint">
-            Enter 发送 · Shift+Enter 换行
+            {displayModel && (
+              <span>
+                <strong>当前模型:</strong> <strong><span className="chat-model-name">{displayModel}</span></strong>
+              </span>
+            )}
+            {displayModel ? ' · ' : ''}Enter 发送 · Shift+Enter 换行
           </div>
         </div>
       </div>

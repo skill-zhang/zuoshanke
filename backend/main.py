@@ -354,6 +354,7 @@ def send_message(data: MessageCreate, db: Session = Depends(get_db)):
         scene_id=data.scene_id,
         role="ai",
         content=ai_response,
+        model="Qwen3.5 本地",
     )
     db.add(ai_msg)
     db.commit()
@@ -440,15 +441,27 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             constraints_ok = True
             missing_info = []
 
-        # 选路
-        full_reply = ""
-        changes = []
+        # 选路 & 模型映射
+        MODEL_MAP = {
+            "light": "Qwen3.5 本地",
+            "medium": "DeepSeek Flash",
+            "heavy": "DeepSeek Pro",
+        }
         if need_extraction and not constraints_ok and missing_info:
             ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db)
+            model_name = "Qwen3.5 本地"
         elif complexity == "light":
             ai_stream = ai_scene_light_chat_stream(scene_id, data.content, history_messages, db)
+            model_name = "Qwen3.5 本地"
         else:
             ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages)
+            model_name = MODEL_MAP.get(complexity, "Qwen3.5 本地")
+
+        # 发送模型信息事件（前端据此显示当前使用的模型）
+        yield f"data: {json.dumps({'type': 'model_info', 'model': model_name, 'complexity': complexity}, ensure_ascii=False)}\n\n"
+
+        full_reply = ""
+        changes = []
         for token in ai_stream:
             if isinstance(token, dict):
                 if token.get("_error"):
@@ -471,6 +484,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 role="ai",
                 content=full_reply,
                 session_id=data.session_id,
+                model=model_name,
             )
             new_db.add(ai_msg)
             new_db.commit()
@@ -482,6 +496,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 "content": full_reply,
                 "created_at": ai_msg.created_at.isoformat(),
                 "changes": changes,
+                "model": model_name,
             }, ensure_ascii=False)
             yield f"data: {done_json}\n\n"
         except Exception as e:
@@ -539,6 +554,7 @@ def send_channel_message(channel_id: str, data: MessageCreate, db: Session = Dep
         channel_id=channel_id,
         role="ai",
         content=ai_response,
+        model="Qwen3.5 本地",
     )
     db.add(ai_msg)
     db.commit()
@@ -597,6 +613,9 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
         # 先推送用户消息
         yield f"data: {user_msg_json}\n\n"
 
+        # 频道闲聊模型信息（固定 Qwen3.5 本地）
+        yield f"data: {json.dumps({'type': 'model_info', 'model': 'Qwen3.5 本地', 'complexity': None}, ensure_ascii=False)}\n\n"
+
         # 流式调用 Qwen
         full_content = ""
         for token in ai_channel_chat_stream(history_dicts, is_default=channel.is_default):
@@ -615,6 +634,7 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
                 channel_id=channel_id,
                 role="ai",
                 content=full_content,
+                model="Qwen3.5 本地",
             )
             new_db.add(ai_msg)
             new_db.commit()
@@ -625,6 +645,7 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
                 "role": "ai",
                 "content": full_content,
                 "created_at": ai_msg.created_at.isoformat(),
+                "model": "Qwen3.5 本地",
             }, ensure_ascii=False)
             yield f"data: {done_json}\n\n"
         except Exception as e:
@@ -767,6 +788,7 @@ def regenerate_message(message_id: str, db: Session = Depends(get_db)):
             scene_id=msg.scene_id,
             role="ai",
             content=ai_response,
+            model="Qwen3.5 本地",
         )
     else:
         channel_id = msg.channel_id
@@ -788,6 +810,7 @@ def regenerate_message(message_id: str, db: Session = Depends(get_db)):
             channel_id=channel_id,
             role="ai",
             content=ai_response,
+            model="Qwen3.5 本地",
         )
 
     db.add(ai_msg)

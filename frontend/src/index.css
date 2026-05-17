@@ -356,6 +356,10 @@ body {
   font-size: 11px;
   color: #30363d;
   margin-top: 4px;
+  font-weight: 600;
+}
+.chat-model-name {
+  color: #6d90b5;
 }
 
 /* ═══ Drawer ═══ */
