@@ -16,6 +16,7 @@ export function MemoryDrawer() {
   const [memories, setMemories] = useState<AgentMemory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showRules, setShowRules] = useState(false);
 
   // 新建表单
   const [showForm, setShowForm] = useState(false);
@@ -100,6 +101,56 @@ export function MemoryDrawer() {
           <span className="close" onClick={closeMemoryDrawer}>✕</span>
         </div>
 
+        {/* ═══ 权重规则面板 ═══ */}
+        <div className="mem-rules-toggle" onClick={() => setShowRules(!showRules)}>
+          <span>❓ 权重计算规则</span>
+          <span className={`mem-rules-arrow${showRules ? ' open' : ''}`}>▾</span>
+        </div>
+        {showRules && (
+          <div className="mem-rules-panel">
+            <div className="mem-rules-formula">
+              <strong>权重</strong> = 基础值 × 新鲜度 × 频次 × 强化倍率
+            </div>
+            <table className="mem-rules-table">
+              <thead>
+                <tr><th>因子</th><th>说明</th><th>如何提升</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>基础值</td>
+                  <td>新建时设定（默认2）</td>
+                  <td>编辑记忆提高基础值</td>
+                </tr>
+                <tr>
+                  <td>新鲜度</td>
+                  <td>14天半衰期指数衰减</td>
+                  <td>⬇ 刷新 / 日常使用自动触达</td>
+                </tr>
+                <tr>
+                  <td>频次</td>
+                  <td>1 + log₂(访问次数+1)</td>
+                  <td>⬇ 刷新 / 聊天中命中记忆</td>
+                </tr>
+                <tr>
+                  <td>强化倍率</td>
+                  <td>强化×2 / 固定×3</td>
+                  <td>点「⬆ 强化」按钮 + 记忆中mention</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="mem-rules-levels">
+              <span className="mem-rule-level p0">🔒 P0 ≥8.0</span>
+              <span className="mem-rule-level p1">⭐ P1 ≥4.0</span>
+              <span className="mem-rule-level p2">📝 P2 ≥2.0</span>
+              <span className="mem-rule-level p3">💤 P3 &lt;2.0</span>
+            </div>
+            <div className="mem-rules-hint">
+              💡 权重由系统实时计算，随时间和使用自动变化。
+              点击「强化」给权重×2，点击「固定」锁定P0永不衰减。
+            </div>
+          </div>
+        )}
+
         <div className="drawer-body">
           {error && <div className="mem-error">{error}</div>}
 
@@ -136,7 +187,16 @@ export function MemoryDrawer() {
                 <div className="mem-item-header">
                   <span className="mem-level">{LEVEL_ICONS[m.priority_level] || '📝'}</span>
                   <span className="mem-key">{m.key}</span>
-                  <span className="mem-weight">{m.weight?.toFixed(1)}</span>
+                  <span
+                    className={`mem-weight${
+                      (m.weight ?? 0) >= 8 ? ' w-p0' :
+                      (m.weight ?? 0) >= 4 ? ' w-p1' :
+                      (m.weight ?? 0) >= 2 ? ' w-p2' : ' w-p3'
+                    }`}
+                  >
+                    <span className="mem-weight-label">权重 </span>
+                    {m.weight?.toFixed(1)}
+                  </span>
                 </div>
                 <div className="mem-content">{m.content}</div>
                 {m.tags && m.tags.length > 0 && (
@@ -145,7 +205,7 @@ export function MemoryDrawer() {
                   </div>
                 )}
                 <div className="mem-actions">
-                  <button className="btn-tiny" onClick={() => handleReinforce(m.key)} title="强化（×2）">⬆ 强化</button>
+                  <button className="btn-tiny" onClick={() => handleReinforce(m.key)} title="强化：权重 ×2，同时更新频次和新鲜度">⬆ 强化</button>
                   {m.priority_level !== 'P0' && (
                     <button className="btn-tiny" onClick={() => handlePin(m.key)} title="标记 P0 永不过期">🔒 固定</button>
                   )}

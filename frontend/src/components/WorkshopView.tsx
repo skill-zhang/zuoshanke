@@ -1,7 +1,7 @@
 /** 🛠 工坊 — 管理自己创作的场景（草稿 + 已发布） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { Scene, updateScene } from '../api/client';
+import { Scene, updateScene, renameCategory } from '../api/client';
 
 const CATEGORY_META: Record<string, { icon: string; label: string }> = {
   life: { icon: '🌿', label: '生活' },
@@ -31,6 +31,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
   const [editModal, setEditModal] = useState<Scene | null>(null);
   const [editForm, setEditForm] = useState({ name: '', icon: '', description: '', category: '', guide_text: '' });
   const [editing, setEditing] = useState(false);
+  const [catManageOpen, setCatManageOpen] = useState(false);
 
   useEffect(() => {
     loadWorkshopScenes(filterCat ? { category: filterCat } : undefined);
@@ -145,6 +146,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
         </div>
         <div className="ws-header-actions">
           <button className="btn" onClick={onCreateScene}>✨ 新建场景</button>
+          <button className="btn" onClick={() => setCatManageOpen(true)}>📁 管理类别</button>
         </div>
       </div>
 
@@ -279,6 +281,53 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {/* ═══ 类别管理弹窗 ═══ */}
+      <div className={`modal-overlay${catManageOpen ? ' show' : ''}`} onClick={() => setCatManageOpen(false)}>
+        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            📁 类别管理
+            <button className="modal-close" onClick={() => setCatManageOpen(false)}>✕</button>
+          </div>
+          {(() => {
+            const catCounts: Record<string, number> = {};
+            workshopScenes.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1; });
+            return Object.entries(catCounts).length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
+            ) : (
+              Object.entries(catCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([catKey, count]) => {
+                  const meta = CATEGORY_META[catKey];
+                  return (
+                    <div key={catKey} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 0', borderBottom: '1px solid #21262d',
+                    }}>
+                      <span style={{ fontSize: 20 }}>{meta?.icon || '📁'}</span>
+                      <span style={{ flex: 1, fontSize: 14 }}>{meta?.label || catKey}</span>
+                      <span style={{ fontSize: 12, color: '#6e7681' }}>{count} 个场景</span>
+                      <span className="sidebar-menu-btn" style={{ fontSize: 13 }}
+                        onClick={async () => {
+                          const name = prompt('新类别名称：', meta?.label || catKey);
+                          if (!name || name === (meta?.label || catKey)) return;
+                          try {
+                            await renameCategory(catKey, name);
+                            setCatManageOpen(false);
+                            loadWorkshopScenes();
+                          } catch (e: any) {
+                            alert('重命名失败: ' + (e.message || ''));
+                          }
+                        }}
+                        title="重命名"
+                      >✏️</span>
+                    </div>
+                  );
+                })
+            );
+          })()}
         </div>
       </div>
     </div>

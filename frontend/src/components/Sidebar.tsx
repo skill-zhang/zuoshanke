@@ -339,7 +339,10 @@ export function Sidebar() {
         })()}
 
         <div className="sidebar-action" onClick={() => setCatManageOpen(true)}>
-          📁 管理类别
+          <svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16" style={{ flexShrink: 0 }}>
+            <path d="M1.5 3h4a.5.5 0 0 1 .5.5v1a.5.5 0 0 0 .5.5h8a.5.5 0 0 1 .5.5V13a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 1 13V4.5A1.5 1.5 0 0 1 2.5 3Z"/>
+          </svg>
+          管理类别
         </div>
 
         <div className="sidebar-action" onClick={async () => {
