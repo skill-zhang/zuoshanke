@@ -961,6 +961,15 @@ body {
   border-color: rgba(139,148,158,0.25) !important;
 }
 
+/* ═══ 全局滚动条 ═══ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Firefox 滚动条 */
+* { scrollbar-width: thin; scrollbar-color: #30363d transparent; }
+
 /* ═══ 工具卡片 ═══ */
 .tool-cards-container {
   display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
