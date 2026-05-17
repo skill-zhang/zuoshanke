@@ -31,6 +31,7 @@ export function Sidebar() {
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
   const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
+  const [catManageOpen, setCatManageOpen] = useState(false);
 
   useEffect(() => { loadChannels(); }, []);
   // 侧边栏需要工坊数据来展示场景列表和计数，不管当前在哪个视图
@@ -253,71 +254,93 @@ export function Sidebar() {
           <span className="badge">{workshopScenes.length}</span>
         </div>
 
-        {/* 分类折叠列表 */}
-        {CATEGORIES.map(cat => {
-          const count = catCounts[cat.key] || 0;
-          if (count === 0) return null;
-          const isCollapsed = collapsedCats.has(cat.key);
-          return (
-            <div key={cat.key}>
-              <div
-                className={`sidebar-category${isCollapsed ? ' collapsed' : ''}`}
-                onClick={() => toggleCategory(cat.key)}
-              >
-                <span className="cat-arrow">▼</span>
-                <span className="cat-icon">{cat.icon}</span>
-                {cat.label}
-                <span className="cat-count">{count}</span>
-                <span className="sidebar-menu-btn" style={{ fontSize: 13, opacity: 0.5 }}
-                  onClick={(e) => { e.stopPropagation(); handleRenameCategory(cat.key, cat.label); }}
-                  title="重命名类别"
-                >✏️</span>
-              </div>
-              <div className={`sidebar-children${isCollapsed ? ' collapsed' : ''}`}>
-                {workshopScenes
-                  .filter(s => s.category === cat.key)
-                  .map(s => {
-                    const isPublished = s.version !== '0.0';
-                    return (
-                      <div
-                        key={s.id}
-                        className={`sidebar-item indent${currentScene?.id === s.id && view === 'chat' ? ' active' : ''}`}
-                        onClick={() => handleEnterScene(s)}
-                        title={`${s.icon || '📦'} ${s.name} ${isPublished ? `v${s.version}` : '草稿'}`}
-                      >
-                        <span className="sidebar-item-icon">{s.icon || '📦'}</span>
-                        <span className="sidebar-item-name" style={s.pinned ? { color: '#d29922' } : undefined}>{s.name}</span>
-                        <span
-                          className="badge"
-                          style={isPublished ? { background: '#23863633', color: '#3fb950' } : { background: '#d2992233', color: '#d29922' }}
+        {/* 分类折叠列表 — 预定义 + 自定义分类 */}
+        {(() => {
+          // 从实际数据中收集所有分类
+          const allCatKeys = new Set(workshopScenes.map(s => s.category));
+          // 构建显示列表：预定义分类（有场景的）+ 自定义分类（不在预定义中的）
+          const displayCats: { key: string; icon: string; label: string }[] = [];
+          const predefinedKeys = new Set(CATEGORIES.map(c => c.key));
+          // 先加预定义的
+          for (const cat of CATEGORIES) {
+            if (allCatKeys.has(cat.key)) {
+              displayCats.push(cat);
+              allCatKeys.delete(cat.key);
+            }
+          }
+          // 再加自定义的
+          for (const key of allCatKeys) {
+            displayCats.push({ key, icon: '📁', label: key });
+          }
+          return displayCats.map(cat => {
+            const count = catCounts[cat.key] || 0;
+            if (count === 0) return null;
+            const isCollapsed = collapsedCats.has(cat.key);
+            return (
+              <div key={cat.key}>
+                <div
+                  className={`sidebar-category${isCollapsed ? ' collapsed' : ''}`}
+                  onClick={() => toggleCategory(cat.key)}
+                >
+                  <span className="cat-arrow">▼</span>
+                  <span className="cat-icon">{cat.icon}</span>
+                  {cat.label}
+                  <span className="cat-count">{count}</span>
+                  <span className="sidebar-menu-btn" style={{ fontSize: 13, opacity: 0.5 }}
+                    onClick={(e) => { e.stopPropagation(); handleRenameCategory(cat.key, cat.label); }}
+                    title="重命名类别"
+                  >✏️</span>
+                </div>
+                <div className={`sidebar-children${isCollapsed ? ' collapsed' : ''}`}>
+                  {workshopScenes
+                    .filter(s => s.category === cat.key)
+                    .map(s => {
+                      const isPublished = s.version !== '0.0';
+                      return (
+                        <div
+                          key={s.id}
+                          className={`sidebar-item indent${currentScene?.id === s.id && view === 'chat' ? ' active' : ''}`}
+                          onClick={() => handleEnterScene(s)}
+                          title={`${s.icon || '📦'} ${s.name} ${isPublished ? `v${s.version}` : '草稿'}`}
                         >
-                          {isPublished ? `v${s.version}` : '草稿'}
-                        </span>
-                        <span
-                          className="sidebar-menu-btn"
-                          onClick={(e) => { e.stopPropagation(); toggleMenu(s.id); }}
-                        >···</span>
+                          <span className="sidebar-item-icon">{s.icon || '📦'}</span>
+                          <span className="sidebar-item-name" style={s.pinned ? { color: '#d29922' } : undefined}>{s.name}</span>
+                          <span
+                            className="badge"
+                            style={isPublished ? { background: '#23863633', color: '#3fb950' } : { background: '#d2992233', color: '#d29922' }}
+                          >
+                            {isPublished ? `v${s.version}` : '草稿'}
+                          </span>
+                          <span
+                            className="sidebar-menu-btn"
+                            onClick={(e) => { e.stopPropagation(); toggleMenu(s.id); }}
+                          >···</span>
 
-                        {menuOpen === s.id && (
-                          <div className="sidebar-dropdown">
-                            <div className="sidebar-dropdown-item"
-                              onClick={(e) => { e.stopPropagation(); handlePin(s); }}
-                            >📌 {s.pinned ? '取消置顶' : '置顶'}</div>
-                            <div className="sidebar-dropdown-item"
-                              onClick={(e) => { e.stopPropagation(); handleRename(s); }}
-                            >✏️ 重命名</div>
-                            <div className="sidebar-dropdown-item danger"
-                              onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
-                            >🗑 删除</div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          {menuOpen === s.id && (
+                            <div className="sidebar-dropdown">
+                              <div className="sidebar-dropdown-item"
+                                onClick={(e) => { e.stopPropagation(); handlePin(s); }}
+                              >📌 {s.pinned ? '取消置顶' : '置顶'}</div>
+                              <div className="sidebar-dropdown-item"
+                                onClick={(e) => { e.stopPropagation(); handleRename(s); }}
+                              >✏️ 重命名</div>
+                              <div className="sidebar-dropdown-item danger"
+                                onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
+                              >🗑 删除</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
+
+        <div className="sidebar-action" onClick={() => setCatManageOpen(true)}>
+          📁 管理类别
+        </div>
 
         <div className="sidebar-action" onClick={async () => {
           const name = prompt('场景名称：');
@@ -352,6 +375,39 @@ export function Sidebar() {
         <div className="sidebar-nav" onClick={() => useStore.getState().openSkillsDrawer()}>
           <span className="nav-icon">📘</span>
           <span>技能管理</span>
+        </div>
+      </div>
+
+      {/* ═══ 类别管理弹窗 ═══ */}
+      <div className={`modal-overlay${catManageOpen ? ' show' : ''}`} onClick={() => setCatManageOpen(false)}>
+        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            📁 类别管理
+            <button className="modal-close" onClick={() => setCatManageOpen(false)}>✕</button>
+          </div>
+          {Object.entries(catCounts).length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
+          ) : (
+            Object.entries(catCounts)
+              .sort((a, b) => b[1] - a[1]) // 按场景数降序
+              .map(([catKey, count]) => {
+                const predef = CATEGORIES.find(c => c.key === catKey);
+                return (
+                  <div key={catKey} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 0', borderBottom: '1px solid #21262d',
+                  }}>
+                    <span style={{ fontSize: 20 }}>{predef?.icon || '📁'}</span>
+                    <span style={{ flex: 1, fontSize: 14 }}>{predef?.label || catKey}</span>
+                    <span style={{ fontSize: 12, color: '#6e7681' }}>{count} 个场景</span>
+                    <span className="sidebar-menu-btn" style={{ fontSize: 13 }}
+                      onClick={() => { setCatManageOpen(false); handleRenameCategory(catKey, predef?.label || catKey); }}
+                      title="重命名"
+                    >✏️</span>
+                  </div>
+                );
+              })
+          )}
         </div>
       </div>
 

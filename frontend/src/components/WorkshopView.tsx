@@ -1,7 +1,7 @@
 /** 🛠 工坊 — 管理自己创作的场景（草稿 + 已发布） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { Scene, publishScene } from '../api/client';
+import { Scene, updateScene } from '../api/client';
 
 const CATEGORY_META: Record<string, { icon: string; label: string }> = {
   life: { icon: '🌿', label: '生活' },
@@ -28,6 +28,9 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
   const [publishVersion, setPublishVersion] = useState('');
   const [publishChangelog, setPublishChangelog] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [editModal, setEditModal] = useState<Scene | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', icon: '', description: '', category: '', guide_text: '' });
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     loadWorkshopScenes(filterCat ? { category: filterCat } : undefined);
@@ -62,12 +65,42 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
 
   const openPublishModal = (scene: Scene) => {
     const curVer = scene.version === '0.0' ? '0.0' : scene.version;
-    // Suggest next micro version
     const parts = curVer.split('.').map(Number);
     const sugg = parts.length === 2 ? `${parts[0]}.${parts[1] + 1}` : '1.0';
     setPublishVersion(sugg);
     setPublishChangelog('');
     setPublishModal(scene);
+  };
+
+  const openEditModal = (scene: Scene) => {
+    setEditForm({
+      name: scene.name,
+      icon: scene.icon || '📦',
+      description: scene.description || '',
+      category: scene.category || 'other',
+      guide_text: scene.guide_text || '',
+    });
+    setEditModal(scene);
+  };
+
+  const handleEditSave = async () => {
+    if (!editModal || !editForm.name.trim()) return;
+    setEditing(true);
+    try {
+      await updateScene(editModal.id, {
+        name: editForm.name.trim(),
+        icon: editForm.icon.trim() || '📦',
+        description: editForm.description.trim(),
+        category: editForm.category,
+        guide_text: editForm.guide_text.trim() || null,
+      });
+      setEditModal(null);
+      loadWorkshopScenes();
+    } catch (e: any) {
+      alert('保存失败: ' + (e.message || ''));
+    } finally {
+      setEditing(false);
+    }
   };
 
   const handleExport = async (scene: Scene) => {
@@ -157,7 +190,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
                     ) : null}
                   </div>
                   <div className="ws-scene-actions">
-                    <button className="btn-sm" onClick={e => { e.stopPropagation(); onEnterScene(s); }}>✏️</button>
+                    <button className="btn-sm" onClick={e => { e.stopPropagation(); openEditModal(s); }}>✏️</button>
                     <button className="btn-sm" onClick={e => { e.stopPropagation(); openPublishModal(s); }}>
                       {isPublished ? '🔄' : '📦'}
                     </button>
@@ -168,6 +201,50 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
             })}
           </div>
         ))}
+      </div>
+
+      {/* ═══ 场景编辑弹窗 ═══ */}
+      <div className={`modal-overlay${editModal ? ' show' : ''}`} onClick={() => !editing && setEditModal(null)}>
+        <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            ✏️ 编辑场景
+            <button className="modal-close" onClick={() => !editing && setEditModal(null)}>✕</button>
+          </div>
+          {editModal && (
+            <>
+              <div className="form-group">
+                <label className="form-label">图标</label>
+                <input className="form-input" value={editForm.icon} onChange={e => setEditForm(f => ({ ...f, icon: e.target.value }))} placeholder="输入 emoji" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">名称</label>
+                <input className="form-input" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="场景名称" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">类别</label>
+                <select className="form-select" value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
+                  {CATEGORY_ORDER.map(k => (
+                    <option key={k} value={k}>{CATEGORY_META[k]?.icon} {CATEGORY_META[k]?.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">简介</label>
+                <input className="form-input" value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} placeholder="场景简述" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">引导语</label>
+                <textarea className="form-textarea" value={editForm.guide_text} onChange={e => setEditForm(f => ({ ...f, guide_text: e.target.value }))} placeholder="用户进入场景后的提示语" style={{ minHeight: 60 }} />
+              </div>
+              <div className="modal-actions">
+                <button className="btn" onClick={() => setEditModal(null)} disabled={editing}>取消</button>
+                <button className="btn btn-primary" onClick={handleEditSave} disabled={editing || !editForm.name.trim()}>
+                  {editing ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ═══ 发布弹窗 ═══ */}
@@ -187,23 +264,12 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
               </div>
               <div className="form-group">
                 <label className="form-label">新版本号</label>
-                <input
-                  className="form-input"
-                  value={publishVersion}
-                  onChange={e => setPublishVersion(e.target.value)}
-                  placeholder="如 1.0 / 1.1 / 2.0"
-                />
+                <input className="form-input" value={publishVersion} onChange={e => setPublishVersion(e.target.value)} placeholder="如 1.0 / 1.1 / 2.0" />
                 <div className="form-hint">必须大于当前版本 v{publishModal.version}</div>
               </div>
               <div className="form-group">
                 <label className="form-label">更新说明（可选）</label>
-                <textarea
-                  className="form-textarea"
-                  value={publishChangelog}
-                  onChange={e => setPublishChangelog(e.target.value)}
-                  placeholder="描述本次更新的内容..."
-                  style={{ minHeight: 60 }}
-                />
+                <textarea className="form-textarea" value={publishChangelog} onChange={e => setPublishChangelog(e.target.value)} placeholder="描述本次更新的内容..." style={{ minHeight: 60 }} />
               </div>
               <div className="modal-actions">
                 <button className="btn" onClick={() => setPublishModal(null)} disabled={publishing}>取消</button>
