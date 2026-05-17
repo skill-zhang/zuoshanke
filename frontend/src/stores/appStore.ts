@@ -117,6 +117,8 @@ interface AppState {
   loadPlazaScenes: (params?: { category?: string; q?: string }) => Promise<void>;
   loadWorkshopScenes: (params?: { category?: string; project_id?: string }) => Promise<void>;
   publishSceneVersion: (sceneId: string, version: string, changelog?: string) => Promise<Scene | null>;
+  createSceneModalOpen: boolean;
+  setCreateSceneModalOpen: (v: boolean) => void;
 
   // ═══ 记忆系统抽屉 🆕 ═══
   memoryDrawerOpen: boolean;
@@ -584,6 +586,8 @@ export const useStore = create<AppState>((set, get) => ({
       return null;
     }
   },
+  createSceneModalOpen: false,
+  setCreateSceneModalOpen: (v) => set({ createSceneModalOpen: v }),
 
   // ═══ 系统设置 ═══
   settingsData: null,

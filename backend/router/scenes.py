@@ -20,6 +20,7 @@ from ai_engine import (
 )
 from agent_core.core import agent_core_light_stream
 from agent_core.tool_executor import detect_and_preexecute
+from agent_core.memory_manager import MemoryManager
 from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
 
@@ -562,6 +563,22 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_reply,
                             created_at=ai_msg.created_at.isoformat(),
                             changes=changes, model=model_name)
+
+            # ── 6. 自动提取记忆 ──
+            try:
+                mm = MemoryManager(db)
+                # 收集本轮对话作为提取素材
+                extract_msgs = [
+                    {"role": m.role, "content": m.content}
+                    for m in scene_history
+                ]
+                extract_msgs.append({"role": "user", "content": data.content})
+                extract_msgs.append({"role": "ai", "content": full_reply})
+                mem_results = mm.auto_extract_from_conversation(extract_msgs)
+                if mem_results:
+                    print(f"[memory] auto-extract: {json.dumps(mem_results, ensure_ascii=False)}")
+            except Exception as e:
+                print(f"[memory] auto-extract error: {e}")
         except Exception as e:
             print(f"[scene stream save error] {e}")
             yield sse_event("error", message="AI 回复保存失败")

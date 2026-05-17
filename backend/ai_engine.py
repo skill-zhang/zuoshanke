@@ -6,6 +6,7 @@ import requests
 from sqlalchemy.orm import Session
 from models import ThinkingMap, ThinkNode
 from utils import make_id
+from agent_core.context_builder import _build_memory_block
 
 # ── 天气查询（直接调 weather.py） ──
 def _weather_maybe(user_text: str) -> str | None:
@@ -500,6 +501,10 @@ def ai_scene_chat_stream(
         reply_messages.append({"role": "system", "content": (
             f"=== 用户输入背景设定 ===\n{user_context}\n====================="
         )})
+    # 🆕 跨会话记忆注入
+    memory_block = _build_memory_block(db, user_content)
+    if memory_block:
+        reply_messages.append({"role": "system", "content": memory_block})
     reply_messages.extend(history_api or [])
     reply_messages.append({"role": "user", "content": f"{_weather_prefix}{tree_ctx}\n\n用户说: {user_content}\n\n请分析并回复。"})
 
@@ -742,6 +747,10 @@ def ai_scene_ask_missing_stream(
         messages.append({"role": "system", "content": (
             f"=== 用户输入背景设定 ===\n{user_context}\n====================="
         )})
+    # 🆕 跨会话记忆注入
+    memory_block = _build_memory_block(db, user_content)
+    if memory_block:
+        messages.append({"role": "system", "content": memory_block})
     messages.extend(history_api)
     messages.append({"role": "user", "content": (
         f"用户说: {user_content}\n\n"

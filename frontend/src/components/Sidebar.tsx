@@ -345,20 +345,8 @@ export function Sidebar() {
           管理类别
         </div>
 
-        <div className="sidebar-action" onClick={async () => {
-          const name = prompt('场景名称：');
-          if (!name) return;
-          try {
-            const projects = await listProjects();
-            if (projects.length === 0) {
-              alert('请先创建一个项目');
-              return;
-            }
-            await createScene(projects[0].id, name, { icon: '📦', category: 'other' });
-            loadWorkshopScenes();
-          } catch (e: any) {
-            alert('创建失败: ' + (e.message || ''));
-          }
+        <div className="sidebar-action" onClick={() => {
+          useStore.getState().setCreateSceneModalOpen(true);
         }}>
           <span className="sidebar-item-icon">+</span>
           新建场景
@@ -391,7 +379,8 @@ export function Sidebar() {
           {Object.entries(catCounts).length === 0 ? (
             <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
           ) : (
-            Object.entries(catCounts)
+            <>
+            {Object.entries(catCounts)
               .sort((a, b) => b[1] - a[1]) // 按场景数降序
               .map(([catKey, count]) => {
                 const predef = CATEGORIES.find(c => c.key === catKey);
@@ -409,7 +398,19 @@ export function Sidebar() {
                     >✏️</span>
                   </div>
                 );
-              })
+              })}
+            <div style={{ borderTop: '1px solid #21262d', paddingTop: 8, marginTop: 4 }}>
+              <span className="sidebar-menu-btn" style={{ fontSize: 13, color: '#58a6ff' }}
+                onClick={() => {
+                  const name = prompt('新类别名称：');
+                  if (!name) return;
+                  // 类别存在即可用，实际会在创建场景时写入
+                  setCatManageOpen(false);
+                  useStore.getState().setCreateSceneModalOpen(true);
+                }}
+              >➕ 新建类别</span>
+            </div>
+            </>
           )}
         </div>
       </div>

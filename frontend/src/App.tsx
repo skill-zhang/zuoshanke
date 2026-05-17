@@ -20,12 +20,14 @@ export default function App() {
     loadThinkingMap, loadSceneMessages,
     channels, setCurrentChannel,
     loadWorkshopScenes,
+    createSceneModalOpen, setCreateSceneModalOpen,
   } = useStore();
 
-  const [createModal, setCreateModal] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createIcon, setCreateIcon] = useState('📦');
   const [createCategory, setCreateCategory] = useState('other');
+  const [createNewCategory, setCreateNewCategory] = useState('');  // 新建类别时输入
+  const [createUseNewCategory, setCreateUseNewCategory] = useState(false);  // 是否使用新类别
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -45,8 +47,15 @@ export default function App() {
     setCreateName('');
     setCreateIcon('📦');
     setCreateCategory('other');
+    setCreateNewCategory('');
+    setCreateUseNewCategory(false);
     setCreateDescription('');
-    setCreateModal(true);
+    setCreateSceneModalOpen(true);
+  };
+
+  const handleCloseCreate = () => {
+    if (creating) return;
+    setCreateSceneModalOpen(false);
   };
 
   const handleImportScene = () => {
@@ -88,12 +97,13 @@ export default function App() {
         alert('请先创建一个项目');
         return;
       }
+      const category = createUseNewCategory ? createNewCategory.trim() : createCategory;
       const scene = await createScene(projects[0].id, createName.trim(), {
         icon: createIcon || undefined,
         description: createDescription.trim() || undefined,
-        category: createCategory,
+        category: category || 'other',
       });
-      setCreateModal(false);
+      setCreateSceneModalOpen(false);
       loadWorkshopScenes();
       // 自动进入新创建的场景
       handleEnterScene(scene);
@@ -159,11 +169,11 @@ export default function App() {
       <SkillsDrawer />
 
       {/* ═══ 创建场景弹窗 ═══ */}
-      <div className={`modal-overlay${createModal ? ' show' : ''}`} onClick={() => !creating && setCreateModal(false)}>
+      <div className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`} onClick={handleCloseCreate}>
         <div className="modal" onClick={e => e.stopPropagation()}>
           <div className="modal-title">
             创建新场景
-            <button className="modal-close" onClick={() => !creating && setCreateModal(false)}>✕</button>
+            <button className="modal-close" onClick={handleCloseCreate}>✕</button>
           </div>
           <div className="form-group">
             <label className="form-label">图标</label>
@@ -176,16 +186,28 @@ export default function App() {
             </div>
             <div className="form-group">
               <label className="form-label">类别</label>
-              <select className="form-select" value={createCategory} onChange={e => setCreateCategory(e.target.value)}>
-                <option value="life">🌿 生活</option>
-                <option value="ecommerce">🛒 电商</option>
-                <option value="work">💼 工作</option>
-                <option value="learn">📚 学习</option>
-                <option value="create">🎨 创作</option>
-                <option value="finance">📈 金融</option>
-                <option value="media">💬 自媒体</option>
-                <option value="other">📦 其他</option>
-              </select>
+              {createUseNewCategory ? (
+                <input className="form-input" value={createNewCategory} onChange={e => setCreateNewCategory(e.target.value)} placeholder="输入新类别名称" />
+              ) : (
+                <select className="form-select" value={createCategory} onChange={e => setCreateCategory(e.target.value)}>
+                  <option value="life">🌿 生活</option>
+                  <option value="ecommerce">🛒 电商</option>
+                  <option value="work">💼 工作</option>
+                  <option value="learn">📚 学习</option>
+                  <option value="create">🎨 创作</option>
+                  <option value="finance">📈 金融</option>
+                  <option value="media">💬 自媒体</option>
+                  <option value="other">📦 其他</option>
+                </select>
+              )}
+              <div className="form-hint">
+                <span style={{ cursor: 'pointer', color: '#58a6ff' }} onClick={() => {
+                  setCreateUseNewCategory(!createUseNewCategory);
+                  setCreateNewCategory('');
+                }}>
+                  {createUseNewCategory ? '← 选择已有类别' : '➕ 新建类别'}
+                </span>
+              </div>
             </div>
           </div>
           <div className="form-group">
@@ -193,7 +215,7 @@ export default function App() {
             <input className="form-input" value={createDescription} onChange={e => setCreateDescription(e.target.value)} placeholder="场景的简短描述" />
           </div>
           <div className="modal-actions">
-            <button className="btn" onClick={() => setCreateModal(false)} disabled={creating}>取消</button>
+            <button className="btn" onClick={handleCloseCreate} disabled={creating}>取消</button>
             <button className="btn btn-primary" onClick={doCreateScene} disabled={creating || !createName.trim()}>
               {creating ? '创建中...' : '创建'}
             </button>

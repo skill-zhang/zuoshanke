@@ -325,7 +325,15 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
                       >✏️</span>
                     </div>
                   );
-                })
+                })}
+            <div style={{ borderTop: '1px solid #21262d', paddingTop: 8, marginTop: 4 }}>
+              <span className="sidebar-menu-btn" style={{ fontSize: 13, color: '#58a6ff' }}
+                onClick={() => {
+                  setCatManageOpen(false);
+                  useStore.getState().setCreateSceneModalOpen(true);
+                }}
+              >➕ 新建类别</span>
+            </div>
             );
           })()}
         </div>
