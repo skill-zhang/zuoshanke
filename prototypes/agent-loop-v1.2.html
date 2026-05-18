@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Loop 原型 · v1.2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+    background: #0f0f13;
+    color: #e0e0e8;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header .tag {
+    background: rgba(139, 92, 246, 0.2); color: #a78bfa;
+    padding: 2px 10px; border-radius: 10px; font-size: 12px;
+  }
+  .header .tag.old { background: rgba(100,100,120,0.15); color: #777; cursor: pointer; }
+  .header .sub { color: #888; font-size: 13px; margin-left: auto; }
+
+  /* === Flow Pipeline === */
+  .pipeline {
+    display: flex; align-items: center; gap: 0; margin-bottom: 20px;
+    background: #1a1a24; border-radius: 10px; padding: 12px 16px;
+    border: 1px solid #2a2a3a; overflow-x: auto;
+  }
+  .pipe-step {
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    padding: 6px 10px; border-radius: 8px; font-size: 12px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .pipe-step:hover { background: rgba(255,255,255,0.03); }
+  .pipe-step .p-icon { font-size: 16px; }
+  .pipe-step .p-name { color: #999; font-weight: 500; }
+  .pipe-step .p-api { font-size: 10px; color: #555; font-family: monospace; }
+  .pipe-step.active { background: rgba(34,197,94,0.1); }
+  .pipe-step.active .p-name { color: #4ade80; }
+  .pipe-step.done .p-name { color: #666; }
+  .pipe-step.done .p-icon { opacity: 0.5; }
+  .pipe-arrow { color: #333; font-size: 14px; padding: 0 2px; }
+
+  /* === Collapsible Mind Map === */
+  .mm-toggle {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; margin-bottom: 8px;
+    background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px;
+    cursor: pointer; user-select: none;
+    font-size: 13px; color: #ccc; transition: all 0.2s;
+  }
+  .mm-toggle:hover { border-color: #3a3a5a; }
+  .mm-toggle .arrow { transition: transform 0.25s; font-size: 12px; color: #777; }
+  .mm-toggle .arrow.open { transform: rotate(90deg); }
+  .mm-toggle .mm-badge { margin-left: auto; font-size: 11px; color: #777; }
+  .mm-body { overflow: hidden; transition: max-height 0.35s ease; max-height: 0; }
+  .mm-body.open { max-height: 600px; }
+  .mm-content {
+    background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .mm-tree { width: 100%; height: 360px; display: block; }
+
+  /* === Grid === */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  /* === Card === */
+  .card {
+    background: #1a1a24; border-radius: 12px; padding: 20px;
+    border: 1px solid #2a2a3a;
+  }
+  .card h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h3 .badge {
+    font-size: 10px; padding: 1px 8px; border-radius: 8px; font-weight: 400;
+  }
+  .card h3 .api-tag {
+    font-size: 10px; color: #555; font-family: monospace; margin-left: auto;
+  }
+  .badge-gray { background: #2a2a3a; color: #999; }
+  .badge-blue { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .badge-orange { background: rgba(249,115,22,0.2); color: #fb923c; }
+  .badge-green { background: rgba(34,197,94,0.2); color: #4ade80; }
+  .badge-purple { background: rgba(168,85,247,0.2); color: #c084fc; }
+  .badge-pink { background: rgba(236,72,153,0.2); color: #f472b6; }
+  .badge-red { background: rgba(239,68,68,0.2); color: #f87171; }
+
+  /* === Converge Card === */
+  .converge-list { display: flex; flex-direction: column; gap: 6px; }
+  .cv-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px;
+    background: #22222e; border: 1px solid #2a2a3a;
+    font-size: 13px;
+  }
+  .cv-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .cv-item .dot.orange { background: #f97316; }
+  .cv-item .dot.green { background: #22c55e; }
+  .cv-item .dot.gray { background: #555; }
+  .cv-item .dot.red { background: #ef4444; }
+  .cv-item .dot.pink { background: #ec4899; }
+  .cv-item .text { flex: 1; }
+  .cv-item .text .s { font-size: 11px; color: #666; display: block; }
+  .cv-item .tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 6px;
+  }
+  .cv-btn {
+    margin-top: 8px; padding: 8px 16px; border-radius: 8px;
+    border: 1px solid #f97316; background: rgba(249,115,22,0.1);
+    color: #fb923c; font-size: 12px; cursor: pointer;
+    transition: all 0.2s; text-align: center;
+  }
+  .cv-btn:hover { background: rgba(249,115,22,0.2); }
+  .cv-btn.done {
+    border-color: #22c55e; background: rgba(34,197,94,0.1);
+    color: #4ade80; cursor: default;
+  }
+
+  /* === Priority Queue Card === */
+  .pq-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    background: #22222e; border: 1px solid #2a2a3a;
+    margin-bottom: 4px; position: relative;
+  }
+  .pq-item .order { width: 20px; font-size: 11px; color: #555; text-align: center; }
+  .pq-item .prio {
+    width: 22px; height: 22px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; flex-shrink: 0;
+  }
+  .pq-item .prio.p1 { background: rgba(239,68,68,0.2); color: #f87171; }
+  .pq-item .prio.p2 { background: rgba(249,115,22,0.2); color: #fb923c; }
+  .pq-item .prio.p3 { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .pq-item .prio.p4 { background: rgba(100,100,120,0.2); color: #888; }
+  .pq-item .pq-text { flex: 1; font-size: 12px; }
+  .pq-item .pq-text .dep { font-size: 10px; color: #666; }
+  .pq-item .pq-status { font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+  .pq-item .pq-status.ready { background: rgba(34,197,94,0.1); color: #4ade80; }
+  .pq-item .pq-status.done { background: rgba(100,100,120,0.1); color: #666; }
+  .pr-btn {
+    margin-top: 6px; padding: 6px 14px; border-radius: 8px;
+    border: 1px solid #a855f7; background: rgba(168,85,247,0.1);
+    color: #c084fc; font-size: 11px; cursor: pointer;
+    transition: all 0.2s; text-align: center;
+  }
+  .pr-btn:hover { background: rgba(168,85,247,0.2); }
+  .pr-btn.done {
+    border-color: #22c55e; background: rgba(34,197,94,0.1);
+    color: #4ade80; cursor: default;
+  }
+
+  /* === Focus Queue Card === */
+  .fq-wip {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: #888; margin-bottom: 8px;
+  }
+  .fq-wip .wip-bar {
+    flex: 1; height: 4px; border-radius: 2px; background: #2a2a3a; overflow: hidden;
+  }
+  .fq-wip .wip-fill {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+  }
+  .fq-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    margin-bottom: 4px; border: 1px solid #2a2a3a;
+    background: #22222e;
+  }
+  .fq-item.active { border-color: #22c55e; background: rgba(34,197,94,0.04); }
+  .fq-item .fq-order { font-size: 11px; color: #555; width: 20px; }
+  .fq-item .fq-icon { font-size: 14px; }
+  .fq-item .fq-text { flex: 1; font-size: 12px; }
+  .fq-item .fq-text .fq-am {
+    font-size: 10px; color: #666; display: block;
+  }
+  .fq-item .fq-btn {
+    font-size: 10px; padding: 2px 8px; border-radius: 4px;
+    border: 1px solid #3a3a5a; background: transparent; color: #888;
+    cursor: pointer;
+  }
+  .fq-item .fq-btn:hover { border-color: #60a5fa; color: #60a5fa; }
+  .fq-item .fq-btn.done { border-color: #22c55e; color: #4ade80; }
+
+  /* === Reflect Timeline === */
+  .reflect-item {
+    display: flex; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid #2a2a3a;
+  }
+  .reflect-item:last-child { border-bottom: none; }
+  .reflect-item .r-icon {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+  }
+  .reflect-item .r-icon.success { background: rgba(34,197,94,0.15); }
+  .reflect-item .r-icon.fail { background: rgba(239,68,68,0.15); }
+  .reflect-item .r-icon.new { background: rgba(59,130,246,0.15); }
+  .reflect-item .r-icon.auto { background: rgba(168,85,247,0.15); }
+  .reflect-item .r-content { flex: 1; }
+  .reflect-item .r-content .r-title { font-size: 12px; }
+  .reflect-item .r-content .r-detail { font-size: 11px; color: #777; }
+  .reflect-item .r-content .r-tag {
+    display: inline-block; font-size: 9px; padding: 1px 5px;
+    border-radius: 5px; margin-top: 3px;
+  }
+  .reflect-item .r-content .r-tag.inject { background: rgba(236,72,153,0.1); color: #f472b6; }
+  .reflect-item .r-content .r-tag.api { background: rgba(168,85,247,0.1); color: #c084fc; font-family: monospace; }
+
+  /* === Status Bar === */
+  .status-bar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px; background: #1a1a24;
+    border-radius: 10px; border: 1px solid #2a2a3a;
+    font-size: 12px; color: #888;
+  }
+  .status-bar .dot-active {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e; animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .pipeline { flex-wrap: wrap; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<div class="header">
+  <h1>🔄 Agent Loop · 坐山客</h1>
+  <span class="tag">v1.2</span>
+  <a href="agent-loop-v1.1.html" style="text-decoration:none;"><span class="tag old">← v1.1</span></a>
+  <span class="sub">后端 API 全部就位 · 等待前端 UI 对接</span>
+</div>
+
+<!-- ===== Flow Pipeline ===== -->
+<div class="pipeline">
+  <div class="pipe-step done">
+    <span class="p-icon">🧠</span>
+    <span><span class="p-name">发散</span><br><span class="p-api">(已有)</span></span>
+  </div>
+  <span class="pipe-arrow">›</span>
+  <div class="pipe-step done">
+    <span class="p-icon">🔀</span>
+    <span><span class="p-name">收敛</span><br><span class="p-api">POST /converge</span></span>
+  </div>
+  <span class="pipe-arrow">›</span>
+  <div class="pipe-step done">
+    <span class="p-icon">📊</span>
+    <span><span class="p-name">排序</span><br><span class="p-api">POST /prioritize</span></span>
+  </div>
+  <span class="pipe-arrow">›</span>
+  <div class="pipe-step active">
+    <span class="p-icon">🎯</span>
+    <span><span class="p-name">聚焦</span><br><span class="p-api">GET /focus-queue</span></span>
+  </div>
+  <span class="pipe-arrow">›</span>
+  <div class="pipe-step">
+    <span class="p-icon">🔄</span>
+    <span><span class="p-name">反馈</span><br><span class="p-api">POST /reflect</span></span>
+  </div>
+</div>
+
+<!-- ===== Main Grid ===== -->
+<div class="grid">
+
+  <!-- Card 1: Converge -->
+  <div class="card">
+    <h3>
+      🔀 收敛 Converge
+      <span class="badge badge-orange">POST</span>
+      <span class="api-tag">/thinking-maps/{id}/converge</span>
+    </h3>
+    <div class="converge-list">
+      <div class="cv-item" style="border-color:rgba(249,115,22,0.3);">
+        <span class="dot orange"></span>
+        <span class="text">调研天气 API 服务 <span class="s">← 合入「天气API选择」「免费天气接口」「OpenWeather评估」</span></span>
+        <span class="tag" style="background:rgba(249,115,22,0.1);color:#fb923c;">🔀×3</span>
+      </div>
+      <div class="cv-item" style="border-color:rgba(34,197,94,0.3);">
+        <span class="dot green"></span>
+        <span class="text">设计推荐算法 <span class="s">← 合入「推荐策略」「推荐引擎」</span></span>
+        <span class="tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">🔀×2</span>
+      </div>
+      <div class="cv-item" style="border-color:rgba(34,197,94,0.3);">
+        <span class="dot green"></span>
+        <span class="text">搭建 Web 展示界面</span>
+        <span class="tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">→队列</span>
+      </div>
+      <div class="cv-item" style="border-color:rgba(34,197,94,0.3);">
+        <span class="dot green"></span>
+        <span class="text">用户位置自动检测</span>
+        <span class="tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">→队列</span>
+      </div>
+      <div class="cv-item" style="border-color:#555;">
+        <span class="dot red"></span>
+        <span class="text">自建爬虫采集天气数据 <span class="s">— 目标网站有反爬机制</span></span>
+        <span class="tag" style="background:rgba(239,68,68,0.1);color:#f87171;">已废弃</span>
+      </div>
+      <div class="cv-btn done">✅ 收敛完成：7 → 5 节点（2 组合并，1 废弃）</div>
+    </div>
+  </div>
+
+  <!-- Card 2: Priority Queue -->
+  <div class="card">
+    <h3>
+      📊 排序 Prioritize
+      <span class="badge badge-purple">POST</span>
+      <span class="api-tag">/thinking-maps/{id}/prioritize</span>
+    </h3>
+
+    <div class="pq-item">
+      <span class="order">#1</span>
+      <span class="prio p1">P1</span>
+      <span class="pq-text">调研天气 API 服务 <span class="dep">blocks=2, level=0</span></span>
+      <span class="pq-status ready">▶ 执行中</span>
+    </div>
+    <div class="pq-item">
+      <span class="order">#2</span>
+      <span class="prio p1">P1</span>
+      <span class="pq-text">搭建 Web 展示界面 <span class="dep">blocks=1, level=0</span></span>
+      <span class="pq-status ready">就绪</span>
+    </div>
+    <div class="pq-item">
+      <span class="order">#3</span>
+      <span class="prio p2">P2</span>
+      <span class="pq-text">设计推荐算法 <span class="dep">depends=调研天气API</span></span>
+      <span class="pq-status ready">就绪</span>
+    </div>
+    <div class="pq-item">
+      <span class="order">#4</span>
+      <span class="prio p3">P3</span>
+      <span class="pq-text">用户位置检测 <span class="dep">depends=调研天气API</span></span>
+    </div>
+    <div class="pq-item" style="opacity:0.6;">
+      <span class="order">#5</span>
+      <span class="prio p4">P4</span>
+      <span class="pq-text">多城市支持 <span class="dep">depends=推荐算法,Web界面</span></span>
+    </div>
+    <div class="pr-btn done">✅ 拓扑排序完成 · 5 节点已分配 P1-P4</div>
+  </div>
+
+  <!-- Card 3: Focus Queue (WIP Top 5) -->
+  <div class="card">
+    <h3>
+      🎯 聚焦队列 Focus Queue
+      <span class="badge badge-green">GET</span>
+      <span class="api-tag">/focus-queue?limit=5</span>
+    </h3>
+
+    <div class="fq-wip">
+      <span>WIP</span>
+      <div class="wip-bar"><div class="wip-fill" style="width:60%"></div></div>
+      <span>3 / 5</span>
+    </div>
+
+    <div class="fq-item active">
+      <span class="fq-order">#1</span>
+      <span class="fq-icon">▶</span>
+      <span class="fq-text">
+        调研天气 API 服务
+        <span class="fq-am">AM: act-8f3a2 · running</span>
+      </span>
+      <button class="fq-btn">执行</button>
+    </div>
+    <div class="fq-item">
+      <span class="fq-order">#2</span>
+      <span class="fq-icon">⏳</span>
+      <span class="fq-text">
+        搭建 Web 展示界面
+        <span class="fq-am">AM: 未生成 · 点击创建</span>
+      </span>
+      <button class="fq-btn">生成 AM</button>
+    </div>
+    <div class="fq-item">
+      <span class="fq-order">#3</span>
+      <span class="fq-icon">⏳</span>
+      <span class="fq-text">
+        设计推荐算法
+        <span class="fq-am">AM: 未生成</span>
+      </span>
+      <button class="fq-btn">生成 AM</button>
+    </div>
+    <div class="fq-item" style="opacity:0.5;">
+      <span class="fq-order">#4</span>
+      <span class="fq-icon">○</span>
+      <span class="fq-text">用户位置检测 <span class="fq-am">阻塞中: 依赖调研天气API</span></span>
+    </div>
+    <div class="fq-item" style="opacity:0.4;">
+      <span class="fq-order">#5</span>
+      <span class="fq-icon">○</span>
+      <span class="fq-text">多城市支持 <span class="fq-am">依赖未满足</span></span>
+    </div>
+  </div>
+
+  <!-- Card 4: Reflect Timeline -->
+  <div class="card">
+    <h3>
+      🔄 反馈注入 Reflect
+      <span class="badge badge-pink">POST</span>
+      <span class="api-tag">/thinking-maps/{id}/reflect</span>
+    </h3>
+
+    <div class="reflect-item">
+      <div class="r-icon success">✅</div>
+      <div class="r-content">
+        <div class="r-title">调研天气 API — 执行完成</div>
+        <div class="r-detail">选定 wttr.in 为主要来源，免费无需 Key</div>
+        <span class="r-tag api">execution_result 已写入</span>
+        <span class="r-tag inject">↪ 新发现: 缓存层设计</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon fail">🔴</div>
+      <div class="r-content">
+        <div class="r-title">自建爬虫方案不可行</div>
+        <div class="r-detail">反爬机制，维护成本过高</div>
+        <span class="r-tag api">status → discarded</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon new">💡</div>
+      <div class="r-content">
+        <div class="r-title">新发现: 缓存层设计</div>
+        <div class="r-detail">执行 API 调研时发现 wttr.in 可能限流，需要缓存</div>
+        <span class="r-tag api">POST /reflect new_discoveries</span>
+        <span class="r-tag inject">created_by=reflect</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon auto">🔄</div>
+      <div class="r-content">
+        <div class="r-title">系统自动: 重新收敛 + 排序</div>
+        <div class="r-detail">新节点「缓存层设计」已排入队列 P3</div>
+        <span class="r-tag api">自动 POST /converge</span>
+        <span class="r-tag api">自动 POST /prioritize</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Status Bar ===== -->
+<div class="status-bar">
+  <span class="dot-active"></span>
+  <span>🎯 聚焦执行阶段</span>
+  <span>|</span>
+  <span>队列: 5 项</span>
+  <span>|</span>
+  <span>已完成: 1</span>
+  <span>|</span>
+  <span>WIP: 3 / 5</span>
+  <span style="margin-left:auto;color:#555;">v1.2 · 后端 API 就绪</span>
+</div>
+
+</body>
+</html>

@@ -32,10 +32,15 @@ function nodesToMarkdown(nodes: any[]): string {
 }
 
 export function ThinkingMapDrawer() {
-  const { drawerOpen, closeDrawer, thinkingMap, toggleNodeActionable } = useStore();
+  const { drawerOpen, closeDrawer, thinkingMap, toggleNodeActionable,
+    convergeThinkingMap, prioritizeThinkingMap, getPriorityQueue } = useStore();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [showNodeSettings, setShowNodeSettings] = useState(false);
+  const [converging, setConverging] = useState(false);
+  const [convergeResult, setConvergeResult] = useState<any>(null);
+  const [queueData, setQueueData] = useState<any[] | null>(null);
+  const [showQueue, setShowQueue] = useState(false);
 
   useEffect(() => {
     if (!drawerOpen || !thinkingMap) return;
@@ -89,6 +94,20 @@ export function ThinkingMapDrawer() {
           >
             🔧 节点设置
           </button>
+          <button
+            className={`tab ${showQueue ? 'active' : ''}`}
+            style={{ cursor: 'pointer', border: 'none', background: 'none', color: showQueue ? '#58a6ff' : '#8b949e', fontSize: '14px', padding: '4px 12px' }}
+            onClick={async () => {
+              if (!showQueue) {
+                const q = await getPriorityQueue();
+                if (q?.queue) setQueueData(q.queue);
+              }
+              setShowQueue(!showQueue);
+              setShowNodeSettings(false);
+            }}
+          >
+            📊 队列
+          </button>
           <span className="close" onClick={closeDrawer}>✕</span>
         </div>
         <div className="drawer-body" style={{ background: '#0d1117', display: 'flex', flexDirection: 'column' }}>
@@ -131,6 +150,79 @@ export function ThinkingMapDrawer() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ 收敛 + 队列面板 ═══ */}
+          {showQueue && (
+            <div className="node-settings-panel" style={{ borderTop: '1px solid #21262d' }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button
+                  disabled={converging}
+                  style={{
+                    padding: '6px 14px', borderRadius: 6, border: '1px solid #f97316',
+                    background: converging ? '#1a1a24' : 'rgba(249,115,22,0.12)',
+                    color: converging ? '#555' : '#fb923c', cursor: converging ? 'default' : 'pointer',
+                    fontSize: 12, fontWeight: 500,
+                  }}
+                  onClick={async () => {
+                    setConverging(true);
+                    try {
+                      const r = await convergeThinkingMap();
+                      setConvergeResult(r?.merged || []);
+                      const q = await prioritizeThinkingMap();
+                      if (q?.queue) setQueueData(q.queue);
+                    } finally {
+                      setConverging(false);
+                    }
+                  }}
+                >
+                  {converging ? '⏳ 收敛中...' : '🔀 收敛并排序'}
+                </button>
+              </div>
+
+              {convergeResult && convergeResult.length > 0 && (
+                <div style={{ fontSize: 12, color: '#fb923c', marginBottom: 8 }}>
+                  ✅ 合并 {convergeResult.length} 组：
+                  {convergeResult.map((m: any, i: number) => (
+                    <div key={i} style={{ color: '#8b949e', fontSize: 11, marginTop: 4, padding: '4px 8px', background: 'rgba(249,115,22,0.05)', borderRadius: 4 }}>
+                      🔀 {m.target_label} ← {m.source_labels.join(' + ')}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {queueData && queueData.length > 0 && (
+                <>
+                  <h4 style={{ margin: '8px 0', fontSize: 13, color: '#e6edf3' }}>📊 Priority Queue</h4>
+                  {queueData.map((q: any) => {
+                    const colors: Record<number, string> = { 1: '#f87171', 2: '#fb923c', 3: '#60a5fa' };
+                    const bg: Record<number, string> = { 1: 'rgba(239,68,68,0.15)', 2: 'rgba(249,115,22,0.15)', 3: 'rgba(59,130,246,0.15)' };
+                    const p = q.priority || 4;
+                    return (
+                      <div key={q.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 8px', marginBottom: 4,
+                        background: '#161b22', borderRadius: 6, fontSize: 12,
+                      }}>
+                        <span style={{ color: '#555', width: 20, textAlign: 'center' }}>#{q.queue_order}</span>
+                        <span style={{
+                          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                          background: bg[p] || 'rgba(100,100,120,0.15)', color: colors[p] || '#888',
+                        }}>P{p}</span>
+                        <span style={{ flex: 1, color: '#e6edf3' }}>{q.label}</span>
+                        {q.blocks_count > 0 && <span style={{ fontSize: 10, color: '#8b949e' }}>🔗阻塞{q.blocks_count}</span>}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {queueData && queueData.length === 0 && (
+                <div style={{ color: '#8b949e', fontSize: 12, padding: '8px 0' }}>
+                  队列为空，点击「收敛并排序」生成
                 </div>
               )}
             </div>
