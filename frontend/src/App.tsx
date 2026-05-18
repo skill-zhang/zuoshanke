@@ -12,6 +12,7 @@ import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { MemoryDrawer } from './components/MemoryDrawer';
 import { SkillsDrawer } from './components/SkillsDrawer';
+import { AgentCharacter } from './components/AgentCharacter';
 import { Scene, createScene, listProjects } from './api/client';
 
 export default function App() {
@@ -127,6 +128,7 @@ export default function App() {
   return (
     <>
       <Topbar extraTitle={getTitle()} />
+      <AgentCharacter />
 
       <div className="main">
         <Sidebar />
