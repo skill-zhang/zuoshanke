@@ -160,7 +160,7 @@ def _build_channel_messages(messages: list[dict], is_default: bool = False) -> l
             "你曾是神王级炼宝宗师，如今化作数字形态，"
             "以未来科技视角和广博学识与用户交流。"
             "你不是道士/隐士。"
-            "用Markdown格式回复，风格：专业、锐利、有洞察力，像一位见多识广的科技顾问。"
+            "用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。"
         )
     else:
         system_content = "你是一个专业的AI智能助手，用Markdown格式回复用户的问题。"
@@ -237,22 +237,44 @@ def call_qwen_chat(messages: list[dict], temperature: float | None = None, route
     """
     route_cfg = get_settings(route)
     temp = temperature if temperature is not None else route_cfg["temperature"]
+    provider = route_cfg.get("provider", "local")
+    model_name = route_cfg.get("model", "qwen3.5-9b")
     try:
-        resp = requests.post(
-            QWEN_API,
-            json={
-                "model": "qwen",
-                "messages": messages,
-                "max_tokens": route_cfg["max_tokens"],
-                "temperature": temp,
-            },
-            timeout=120,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        if provider == "deepseek":
+            if not DEEPSEEK_API_KEY:
+                _ai_log.error("[DeepSeek] API key 未配置")
+                return None
+            ds_model = DEEPSEEK_MODEL_MAP.get(model_name, "deepseek-chat")
+            resp = requests.post(
+                f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
+                json={
+                    "model": ds_model,
+                    "messages": messages,
+                    "max_tokens": route_cfg["max_tokens"],
+                    "temperature": temp,
+                },
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        else:
+            resp = requests.post(
+                QWEN_API,
+                json={
+                    "model": "qwen",
+                    "messages": messages,
+                    "max_tokens": route_cfg["max_tokens"],
+                    "temperature": temp,
+                },
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
     except Exception as e:
-        _ai_log.error(f"[Qwen chat] {e}")
+        _ai_log.error(f"[{provider} chat] {e}")
         return None
 
 

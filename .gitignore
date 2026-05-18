@@ -15,6 +15,7 @@ frontend/.vite/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 
 # IDE
 .vscode/
@@ -27,6 +28,9 @@ frontend/.vite/
 # OS
 .DS_Store
 Thumbs.db
+
+# TypeScript build artifacts
+*.tsbuildinfo
 
 # Outputs / temp
 outputs/

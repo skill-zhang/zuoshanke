@@ -480,6 +480,29 @@ def format_weather_for_prompt(weather_data: dict) -> str:
     return "\n".join(lines)
 
 
+def _extract_forecast_days(text: str) -> int:
+    """从用户文本中提取预报天数
+
+    Args:
+        text: 用户输入文本
+
+    Returns:
+        int: 预报天数（0=仅当前，1~7=预报天数）
+    """
+    import re
+    # 匹配 "最近N天" "接下来N天" "N天" "未来N天"
+    m = re.search(r'(?:最近|未来|接下来|后|近)(\d+)\s*天', text)
+    if m:
+        days = int(m.group(1))
+        return min(max(days, 1), 7)
+    # 匹配 "N天天气" "N天预报"
+    m = re.search(r'(\d+)\s*天(?:天气|预报|的天气)?', text)
+    if m:
+        days = int(m.group(1))
+        return min(max(days, 1), 7)
+    return 0
+
+
 def maybe_weather_context(user_text: str) -> str | None:
     """检测用户输入，如果是天气查询则返回天气数据上下文
 
@@ -497,8 +520,10 @@ def maybe_weather_context(user_text: str) -> str | None:
     if not city:
         return None
 
+    forecast_days = _extract_forecast_days(user_text)
+
     try:
-        weather_data = get_weather(city)
+        weather_data = get_weather(city, forecast_days=forecast_days)
         return format_weather_for_prompt(weather_data)
     except Exception as e:
         return f"【天气查询失败】{city} 天气查询出错: {e}"
