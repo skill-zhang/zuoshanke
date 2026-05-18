@@ -1,5 +1,17 @@
 """坐山客 API — FastAPI 应用入口"""
 import logging
+from pathlib import Path
+
+# 加载环境变量（优先加载 hermes 的 .env，它含有 DEEPSEEK_API_KEY 等）
+try:
+    from dotenv import load_dotenv
+    hermes_env = Path.home() / ".hermes" / ".env"
+    if hermes_env.exists():
+        load_dotenv(hermes_env)
+        logging.info(f"✅ 已加载环境变量: {hermes_env}")
+except ImportError:
+    pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

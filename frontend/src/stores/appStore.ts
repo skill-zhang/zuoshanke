@@ -168,7 +168,7 @@ export type AgentStatus =
 
 export const useStore = create<AppState>((set, get) => ({
   view: 'chat',  // 默认进入聊天视图
-  setView: (v) => set({ view: v }),
+  setView: (v) => set({ view: v, contextUsage: null, capacityWarning: null }),
   isGenerating: false,
   currentModelName: null,
   contextUsage: null,
@@ -202,9 +202,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   currentProject: null,
-  setCurrentProject: (p) => set({ currentProject: p, currentScene: null, messages: [] }),
+  setCurrentProject: (p) => set({ currentProject: p, currentScene: null, messages: [], contextUsage: null, capacityWarning: null }),
   currentScene: null,
-  setCurrentScene: (s) => { set({ currentScene: s, messages: [] }); if (s) get().loadUserContext(s.id); },
+  setCurrentScene: (s) => { set({ currentScene: s, messages: [], contextUsage: null, capacityWarning: null }); if (s) get().loadUserContext(s.id); },
   userContext: '',
   loadUserContext: async (sceneId) => {
     try {
@@ -527,7 +527,7 @@ export const useStore = create<AppState>((set, get) => ({
       set({ channelMessages: [] });
     }
   },
-  setCurrentChannel: (c) => set({ currentChannel: c, channelMessages: [] }),
+  setCurrentChannel: (c) => set({ currentChannel: c, channelMessages: [], contextUsage: null, capacityWarning: null }),
 
   // ═══ 频道消息 ═══
   channelMessages: [],

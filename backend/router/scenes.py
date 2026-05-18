@@ -1239,6 +1239,100 @@ def rename_category(name: str, data: dict, db: Session = Depends(get_db)):
     return {"ok": True, "updated": count, "old_name": name, "new_name": new_name}
 
 
+# ═══ Agent Loop 执行引擎 ═══
+
+from pydantic import Field as PydanticField
+
+class AgentLoopRequest(BaseModel):
+    task: str = PydanticField(..., description="任务描述")
+    model: str = PydanticField("flash", description="模型: flash / pro")
+    scene_id: Optional[str] = PydanticField(None, description="关联的场景 ID（可选）")
+    memory_context: str = PydanticField("", description="额外上下文/记忆信息")
+
+
+@router.post("/api/agent-loop/stream")
+def stream_agent_loop(data: AgentLoopRequest, db: Session = Depends(get_db)):
+    """Agent Loop：用 LLM 自主调工具完成任务，SSE 流式输出每一步。
+
+    流程：
+      1. LLM 收到任务 + 工具定义
+      2. LLM 决定调什么工具 → 后端执行 → 结果喂回
+      3. 重复直到 LLM 返回最终回复
+      4. SSE 流式输出每一步状态
+    """
+    from agent_core.agent_loop import run_agent_loop
+
+    def generate():
+        # 1. 可选：注入场景记忆
+        memory_ctx = data.memory_context
+        if data.scene_id:
+            try:
+                mm = MemoryManager(db, data.scene_id)
+                ctx = mm.build_context()
+                if ctx:
+                    memory_ctx += "\n" + ctx
+            except Exception:
+                pass
+
+        yield sse_event("agent_loop:start", task=data.task[:100], model=data.model)
+
+        # 2. 运行 Agent Loop
+        for event in run_agent_loop(
+            task=data.task,
+            memory_context=memory_ctx,
+            model=data.model,
+        ):
+            event_type = event.pop("type", "unknown")
+
+            if event_type == "status":
+                yield sse_event("agent_loop:status", message=event.get("message", ""))
+
+            elif event_type == "tool_start":
+                yield sse_event("agent_loop:tool_start",
+                                tool=event.get("tool", ""),
+                                args=event.get("args", {}),
+                                tool_call_id=event.get("tool_call_id", ""))
+
+            elif event_type == "tool_done":
+                yield sse_event("agent_loop:tool_done",
+                                tool=event.get("tool", ""),
+                                result=event.get("result", ""),
+                                tool_call_id=event.get("tool_call_id", ""))
+
+            elif event_type == "tool_error":
+                yield sse_event("agent_loop:tool_error",
+                                tool=event.get("tool", ""),
+                                error=event.get("error", ""),
+                                tool_call_id=event.get("tool_call_id", ""))
+
+            elif event_type == "thinking":
+                yield sse_event("agent_loop:thinking",
+                                text=event.get("text", ""))
+
+            elif event_type == "token":
+                yield sse_event("agent_loop:token",
+                                token=event.get("text", ""))
+
+            elif event_type == "done":
+                yield sse_event("agent_loop:done",
+                                summary=event.get("summary", ""),
+                                steps=event.get("steps", 0),
+                                finish_reason=event.get("finish_reason", ""))
+
+            elif event_type == "error":
+                yield sse_event("agent_loop:error",
+                                message=event.get("message", ""))
+
+            else:
+                # 透传未知事件
+                yield sse_event(f"agent_loop:{event_type}", **event)
+
+        # 3. 完成标记
+        yield sse_event("done", type="agent_loop", task=data.task[:100])
+
+    return sse_response(generate())
+
+
 # ═══ 辅助函数 ═══
 
 def _get_project_or_404(db: Session, project_id: str):
