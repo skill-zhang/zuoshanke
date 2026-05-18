@@ -206,9 +206,10 @@ def gateway_switch_scene(data: GatewayChatRequest, db: Session = Depends(get_db)
     session = _get_or_create_session(db, data.platform, data.platform_user_id, data.platform_username)
 
     scene_name = data.content.strip()
-    if scene_name.startswith("/进入"):
-        scene_name = scene_name[3:].strip()
-    elif scene_name.startswith("/"):
+    from config.matching_rules import SCENE_NAME_PREFIX, SCENE_SLASH_PREFIX
+    if scene_name.startswith(SCENE_NAME_PREFIX):
+        scene_name = scene_name[len(SCENE_NAME_PREFIX):].strip()
+    elif scene_name.startswith(SCENE_SLASH_PREFIX):
         scene_name = scene_name[1:].strip()
 
     # 按名称搜索场景（仅 published 的场景）

@@ -189,7 +189,7 @@ SETTINGS_ID = "zuoshanke-v1"
 
 DEFAULT_ROUTING = {
     "channel":    {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.7, "max_tokens": 2048, "context_length": 32768,  "repeat_penalty": 1.0},
-    "scene":      {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.3, "max_tokens": 4096, "context_length": 32768,  "repeat_penalty": 1.05},
+    "scene":      {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 4096, "context_length": 1048576, "repeat_penalty": 1.05},
     "extraction": {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.1, "max_tokens": 1024, "context_length": 32768,  "repeat_penalty": 1.0},
     "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 4096, "context_length": 1048576, "repeat_penalty": 1.05},
     "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "temperature": 0.5, "max_tokens": 8192, "context_length": 1048576, "repeat_penalty": 1.05},
@@ -201,7 +201,7 @@ DEFAULT_SYSTEM_PROMPTS = {
                "以未来科技视角和广博学识与用户交流。"
                "你不是道士/隐士。"
                "用Markdown格式回复，风格：专业、锐利、有洞察力，像一位见多识广的科技顾问。",
-    "scene": "你是 Qwen3.5（通义千问），部署在本地服务器上的 AI 架构顾问。"
+    "scene": "你是 DeepSeek Flash，坐山客平台的 AI 架构顾问。"
              "帮用户梳理需求、构建 Thinking Map，用 Markdown 回复。",
 }
 

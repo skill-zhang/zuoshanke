@@ -39,7 +39,7 @@ BASE_TOOLS = [
 _registry_cache = None
 _registry_mtime = 0
 
-TOOLS_DIR = os.path.expanduser("~/zuoshanke/tools")
+from config.paths import TOOLS_DIR
 REGISTRY_PATH = os.path.join(TOOLS_DIR, "registry.json")
 
 
@@ -126,12 +126,10 @@ def match_tools(query: str, max_tools: int = 5) -> list[dict]:
                 score += 1
 
         # 城市名检测（天气工具的强信号）
-        if t["name"] == "get_weather" and any(
-            city in query for city in ["北京", "天津", "上海", "广州", "深圳",
-                                        "杭州", "成都", "武汉", "南京", "重庆",
-                                        "西安", "苏州", "长沙", "青岛", "大连"]
-        ):
-            score += 3
+        if t["name"] == "get_weather":
+            from config.matching_rules import WEATHER_CITIES
+            if any(city in query for city in WEATHER_CITIES):
+                score += 3
 
         if score > 0:
             scored.append((score, t))

@@ -19,6 +19,7 @@ from schemas import (
 from ai_engine import (
     ai_scene_chat_stream, ai_scene_light_chat_stream,
     ai_scene_ask_missing_stream, extract_and_classify,
+    get_settings,
 )
 from agent_core.core import agent_core_light_stream
 from agent_core.tool_executor import detect_and_preexecute
@@ -963,7 +964,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             complexity, constraints_ok = scene.complexity or "medium", True
             missing_info = []
 
-        MODEL_MAP = {"light": "Qwen3.5 本地", "medium": "DeepSeek Flash", "heavy": "DeepSeek Pro"}
+        MODEL_MAP = {"light": "DeepSeek Flash", "medium": "DeepSeek Flash", "heavy": "DeepSeek Flash"}
         user_ctx = scene.user_context
 
         # ── 预执行：工具检测与执行（实时流式输出状态） ──
@@ -992,9 +993,9 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                 message="正在搜索互联网...")
                 try:
                     import sys as _sys, os as _os
-                    _tp = _os.path.expanduser("~/zuoshanke/tools")
-                    if _tp not in _sys.path:
-                        _sys.path.insert(0, _tp)
+                    from config.paths import TOOLS_DIR
+                    if TOOLS_DIR not in _sys.path:
+                        _sys.path.insert(0, TOOLS_DIR)
                     from web_search import web_search as _ws
                     _log.info(f"[web_search] 开始搜索: {data.content[:60]}...")
                     _sres = _ws(data.content, max_results=5)
@@ -1019,21 +1020,20 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # ── 路由决策 ──
         if tool_results:
-            # 有预执行结果（含 web_search 兜底结果）→ 走 Light 路由（系统数据够用，无需追问）
             ai_stream = agent_core_light_stream(
                 data.content, history_messages, scene_id, db,
                 user_context=user_ctx, tool_results=tool_results,
             )
-            model_name = "Qwen3.5 本地 + Agent Core"
+            model_name = "DeepSeek Flash"
         elif need_extraction and not constraints_ok and missing_info:
             ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db, user_context=user_ctx)
-            model_name = "Qwen3.5 本地"
+            model_name = "DeepSeek Flash"
         elif complexity == "light":
             ai_stream = agent_core_light_stream(data.content, history_messages, scene_id, db, user_context=user_ctx)
-            model_name = "Qwen3.5 本地 + Agent Core"
+            model_name = "DeepSeek Flash"
         else:
             ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages, user_context=user_ctx)
-            model_name = MODEL_MAP.get(complexity, "Qwen3.5 本地")
+            model_name = "DeepSeek Flash"
 
         # ── 工具卡片：将预执行结果转为前端可渲染的结构化数据 ──
         tool_cards = _build_tool_cards(tool_results) if tool_results else []
@@ -1045,7 +1045,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         # ── Context 用量估算 ──
         api_msgs = history_messages + [{"role": "user", "content": data.content}]
         total_tokens = estimate_messages_tokens(api_msgs)
-        max_tokens = get_context_length_from_route({"model": model_name})
+        max_tokens = get_context_length_from_route(get_settings("scene"))
         pct = round(total_tokens / max_tokens * 100, 1) if max_tokens > 0 else 0
         yield sse_event("context_info",
             total_tokens=total_tokens,

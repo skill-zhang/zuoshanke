@@ -22,7 +22,8 @@ from typing import Optional
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
 # ── 路径 ──
-TOOLS_DIR = os.path.expanduser("~/zuoshanke/tools")
+from config.paths import TOOLS_DIR
+
 REGISTRY_PATH = os.path.join(TOOLS_DIR, "registry.json")
 
 

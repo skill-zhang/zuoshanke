@@ -8,9 +8,8 @@
 import os
 import json
 from pathlib import Path
+from config.paths import ZUOSHANKE_HOME
 
-
-ZUOSHANKE_HOME = Path.home() / ".zuoshanke"
 GATEWAY_ENV_FILE = ZUOSHANKE_HOME / ".gateway.env"
 
 
@@ -24,17 +23,11 @@ ILINK_APP_CLIENT_VERSION = (2 << 16) | (2 << 8) | 0
 EP_GET_UPDATES = "ilink/bot/getupdates"
 EP_SEND_MESSAGE = "ilink/bot/sendmessage"
 
-# 超时
-LONG_POLL_TIMEOUT_MS = 35_000
-API_TIMEOUT_MS = 15_000
-
-# 重试
-MAX_CONSECUTIVE_FAILURES = 3
-RETRY_DELAY_SECONDS = 2
-BACKOFF_DELAY_SECONDS = 30
+from config.constants import GATEWAY_LONG_POLL_TIMEOUT_MS, GATEWAY_MAX_CONSECUTIVE_FAILURES, GATEWAY_RETRY_DELAY_SECONDS, GATEWAY_BACKOFF_DELAY_SECONDS
+from config.urls import BACKEND_BASE_URL
 
 # 后端 API
-BACKEND_BASE_URL = os.environ.get("ZUOSHANKE_BACKEND_URL", "http://localhost:8000")
+# ── 轮询参数（微信 iLink） ──
 
 
 class GatewayConfig:

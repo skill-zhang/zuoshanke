@@ -221,8 +221,9 @@ def classify_weather(weather_data: dict) -> str:
         elif temp_val <= 0:
             return "cold"
         elif temp_val >= 5:
+            from config.matching_rules import WEATHER_DESC_SUNNY
             # 默认按 desc 判断晴/阴
-            if any(kw in desc for kw in ["晴"]):
+            if any(kw in desc for kw in WEATHER_DESC_SUNNY):
                 return "sunny"
             return "overcast"
 
@@ -534,8 +535,9 @@ def classify_weather(weather_data: dict) -> str:
         elif temp_val <= 0:
             return "cold"
         elif temp_val >= 5:
+            from config.matching_rules import WEATHER_DESC_SUNNY_EN
             # 从 desc 判断晴/阴
-            if any(kw in desc.lower() for kw in ["sunny", "clear", "晴"]):
+            if any(kw in desc.lower() for kw in WEATHER_DESC_SUNNY_EN):
                 return "sunny"
             return "overcast"
 

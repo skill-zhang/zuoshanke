@@ -21,12 +21,13 @@ from logger import get_logger as _get_logger
 _log = _get_logger("weather")
 
 # ── 缓存 ──
+from config.constants import WEATHER_CACHE_TTL as CACHE_TTL, WEATHER_TIMEOUT as TIMEOUT
+from config.urls import WTTR_URL as WTTR_TEMPLATE
+
 _cache: dict[str, dict] = {}         # city_key → {"data": {...}, "ts": float}
-CACHE_TTL = 60                       # 秒
 
 # ── API ──
-WTTR_URL = "https://wttr.in/{city}?format=j1"
-TIMEOUT = 10  # 秒
+WTTR_URL = WTTR_TEMPLATE + "/{city}?format=j1"
 
 # ── 回退当前天气数据（9 城市保底） ──
 FALLBACK_WEATHER: dict[str, dict] = {

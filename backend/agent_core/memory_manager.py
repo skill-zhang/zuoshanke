@@ -22,16 +22,18 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import AgentMemory
+from config.constants import (
+    MEMORY_DEFAULT_BASE_WEIGHT as DEFAULT_BASE_WEIGHT,
+    MEMORY_DECAY_HALF_LIFE as DECAY_HALF_LIFE,
+    MEMORY_MAX_INJECT_COUNT as MAX_INJECT_COUNT,
+    MEMORY_REINFORCE_BOOST as REINFORCE_BOOST,
+    MEMORY_EXPLICIT_BOOST as EXPLICIT_BOOST,
+)
 
 # ── 权重常量 ──
-DEFAULT_BASE_WEIGHT = 2     # 新建记忆默认 P2
-DECAY_HALF_LIFE = 14         # 半衰期：14 天不访问 weight 减半
 P0_THRESHOLD = 8.0
 P1_THRESHOLD = 4.0
 P2_THRESHOLD = 2.0
-MAX_INJECT_COUNT = 5         # 每次最多注入 5 条
-REINFORCE_BOOST = 2.0        # 用户强化（反复提及）倍率
-EXPLICIT_BOOST = 3.0         # "记住这个" 倍率
 
 # ── 话题检测关键词（用于当前查询的话题匹配） ──
 TOPIC_KEYWORDS = {

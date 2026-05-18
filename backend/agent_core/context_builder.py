@@ -18,13 +18,10 @@ from .memory_manager import MemoryManager
 from .skill_manager import SkillManager
 
 
-# ── 场景聊天的 System Prompt（v0.5 预执行模式） ──
+# ── 场景聊天的 System Prompt（兜底用，优先从 DB settings 读取） ──
 SCENE_SYSTEM_PROMPT = (
     "你是一个专业的AI架构顾问，同时也是坐山客AI工作台的智能助手。\n"
-    "系统已自动为你获取了实时数据（天气、景点推荐、装备建议等），数据附在下方。\n"
-    "请基于提供的真实数据回复用户，不要编造或猜测数据。\n"
-    "用Markdown格式回复，每次回复50-300字，充分且直接。\n"
-    "不要拆解任务、不需要创建思维导图。"
+    "请基于提供的真实数据回复用户，不要编造或猜测数据。"
 )
 
 
@@ -87,8 +84,17 @@ def build_scene_context(
     """
     messages = []
 
-    # ── 1. System prompt ──
-    system_parts = [SCENE_SYSTEM_PROMPT]
+    # ── 1. System prompt（优先从 DB settings 读取，兜底用 SCENE_SYSTEM_PROMPT） ──
+    _scene_sp = SCENE_SYSTEM_PROMPT
+    if db is not None:
+        try:
+            from models import Setting
+            _setting = db.query(Setting).first()
+            if _setting and _setting.system_prompts:
+                _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
+        except Exception:
+            pass  # 任何异常静默兜底到 SCENE_SYSTEM_PROMPT
+    system_parts = [f"# 角色设定\n{_scene_sp}"]
 
     # ── 1.5 用户输入背景设定 ──
     if user_context:

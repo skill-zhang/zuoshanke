@@ -20,7 +20,7 @@ import {
   SettingsData, ServiceStatus, RouteConfig,
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools';
+export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills';
 
 interface AppState {
   view: ViewPage;
@@ -105,6 +105,7 @@ interface AppState {
 
   // ═══ 流式状态 ═══
   isGenerating: boolean;
+  generatingEntityId: string | null;  // 当前在生成的实体ID（场景/频道），null=无
   currentModelName: string | null;   // 当前使用的模型名（来自 SSE model_info 事件）
   contextUsage: { totalTokens: number; maxTokens: number; percentage: number; usageStr: string; progressBar: string; historyCount: number } | null;
   capacityWarning: { message: string; percentage: number } | null;
@@ -170,6 +171,7 @@ export const useStore = create<AppState>((set, get) => ({
   view: 'chat',  // 默认进入聊天视图
   setView: (v) => set({ view: v, contextUsage: null, capacityWarning: null }),
   isGenerating: false,
+  generatingEntityId: null,
   currentModelName: null,
   contextUsage: null,
   capacityWarning: null,
@@ -410,6 +412,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     set({
       isGenerating: true,
+      generatingEntityId: sceneId,
       currentToolCards: [],
       currentToolLogs: [],
       messages: [...get().messages, tempUserMsg, tempAiMsg],
@@ -454,6 +457,7 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'done') {
           set(state => ({
             isGenerating: false,
+            generatingEntityId: null,
             messages: state.messages.map(m =>
               m.id === tempAiId
                 ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null, toolCards: state.currentToolCards }
@@ -465,6 +469,7 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'error') {
           set(state => ({
             isGenerating: false,
+            generatingEntityId: null,
             currentToolCards: [],
             currentToolLogs: [],
             messages: state.messages.map(m =>
@@ -479,6 +484,7 @@ export const useStore = create<AppState>((set, get) => ({
       console.error('[store] sendSceneMsg stream failed:', e);
       set(state => ({
         isGenerating: false,
+        generatingEntityId: null,
         messages: state.messages.map(m =>
           m.id === tempAiId
             ? { ...m, content: '❌ 网络请求失败，请重试' }
@@ -570,6 +576,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     set({
       isGenerating: true,
+      generatingEntityId: channelId,
       channelMessages: [...get().channelMessages, tempUserMsg, tempAiMsg],
     });
 
@@ -618,6 +625,7 @@ export const useStore = create<AppState>((set, get) => ({
           // 服务器保存完成 → 用真实 ID 替换占位
           set(state => ({
             isGenerating: false,
+            generatingEntityId: null,
             channelMessages: state.channelMessages.map(m =>
               m.id === tempAiId
                 ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null }
@@ -627,6 +635,7 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'error') {
           set(state => ({
             isGenerating: false,
+            generatingEntityId: null,
             channelMessages: state.channelMessages.map(m =>
               m.id === tempAiId
                 ? { ...m, content: `❌ ${event.message}` }
@@ -639,6 +648,7 @@ export const useStore = create<AppState>((set, get) => ({
       console.error('[store] sendChannelMsg stream failed:', e);
       set(state => ({
         isGenerating: false,
+        generatingEntityId: null,
         channelMessages: state.channelMessages.map(m =>
           m.id === tempAiId
             ? { ...m, content: '❌ 网络请求失败，请重试' }

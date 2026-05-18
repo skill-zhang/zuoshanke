@@ -11,7 +11,8 @@ import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
 import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { MemoryDrawer } from './components/MemoryDrawer';
-import { SkillsDrawer } from './components/SkillsDrawer';
+import { SkillsView } from './components/SkillsView';
+import { CapabilityVerify } from './components/CapabilityVerify';
 import { AgentCharacter } from './components/AgentCharacter';
 import { Scene, createScene, listProjects } from './api/client';
 
@@ -273,10 +274,14 @@ export default function App() {
            />
          ) :
          view === 'tools' ? (
-           <ToolsView />
-         ) : (
-           <ChatView />
-         )}
+          <ToolsView />
+        ) :        view === 'capability-verify' ? (
+          <CapabilityVerify />
+        ) : view === 'skills' ? (
+          <SkillsView />
+        ) : (
+          <ChatView />
+        )}
       </div>
 
       <div className="statusbar">
@@ -294,7 +299,6 @@ export default function App() {
       <ActionMapDrawer />
       <SettingsDrawer />
       <MemoryDrawer />
-      <SkillsDrawer />
 
       {/* ═══ 创建场景弹窗 ═══ */}
       <div className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`} onClick={handleCloseCreate}>

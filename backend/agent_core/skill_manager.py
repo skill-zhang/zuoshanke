@@ -14,8 +14,7 @@ import os
 import re
 from pathlib import Path
 from typing import Optional
-
-SKILLS_DIR = os.path.expanduser("~/zuoshanke/skills")
+from config.paths import SKILLS_DIR
 
 # ── Skill Schema ──
 # SKILL.md format:

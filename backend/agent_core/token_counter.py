@@ -17,9 +17,7 @@ from typing import Optional
 # 中文一个字符 ≈ 1.5-2 token
 # 英文 4 个字符 ≈ 1 token
 # 标点/空格/换行 ≈ 0.5 token
-CHINESE_RATE = 2.0       # 每个中文字符约 2 tokens
-ASCII_RATE = 0.3         # 每个 ASCII 字符约 0.3 tokens
-PER_MESSAGE_OVERHEAD = 4  # 每条消息的 role/元数据开销
+from config.constants import TOKEN_CHINESE_RATE as CHINESE_RATE, TOKEN_ASCII_RATE as ASCII_RATE, TOKEN_PER_MESSAGE_OVERHEAD as PER_MESSAGE_OVERHEAD
 
 
 def estimate_tokens(text: str) -> int:

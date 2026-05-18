@@ -5,10 +5,10 @@ from pathlib import Path
 # 加载环境变量（优先加载 hermes 的 .env，它含有 DEEPSEEK_API_KEY 等）
 try:
     from dotenv import load_dotenv
-    hermes_env = Path.home() / ".hermes" / ".env"
-    if hermes_env.exists():
-        load_dotenv(hermes_env)
-        logging.info(f"✅ 已加载环境变量: {hermes_env}")
+    from config.paths import HERMES_ENV
+    if HERMES_ENV.exists():
+        load_dotenv(HERMES_ENV)
+        logging.info(f"✅ 已加载环境变量: {HERMES_ENV}")
 except ImportError:
     pass
 
@@ -17,12 +17,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
 from router import register_all_routers
+from config.urls import CORS_ORIGINS
 
 app = FastAPI(title="坐山客 API", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -25,7 +25,13 @@ if _BACKEND_DIR not in sys.path:
 
 import aiohttp
 
-from backend.gateway.config import GatewayConfig
+from backend.gateway.config import (
+    GatewayConfig,
+    LONG_POLL_TIMEOUT_MS,
+    MAX_CONSECUTIVE_FAILURES,
+    RETRY_DELAY_SECONDS,
+    BACKOFF_DELAY_SECONDS,
+)
 from backend.gateway.adapter_weixin import (
     get_updates,
     send_message,
@@ -53,12 +59,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("gateway")
-
-# ── 轮询参数（微信 iLink） ──
-LONG_POLL_TIMEOUT_MS = 35_000
-MAX_CONSECUTIVE_FAILURES = 3
-RETRY_DELAY_SECONDS = 2
-BACKOFF_DELAY_SECONDS = 30
 
 
 # ── 上下文 Token 管理 ──
@@ -273,7 +273,8 @@ class WeixinAdapter:
 
         cmd = command.strip().lower()
 
-        if cmd in ("/exit", "/闲聊", "/退出", "/回到频道"):
+        from config.matching_rules import EXIT_COMMANDS, SCENE_COMMAND_PREFIXES
+        if cmd in EXIT_COMMANDS:
             result = await call_backend_back_to_channel(
                 self._session,
                 backend_url=self.config.backend_url,
@@ -283,7 +284,7 @@ class WeixinAdapter:
             reply = result.get("message", "已回到闲聊模式。")
             await self._send_reply(sender_id, reply, context_token)
 
-        elif cmd.startswith("/进入") or cmd.startswith("/scene") or cmd.startswith("/场景"):
+        elif any(cmd.startswith(p) for p in SCENE_COMMAND_PREFIXES):
             result = await call_backend_switch_scene(
                 self._session,
                 backend_url=self.config.backend_url,

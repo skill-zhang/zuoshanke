@@ -39,11 +39,11 @@ export function Sidebar() {
   // 侧边栏需要工坊数据来展示场景列表和计数，不管当前在哪个视图
   useEffect(() => { loadWorkshopScenes(); }, []);
 
-  // 加载工具和技能数量
+  // 加载工具和技能数量（每次 view 切换时也刷新）
   useEffect(() => {
     listTools().then(r => { if (r.success) setToolsCount(r.data.length); }).catch(() => {});
     listSkills().then(r => { if (r.success) setSkillsCount(r.data.length); }).catch(() => {});
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     if (view === 'workshop') {
@@ -375,13 +375,21 @@ export function Sidebar() {
           <span className="badge">{toolsCount}</span>
         </div>
 
+        <div className="sidebar-nav" onClick={() => {
+          setView('capability-verify');
+          useStore.getState().setCurrentScene(null);
+        }}>
+          <span className="nav-icon">🧪</span>
+          <span>能力验证</span>
+        </div>
+
         <div className="sidebar-nav" onClick={() => useStore.getState().openMemoryDrawer()}>
           <span className="nav-icon">🧠</span>
           <span>记忆管理</span>
           <span className="badge">{memories.length}</span>
         </div>
 
-        <div className="sidebar-nav" onClick={() => useStore.getState().openSkillsDrawer()}>
+        <div className="sidebar-nav" onClick={() => { setView('skills'); useStore.getState().setCurrentScene(null); }}>
           <span className="nav-icon">📘</span>
           <span>技能管理</span>
           <span className="badge">{skillsCount}</span>

@@ -359,6 +359,7 @@ export function ChatView() {
     batchDeleteMsgs, clearSceneMsgs, clearChannelHistory,
     sessions, loadSceneSessions, switchSceneSession,
     isGenerating,
+    generatingEntityId,
     currentModelName,
     contextUsage,
     capacityWarning,
@@ -367,6 +368,10 @@ export function ChatView() {
     userContext, saveUserContext,
     compressChannel,
   } = useStore();
+
+  // 当前实体（场景/频道）是否在生成中 — 不影响其他实体的发送按钮
+  const currentEntityId = currentScene?.id || currentChannel?.id;
+  const entityGenerating = isGenerating && generatingEntityId === currentEntityId;
 
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -547,7 +552,7 @@ export function ChatView() {
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending || isGenerating) return;
+    if (!text || sending || entityGenerating) return;
     setInput('');
     setSending(true);
 
@@ -566,7 +571,7 @@ export function ChatView() {
     } finally {
       setSending(false);
     }
-  }, [input, sending, isGenerating, isChannel, currentChannel, currentScene, sendChannelMsg, sendSceneMsg]);
+  }, [input, sending, entityGenerating, isChannel, currentChannel, currentScene, sendChannelMsg, sendSceneMsg]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -851,7 +856,7 @@ export function ChatView() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={sending || isGenerating}
+                  disabled={sending || entityGenerating}
                   rows={2}
                 />
                 <div className="chat-input-toolbar">
@@ -884,9 +889,9 @@ export function ChatView() {
                   <button
                     className="chat-send-btn"
                     onClick={handleSend}
-                    disabled={sending || isGenerating || !input.trim()}
+                    disabled={sending || entityGenerating || !input.trim()}
                   >
-                    {sending || isGenerating ? '⏳' : '发送'}
+                    {sending || entityGenerating ? '⏳' : '发送'}
                   </button>
                 </div>
               </div>

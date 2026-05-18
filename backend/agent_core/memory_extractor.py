@@ -24,30 +24,9 @@ from typing import Optional
 from models import AgentMemory
 from agent_core.memory_manager import MemoryManager
 from logger import get_logger as _get_logger
+from config.urls import QWEN_API
+from config.matching_rules import MEMORY_FAST_TRIGGERS as FAST_TRIGGERS, TOPIC_DOMAINS
 _log = _get_logger("memory_extractor")
-
-# ── 默认 LLM 端点（与 ai_engine.py 保持一致） ──
-QWEN_API = "http://localhost:8083/v1/chat/completions"
-
-# ── 快速通道的关键词（与 memory_manager.py 保持一致） ──
-FAST_TRIGGERS = ["记住", "别忘了", "牢记", "很重要", "非常重要",
-                 "以后都这样", "记住了", "记牢"]
-
-# ── 话题域（每个记忆提取时都要打一个 topic 标签） ──
-TOPIC_DOMAINS = [
-    "personal_info",  # 姓名、年龄、职业、所在地等身份信息
-    "preference",     # 喜好、偏好（颜色、温度、食物、话题等）
-    "habit",          # 习惯、日常作息
-    "work",           # 工作、项目、技术约束
-    "entertainment",  # 娱乐、影视、游戏、小说、音乐
-    "food",           # 饮食、餐饮、烹饪
-    "travel",         # 旅游、出行、景点
-    "tech",           # 技术、编程、工具
-    "shopping",       # 购物、消费
-    "health",         # 健康、运动、养生
-    "education",      # 学习、课程、教学
-    "general",        # 通用/兜底（不属于以上任何分类）
-]
 
 # 快速通道模式 → topic 映射
 _FAST_TOPIC_MAP = {

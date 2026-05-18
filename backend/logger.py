@@ -14,8 +14,9 @@ import logging
 import logging.handlers
 import sys
 from pathlib import Path
+from config.paths import LOG_DIR
 
-_LOG_DIR = Path.home() / ".zuoshanke"
+_LOG_DIR = LOG_DIR
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
 _LOG_FILE = _LOG_DIR / "backend.log"
 

@@ -342,23 +342,25 @@ def _extract_params(tool_name: str, query: str) -> Optional[dict]:
         if len(parts) >= 2 and parts[0] and parts[1]:
             origin, dest = parts[0], parts[1]
             # 去掉工具名关键词
-            for kw in ["怎么去", "路线", "怎么走", "导航"]:
+            from config.matching_rules import ROUTE_KEYWORDS
+            for kw in ROUTE_KEYWORDS:
                 dest = dest.replace(kw, "").strip()
             if origin and dest:
                 # 推断出行方式
+                from config.matching_rules import MODE_KEYWORDS
                 mode = "driving"
-                if "步行" in query or "走路" in query:
-                    mode = "walking"
-                elif "骑车" in query or "骑行" in query or "自行车" in query:
-                    mode = "cycling"
+                for m, kws in MODE_KEYWORDS.items():
+                    if any(kw in query for kw in kws):
+                        mode = m
+                        break
                 return {"origin": origin, "destination": dest, "mode": mode}
         return None
 
     elif tool_name == "todo_add":
         # 提取任务内容 — 去掉触发关键词后的剩余文本
-        triggers = ["添加任务", "新建任务", "记一下", "提醒我", "帮我记"]
+        from config.matching_rules import TODO_TRIGGERS
         content = query
-        for t in triggers:
+        for t in TODO_TRIGGERS:
             content = content.replace(t, "").strip()
         if not content:
             return None

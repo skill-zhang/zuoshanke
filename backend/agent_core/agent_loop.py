@@ -16,10 +16,10 @@ import json
 import os
 import logging
 from typing import Generator, Optional
+from config.paths import TOOLS_DIR
 
 logger = logging.getLogger(__name__)
 
-TOOLS_DIR = os.path.expanduser("~/zuoshanke/tools")
 REGISTRY_PATH = os.path.join(TOOLS_DIR, "registry.json")
 
 # ── 这些工具只给预执行用，不给 LLM 自主调用 ──

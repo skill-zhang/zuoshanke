@@ -15,24 +15,25 @@ def _weather_maybe(user_text: str) -> str | None:
     """检测用户消息中的天气意图，调 weather.maybe_weather_context 获取实时数据"""
     import sys as _sys, os as _os
     try:
-        _tp = _os.path.expanduser("~/zuoshanke/tools")
-        if _tp not in _sys.path:
-            _sys.path.insert(0, _tp)
+        from config.paths import TOOLS_DIR
+        if TOOLS_DIR not in _sys.path:
+            _sys.path.insert(0, TOOLS_DIR)
         from weather import maybe_weather_context
         return maybe_weather_context(user_text)
     except Exception:
         return None
 
 
-QWEN_API = "http://localhost:8083/v1/chat/completions"
-HERMES_BIN = os.path.expanduser("~/.local/bin/hermes")
+from config.urls import QWEN_API, DEEPSEEK_BASE_URL
+from config.paths import HERMES_BIN
 
 # ── DeepSeek 云 API 配置（读取环境变量） ──
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
 DEEPSEEK_MODEL_MAP = {
     "flash": "deepseek-chat",        # deepseek-v4-flash → 实际模型名
     "pro": "deepseek-chat",          # deepseek-v4-pro → 实际模型名（当前同 flash）
+    "deepseek-v4-flash": "deepseek-chat",
+    "deepseek-v4-pro": "deepseek-chat",
 }
 
 # ── 系统设置缓存 ──
@@ -322,7 +323,7 @@ def should_web_search(text: str) -> bool:
 
 
 def _stream_qwen(messages: list[dict], temperature: float | None = None, route: str = "scene"):
-    """通用流式调用 Qwen，逐 token yield。
+    """通用流式调用（支持 local Qwen 或 DeepSeek 云 API），逐 token yield。
 
     Args:
         messages: 消息列表
@@ -335,20 +336,46 @@ def _stream_qwen(messages: list[dict], temperature: float | None = None, route: 
     """
     route_cfg = get_settings(route)
     temp = temperature if temperature is not None else route_cfg["temperature"]
+    provider = route_cfg.get("provider", "local")
+
     try:
-        resp = requests.post(
-            QWEN_API,
-            json={
-                "model": "qwen",
-                "messages": messages,
-                "max_tokens": route_cfg["max_tokens"],
-                "temperature": temp,
-                "stream": True,
-            },
-            timeout=120,
-            stream=True,
-        )
-        resp.raise_for_status()
+        if provider == "deepseek":
+            # ── DeepSeek 云 API 流式调用 ──
+            model_name = route_cfg.get("model", "deepseek-v4-flash")
+            ds_model = DEEPSEEK_MODEL_MAP.get(model_name, "deepseek-chat")
+            resp = requests.post(
+                f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": ds_model,
+                    "messages": messages,
+                    "max_tokens": route_cfg["max_tokens"],
+                    "temperature": temp,
+                    "stream": True,
+                },
+                timeout=120,
+                stream=True,
+            )
+            resp.raise_for_status()
+        else:
+            # ── 本地 Qwen 流式调用 ──
+            resp = requests.post(
+                QWEN_API,
+                json={
+                    "model": "qwen",
+                    "messages": messages,
+                    "max_tokens": route_cfg["max_tokens"],
+                    "temperature": temp,
+                    "stream": True,
+                },
+                timeout=120,
+                stream=True,
+            )
+            resp.raise_for_status()
+
         for line in resp.iter_lines():
             if not line:
                 continue
@@ -366,7 +393,8 @@ def _stream_qwen(messages: list[dict], temperature: float | None = None, route: 
             except (json.JSONDecodeError, KeyError, IndexError):
                 continue
     except Exception as e:
-        print(f"[Qwen stream error] {e}")
+        _log_msg = f"[{'DeepSeek' if provider == 'deepseek' else 'Qwen'} stream error] {e}"
+        print(_log_msg)
         yield None
 
 
@@ -1403,8 +1431,8 @@ def call_hermes_action_map(think_node_id: str, db: Session, model: str = "flash"
     yield {"type": "status", "line": "✅ DeepSeek 返回完成，解析 JSON..."}
 
     # 写原始输出到文件以便调试
-    import os as _os
-    _log_dir = _os.path.expanduser("~/.hermes/logs")
+    from config.paths import HERMES_LOGS
+    _log_dir = HERMES_LOGS
     _os.makedirs(_log_dir, exist_ok=True)
     _log_path = _os.path.join(_log_dir, "zuoshanke_actionmap_raw.log")
     with open(_log_path, "a") as _f:
@@ -1560,8 +1588,8 @@ def call_hermes_execute_node(
 - [车源2](链接) — 商家车源，右后门补漆 | `里程低` `价格可议`"""
 
     # 沙箱工作目录
-    import os as _os
-    _sandbox = _os.path.expanduser("~/zuoshanke/tools")
+    from config.paths import TOOLS_DIR
+    _sandbox = TOOLS_DIR
     _os.makedirs(_sandbox, exist_ok=True)
 
     # 执行节点时需要 terminal 和 web 工具
@@ -1692,13 +1720,16 @@ category: tools
 
 def scan_and_document_tools(
     action_map_id: str,
-    tools_dir: str = "~/zuoshanke/tools",
+    tools_dir: str | None = None,
 ) -> list[dict]:
     """扫描 tools/ 目录，为没有 SKILL.md 的工具自动生成说明书并注册。
 
     Returns:
         新增工具列表 [{name, path, skill_path}]
     """
+    from config.paths import TOOLS_DIR
+    if tools_dir is None:
+        tools_dir = TOOLS_DIR
     import os as _os
     import json as _json
 

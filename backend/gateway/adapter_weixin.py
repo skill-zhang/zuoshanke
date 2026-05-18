@@ -84,7 +84,7 @@ def _extract_text(item_list: list) -> str:
 
 # ── 同步缓冲区管理 ──
 
-SYNC_BUF_DIR = Path.home() / ".zuoshanke" / "gateway"
+from config.paths import GATEWAY_BUF_DIR as SYNC_BUF_DIR
 
 
 def _sync_buf_path(account_id: str) -> Path:

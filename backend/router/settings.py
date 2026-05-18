@@ -154,7 +154,8 @@ def get_service_status():
     从 /health, /slots, /props 获取实时数据。
     任何一项失败不会影响其他项。
     """
-    base = "http://localhost:8083"
+    from config.urls import QWEN_API as LLAMA_BASE
+    base = LLAMA_BASE.rsplit("/v1", 1)[0]  # 去掉 /v1/chat/completions 保留根
     result = ServiceStatusOut(
         llama_server="stopped",
         port=8083,
