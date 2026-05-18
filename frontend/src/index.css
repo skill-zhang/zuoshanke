@@ -773,9 +773,7 @@ body {
   fill: #c9d1d9 !important;
 }
 
-/* ═══ Markmap ═══ */
-#mindmap-wrap {
-/* ── 思维导图（CustomMindMap 渲染） ── */
+/* ═══ 思维导图（CustomMindMap 渲染） ═══ */
 .drawer-body {
   padding: 0 !important;
 }
@@ -1705,6 +1703,16 @@ body {
   background:rgba(22,27,34,0.6);
 }
 .agent-char-container:hover .agent-char-hider { opacity:1; }
+
+/* Status label (debug, shows on hover) */
+.agent-char-label {
+  position:absolute; top:52px; left:50%; transform:translateX(-50%);
+  font-size:8px; color:#484f58; text-transform:uppercase;
+  letter-spacing:0.5px; white-space:nowrap;
+  opacity:0; transition:opacity 0.2s;
+  pointer-events:none;
+}
+.agent-char-container:hover .agent-char-label { opacity:1; }
 
 /* Animations */
 @keyframes pulse-dot { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.3)} }

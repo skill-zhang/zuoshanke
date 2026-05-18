@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useStore } from './stores/appStore';
 import { Topbar } from './components/Topbar';
 import { Sidebar } from './components/Sidebar';
@@ -32,6 +32,34 @@ export default function App() {
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // ═══ 角色动画联动 ═══
+  const agentStatus = useStore(s => s.agentStatus);
+  const agentMessage = useStore(s => s.agentMessage);
+  const agentHidden = useStore(s => s.agentHidden);
+  const setAgentStatus = useStore(s => s.setAgentStatus);
+  const setAgentMessage = useStore(s => s.setAgentMessage);
+  const toggleAgentHidden = useStore(s => s.toggleAgentHidden);
+  const isGenerating = useStore(s => s.isGenerating);
+
+  // 自动检测系统状态 → 切换角色表情
+  const prevGenRef = useRef(isGenerating);
+  useEffect(() => {
+    const prev = prevGenRef.current;
+    if (!prev && isGenerating) {
+      setAgentStatus('working');
+      setAgentMessage('正在处理...');
+    } else if (prev && !isGenerating) {
+      setAgentStatus('done');
+      setAgentMessage('搞定！✅');
+      const t = setTimeout(() => {
+        setAgentStatus('idle');
+        setAgentMessage('在线待命');
+      }, 2500);
+      return () => clearTimeout(t);
+    }
+    prevGenRef.current = isGenerating;
+  }, [isGenerating]);
+
   useEffect(() => {
     loadProjects();
   }, []);
@@ -42,6 +70,13 @@ export default function App() {
     setView('chat');
     await loadThinkingMap(scene.id);
     await loadSceneMessages(scene.id);
+    // 进入场景 → 角色打招呼
+    setAgentStatus('greeting');
+    setAgentMessage(`${scene.icon || '📦'} ${scene.name}，来了！`);
+    setTimeout(() => {
+      setAgentStatus('idle');
+      setAgentMessage('在线待命');
+    }, 3000);
   };
 
   const handleCreateScene = () => {
@@ -128,7 +163,12 @@ export default function App() {
   return (
     <>
       <Topbar extraTitle={getTitle()} />
-      <AgentCharacter />
+      <AgentCharacter
+        status={agentStatus}
+        message={agentMessage}
+        hidden={agentHidden}
+        onToggle={toggleAgentHidden}
+      />
 
       <div className="main">
         <Sidebar />

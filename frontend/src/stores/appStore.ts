@@ -150,7 +150,20 @@ interface AppState {
   skillsDrawerOpen: boolean;
   openSkillsDrawer: () => void;
   closeSkillsDrawer: () => void;
+
+  // ═══ AI 角色动画 ═══
+  agentStatus: AgentStatus;
+  agentMessage: string;
+  agentHidden: boolean;
+  setAgentStatus: (s: AgentStatus) => void;
+  setAgentMessage: (m: string) => void;
+  toggleAgentHidden: () => void;
 }
+
+export type AgentStatus =
+  | 'idle' | 'greeting' | 'thinking' | 'working'
+  | 'done' | 'error' | 'notify'
+  | 'resting' | 'angry' | 'laugh' | 'sad';
 
 export const useStore = create<AppState>((set, get) => ({
   view: 'chat',  // 默认进入聊天视图
@@ -161,6 +174,14 @@ export const useStore = create<AppState>((set, get) => ({
   capacityWarning: null,
   currentToolCards: [],
   currentToolLogs: [],
+
+  // ═══ AI 角色动画默认值 ═══
+  agentStatus: 'idle' as AgentStatus,
+  agentMessage: '在线待命',
+  agentHidden: false,
+  setAgentStatus: (s) => set({ agentStatus: s }),
+  setAgentMessage: (m) => set({ agentMessage: m }),
+  toggleAgentHidden: () => set((s) => ({ agentHidden: !s.agentHidden })),
 
   // ═══ 项目 ═══
   projects: [],

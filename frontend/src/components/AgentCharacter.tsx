@@ -5,11 +5,7 @@
  * 11 种表情状态 + 对话气泡弹出动画。
  */
 import { useEffect, useState, useRef } from 'react';
-
-export type AgentStatus =
-  | 'idle' | 'greeting' | 'thinking' | 'working'
-  | 'done' | 'error' | 'notify'
-  | 'resting' | 'angry' | 'laugh' | 'sad';
+import { useStore, AgentStatus } from '../stores/appStore';
 
 interface AgentCharacterProps {
   status?: AgentStatus;
@@ -72,16 +68,25 @@ export function AgentCharacter({ status = 'idle', message, hidden = false, onTog
   const [bubbleShow, setBubbleShow] = useState(false);
   const prevStatusRef = useRef(status);
   useEffect(() => {
-    // Toggle off then on for each status change (re-trigger animation)
     setBubbleShow(false);
     const t = setTimeout(() => setBubbleShow(true), 50);
     prevStatusRef.current = status;
     return () => clearTimeout(t);
   }, [status]);
 
+  // 点击角色 → 轮播所有表情（开发测试用）
+  const allStatuses: AgentStatus[] = ['idle', 'greeting', 'thinking', 'working', 'done', 'error', 'notify', 'resting', 'angry', 'laugh', 'sad'];
+  const cycleStatus = () => {
+    const idx = allStatuses.indexOf(status);
+    const next = allStatuses[(idx + 1) % allStatuses.length];
+    const store = useStore.getState();
+    store.setAgentStatus(next);
+    store.setAgentMessage(STATE_MAP[next]?.defaultMsg || '');
+  };
+
   return (
     <div className="agent-char-area">
-      <div className={`agent-char-container${hidden ? ' agent-char-hidden' : ''} ${animClass}`}>
+      <div className={`agent-char-container${hidden ? ' agent-char-hidden' : ''} ${animClass}`} onClick={cycleStatus}>
         {/* Bubble with show/hide animation */}
         <div className={`agent-char-bubble${bubbleShow ? ' show' : ''}`}>
           <span className="agent-char-dot" style={{ background: cfg.color }} />
@@ -176,10 +181,12 @@ export function AgentCharacter({ status = 'idle', message, hidden = false, onTog
           </svg>
         </div>
         {onToggle && (
-          <div className="agent-char-hider" onClick={onToggle} title="隐藏">
+          <div className="agent-char-hider" onClick={e => { e.stopPropagation(); onToggle(); }} title="隐藏/显示">
             {hidden ? '👁' : '✕'}
           </div>
         )}
+        {/* 调试：hover 显示当前表情名称 */}
+        <div className="agent-char-label">{status}</div>
       </div>
     </div>
   );
