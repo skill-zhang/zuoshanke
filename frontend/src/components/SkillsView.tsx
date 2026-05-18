@@ -3,7 +3,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useStore } from '../stores/appStore';
 import {
   listSkills, getSkill, createSkill, updateSkill, deleteSkill,
-  type SkillMeta,
+  listSkillCategories, renameSkillCategory,
+  type SkillMeta, type SkillCategory,
 } from '../api/client';
 
 // ── 默认分类图标映射（识别不了的fallback到📘） ──
@@ -33,12 +34,21 @@ export function SkillsView() {
   const categories = (() => {
     const keys = new Set(skills.map(s => s.category).filter(Boolean));
     const known = ['development', 'reference', 'formatting', 'workflow', 'general'];
-    // 已知分类按固定顺序，未知分类追加在后面
     const ordered = known.filter(k => keys.has(k));
     const extra = [...keys].filter(k => !known.includes(k));
     return [
       { key: 'all', icon: '🔍', label: `全部 (${skills.length})` },
       ...ordered.map(k => ({ key: k, icon: getCatIcon(k), label: getCatLabel(k) })),
+      ...extra.map(k => ({ key: k, icon: getCatIcon(k), label: getCatLabel(k) })),
+    ];
+  })();
+  // ── 编辑弹窗分类下拉 = 所有已知分类 + 额外分类（不管当前有没有数据） ──
+  const fullCategories = (() => {
+    const keys = new Set(skills.map(s => s.category).filter(Boolean));
+    const known = ['development', 'reference', 'formatting', 'workflow', 'general'];
+    const extra = [...keys].filter(k => !known.includes(k));
+    return [
+      ...known.map(k => ({ key: k, icon: getCatIcon(k), label: getCatLabel(k) })),
       ...extra.map(k => ({ key: k, icon: getCatIcon(k), label: getCatLabel(k) })),
     ];
   })();
@@ -59,6 +69,13 @@ export function SkillsView() {
 
   // 删除确认
   const [deleteName, setDeleteName] = useState<string | null>(null);
+
+  // 分类管理弹窗
+  const [catManageOpen, setCatManageOpen] = useState(false);
+  const [catList, setCatList] = useState<SkillCategory[]>([]);
+  const [catManageError, setCatManageError] = useState('');
+  const [renamingCat, setRenamingCat] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState('');
 
   // 导入文件 input ref
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -284,6 +301,14 @@ export function SkillsView() {
           </button>
           <input ref={importInputRef} type="file" accept=".md" multiple
             onChange={handleImport} style={{ display: 'none' }} />
+          <button onClick={async () => {
+            setCatManageError('');
+            try {
+              const res = await listSkillCategories();
+              setCatList(res.data);
+              setCatManageOpen(true);
+            } catch (e: any) { setCatManageError(e.message || '加载分类失败'); }
+          }} style={btn()}>📁 分类</button>
           <button onClick={exportAll} style={btn()}>📤 导出全部</button>
           <button onClick={openCreate} style={btn({ background: '#238636', borderColor: '#2ea043', color: '#fff' })}>➕ 新建技能</button>
         </div>
@@ -313,7 +338,7 @@ export function SkillsView() {
             onClick={() => openDetail(s.name)}
             style={{
               background: '#161b22', border: '1px solid #30363d', borderRadius: 10, padding: 20, cursor: 'pointer',
-              transition: 'all .15s', display: 'flex', flexDirection: 'column',
+              transition: 'all .15s', display: 'flex', flexDirection: 'column', height: '100%',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = '#6e7681'; e.currentTarget.style.background = '#1c2128'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,.3)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = '#30363d'; e.currentTarget.style.background = '#161b22'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
@@ -333,8 +358,10 @@ export function SkillsView() {
                   🎯 {s.triggers.slice(0, 2).join(', ')}{s.triggers.length > 2 ? ` +${s.triggers.length - 2}` : ''}
                 </span>
               )}
-              <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', padding: '2px 5px', borderRadius: 4, fontSize: 12, color: '#8b949e' }}
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '6px 10px', borderRadius: 6, fontSize: 16, color: '#8b949e', transition: 'all .15s' }}
                 title="下载 .skill.md"
+                onMouseEnter={e => { e.currentTarget.style.background = '#21262d'; e.currentTarget.style.color = '#e6edf3'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8b949e'; }}
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
@@ -433,13 +460,19 @@ export function SkillsView() {
                 style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', borderRadius: 6, padding: '8px 12px', color: '#e6edf3', fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 13, color: '#8b949e', marginBottom: 6, fontWeight: 500 }}>分类</label>
-              <select value={editCategory} onChange={e => setEditCategory(e.target.value)}
-                style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', borderRadius: 6, padding: '8px 12px', color: '#e6edf3', fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
-                {categories.filter(c => c.key !== 'all').map(c => (
-                  <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
-                ))}
-              </select>
+              <label style={{ display: 'block', fontSize: 13, color: '#8b949e', marginBottom: 6, fontWeight: 500 }}>
+                分类 <span style={{ fontWeight: 400, color: '#6e7681' }}>（可输入新分类名）</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input list="skill-categories" value={editCategory} onChange={e => setEditCategory(e.target.value)}
+                  placeholder="development / reference / ..."
+                  style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', borderRadius: 6, padding: '8px 12px', color: '#e6edf3', fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
+                <datalist id="skill-categories">
+                  {fullCategories.map(c => (
+                    <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
+                  ))}
+                </datalist>
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid #21262d' }}>
@@ -471,6 +504,77 @@ export function SkillsView() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid #21262d' }}>
               <button onClick={() => setDeleteName(null)} style={btn()}>取消</button>
               <button onClick={handleDelete} style={btn({ borderColor: '#f85149', background: '#f85149', color: '#fff' })}>确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 分类管理 Modal ═══ */}
+      {catManageOpen && (
+        <div className="modal-overlay show" style={modalOverlay} onClick={e => { if (e.target === e.currentTarget) setCatManageOpen(false); }}>
+          <div style={{ ...modalBox, width: 480 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              📁 分类管理
+              <button className="modal-close" onClick={() => setCatManageOpen(false)} style={{ background: 'none', border: 'none', color: '#8b949e', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+            {catManageError && <div style={{ color: '#f85149', fontSize: 13, marginBottom: 12, padding: 8, background: '#f8514915', borderRadius: 6 }}>{catManageError}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {catList.map(cat => (
+                <div key={cat.name} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', background: '#0d1117', borderRadius: 8,
+                }}>
+                  <span style={{ fontSize: 20 }}>{getCatIcon(cat.name)}</span>
+                  <div style={{ flex: 1 }}>
+                    {renamingCat === cat.name ? (
+                      <input value={renameInput} onChange={e => setRenameInput(e.target.value)}
+                        autoFocus onKeyDown={async e => {
+                          if (e.key === 'Escape') setRenamingCat(null);
+                          if (e.key !== 'Enter' || !renameInput.trim()) return;
+                          try {
+                            const res = await renameSkillCategory(cat.name, renameInput.trim());
+                            setCatManageError(`✅ 已重命名 ${res.count} 个技能`);
+                            setRenamingCat(null);
+                            const r = await listSkillCategories();
+                            setCatList(r.data);
+                            await load();
+                          } catch (err: any) { setCatManageError(err.message || '重命名失败'); }
+                        }}
+                        style={{ width: '100%', background: '#161b22', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', color: '#e6edf3', fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
+                      />
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: '#e6edf3' }}>{getCatLabel(cat.name)}</div>
+                        <div style={{ fontSize: 12, color: '#6e7681' }}>{cat.count} 个技能{cat.protected ? ' · 🔒 默认分类' : ''}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {!cat.protected && (
+                      <>
+                        {renamingCat === cat.name ? (
+                          <>
+                            <button onClick={() => setRenamingCat(null)} style={{ padding: '4px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>取消</button>
+                            <button onClick={async () => {
+                              if (!renameInput.trim()) return;
+                              try {
+                                const res = await renameSkillCategory(cat.name, renameInput.trim());
+                                setCatManageError(`✅ 已重命名 ${res.count} 个技能`);
+                                setRenamingCat(null);
+                                const r = await listSkillCategories();
+                                setCatList(r.data);
+                                await load();
+                              } catch (err: any) { setCatManageError(err.message || '重命名失败'); }
+                            }} style={{ padding: '4px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #238636', background: '#238636', color: '#fff', cursor: 'pointer' }}>确定</button>
+                          </>
+                        ) : (
+                          <button onClick={() => { setRenamingCat(cat.name); setRenameInput(cat.name); }} style={{ padding: '4px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>✏️ 重命名</button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

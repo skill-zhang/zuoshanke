@@ -17,12 +17,10 @@ from schemas import (
     MessageCreate,
 )
 from ai_engine import (
-    ai_scene_chat_stream, ai_scene_light_chat_stream,
-    ai_scene_ask_missing_stream, extract_and_classify,
+    extract_and_classify,
     get_settings,
 )
-from agent_core.core import agent_core_light_stream
-from agent_core.tool_executor import detect_and_preexecute
+
 from agent_core.memory_manager import MemoryManager
 from agent_core.memory_extractor import MemoryExtractor
 from agent_core.token_counter import (
@@ -964,81 +962,29 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             complexity, constraints_ok = scene.complexity or "medium", True
             missing_info = []
 
-        MODEL_MAP = {"light": "DeepSeek Flash", "medium": "DeepSeek Flash", "heavy": "DeepSeek Flash"}
         user_ctx = scene.user_context
 
-        # ── 预执行：工具检测与执行（实时流式输出状态） ──
-        tool_results = None
+        # ── Agent Loop：LLM 自主决策调工具（替代预执行 + 规则路由） ──
+        from agent_core.agent_loop import run_agent_loop
 
-        # Step 1: 分析工具需求
-        yield sse_event("tool_status", tool="_analysis", status="running", message="正在分析工具需求...")
-        pre_results = detect_and_preexecute(data.content)
+        scene_agent_prompt = (
+            "你是坐山客AI工作台的智能助手。\n"
+            "你可以调用工具获取实时信息（天气、搜索等），也可以直接回答用户的问题。\n"
+            "当你需要实时数据或用户明确要求查信息时，先调用工具获取数据，再基于数据回复。\n"
+            "如果用户问的是常识性问题或你已知道的知识，直接回复即可，不需要调工具。\n"
+            "请用中文回复，保持简洁自然。\n"
+        )
+        if user_ctx:
+            scene_agent_prompt += f"\n=== 用户设定的背景 ===\n{user_ctx}\n==================="
 
-        if pre_results:
-            # 有工具匹配 → 逐个报告结果
-            tool_results = pre_results
-            for r in pre_results:
-                t = r.get("tool", "unknown")
-                if r.get("success"):
-                    yield sse_event("tool_status", tool=t, status="done",
-                                    success=True, message="已完成")
-                else:
-                    yield sse_event("tool_status", tool=t, status="error",
-                                    success=False, message=str(r.get("result", "执行失败")))
-        else:
-            # Step 2: 无工具匹配 → 判断是否需要 web_search 兜底
-            # 仅用户消息看起来是在"查信息"时才搜，避免闲聊/追问/确认也被搜
-            if _needs_search_fallback(data.content):
-                yield sse_event("tool_status", tool="web_search", status="running",
-                                message="正在搜索互联网...")
-                try:
-                    import sys as _sys, os as _os
-                    from config.paths import TOOLS_DIR
-                    if TOOLS_DIR not in _sys.path:
-                        _sys.path.insert(0, TOOLS_DIR)
-                    from web_search import web_search as _ws
-                    _log.info(f"[web_search] 开始搜索: {data.content[:60]}...")
-                    _sres = _ws(data.content, max_results=5)
-                    if _sres:
-                        tool_results = [{
-                            "tool": "web_search",
-                            "params": {"query": data.content},
-                            "result": _sres[:5],
-                            "success": True,
-                        }]
-                        yield sse_event("tool_status", tool="web_search", status="done",
-                                        success=True, message=f"找到 {len(_sres)} 条结果")
-                        _log.info(f"[web_search] 成功: {len(_sres)} 条结果")
-                    else:
-                        yield sse_event("tool_status", tool="web_search", status="done",
-                                        success=False, message="未找到相关结果")
-                        _log.info("[web_search] 无结果")
-                except Exception as _e:
-                    _log.warning(f"[web_search fallback] {_e}")
-                    yield sse_event("tool_status", tool="web_search", status="error",
-                                    success=False, message=str(_e))
+        agent_stream = run_agent_loop(
+            task=data.content,
+            system_prompt=scene_agent_prompt,
+            max_steps=15,
+        )
 
-        # ── 路由决策 ──
-        if tool_results:
-            ai_stream = agent_core_light_stream(
-                data.content, history_messages, scene_id, db,
-                user_context=user_ctx, tool_results=tool_results,
-            )
-            model_name = "DeepSeek Flash"
-        elif need_extraction and not constraints_ok and missing_info:
-            ai_stream = ai_scene_ask_missing_stream(scene_id, data.content, missing_info, history_messages, db, user_context=user_ctx)
-            model_name = "DeepSeek Flash"
-        elif complexity == "light":
-            ai_stream = agent_core_light_stream(data.content, history_messages, scene_id, db, user_context=user_ctx)
-            model_name = "DeepSeek Flash"
-        else:
-            ai_stream = ai_scene_chat_stream(scene_id, data.content, db, complexity, history_messages, user_context=user_ctx)
-            model_name = "DeepSeek Flash"
-
-        # ── 工具卡片：将预执行结果转为前端可渲染的结构化数据 ──
-        tool_cards = _build_tool_cards(tool_results) if tool_results else []
-        if tool_cards:
-            yield sse_event("tool_cards", cards=tool_cards)
+        model_name = "DeepSeek Flash"
+        full_reply = ""
 
         yield sse_event("model_info", model=model_name, complexity=complexity)
 
@@ -1066,25 +1012,49 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 ),
             )
 
-        # 4. 流式收回复
-        full_reply, changes = "", []
+        # ── 流式收 Agent Loop 回复 ──
+        agent_tool_results = []
         try:
-            for token in ai_stream:
-                if isinstance(token, dict):
-                    if token.get("_error"):
-                        yield sse_event("error", message=token["message"])
-                        return
-                    if token.get("_done"):
-                        full_reply = token["reply"]
-                        changes = token.get("changes", [])
-                        break
-                elif token is not None:
-                    full_reply += token
-                    yield sse_event("token", token=token)
+            for event in agent_stream:
+                etype = event["type"]
+                if etype == "tool_start":
+                    yield sse_event("tool_status", tool=event["tool"], status="running",
+                                    message=f"正在执行：{event['tool']}...")
+                elif etype == "tool_done":
+                    yield sse_event("tool_status", tool=event["tool"], status="done",
+                                    success=True, message="已完成")
+                    agent_tool_results.append({
+                        "tool": event["tool"], "params": {},
+                        "result": event.get("result"), "success": True,
+                    })
+                elif etype == "tool_error":
+                    yield sse_event("tool_status", tool=event["tool"], status="error",
+                                    success=False, message=event.get("error", "执行失败"))
+                    agent_tool_results.append({
+                        "tool": event["tool"], "params": {},
+                        "result": event.get("error", "执行失败"), "success": False,
+                    })
+                elif etype == "thinking":
+                    text = event["text"]
+                    full_reply += text
+                    yield sse_event("token", token=text)
+                elif etype == "done":
+                    full_reply = event.get("summary", full_reply)
+                    break
+                elif etype == "error":
+                    _log.error(f"[scene agent loop] {event['message']}")
+                    yield sse_event("error", message=event["message"])
+                    return
         except Exception as e:
-            _log.error(f"[scene stream] 迭代异常: {e}")
+            _log.error(f"[scene agent loop] 迭代异常: {e}")
             yield sse_event("error", message=f"AI 响应生成异常: {e}")
             return
+
+        # ── 工具卡片（从 Agent Loop 结果重建） ──
+        tool_cards = _build_tool_cards(agent_tool_results) if agent_tool_results else []
+        if tool_cards:
+            yield sse_event("tool_cards", cards=tool_cards)
+        tool_results = agent_tool_results or None
 
         # 5. 保存 AI 消息（独立 DB session）
         ai_msg_id = make_id("msg")
@@ -1100,7 +1070,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             new_db.refresh(ai_msg)
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_reply,
                             created_at=ai_msg.created_at.isoformat(),
-                            changes=changes, model=model_name)
+                            changes=[], model=model_name)
 
             # ── 6. 自动提取记忆（双通道） ──
             try:

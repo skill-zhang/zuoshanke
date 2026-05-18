@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
 description: 坐山客技能编写指南 — SKILL.md 格式规范、触发词设计、CRUD API 操作
-version: 1.0
+version: 1.1
 category: development
 triggers: [技能编写, SKILL.md, 技能格式, 创建技能, 技能管理]
 ---
@@ -22,7 +22,7 @@ triggers: [技能编写, SKILL.md, 技能格式, 创建技能, 技能管理]
 | 存储 | `~/zuoshanke/skills/<name>/SKILL.md` | `~/zuoshanke/tools/<name>.py` |
 | 用途 | 指导 AI「怎么做」 | 让 AI 能执行操作 |
 | 触发 | 关键词匹配（triggers） | 函数注册表 |
-| 管理界面 | SkillsDrawer | ToolsDrawer |
+| 管理界面 | SkillsView（全页卡片网格） | ToolsView（全页卡片网格） |
 
 ## SKILL.md 格式
 
@@ -105,14 +105,19 @@ DELETE /api/skills/{name}
 GET /api/skills/match?query=用户说的内容&max_count=2
 ```
 
-## 使用 SkillsDrawer UI 管理
+## 使用 SkillsView UI 管理
 
-前端侧边栏 SkillsDrawer 提供图形化界面，支持：
-- **刷新列表** — 查看所有技能
-- **新建技能** — 填写名称、说明、正文、触发词、分类
-- **查看详情** — 点击技能条目展开完整内容
-- **编辑技能** — 修改元信息或正文
-- **删除技能** — 确认后删除
+前端侧边栏点击「📘 技能管理」进入全页卡片网格视图（类似工具管理），支持：
+
+- **分类筛选** — 分类 tab 从数据中**动态生成**，不硬编码
+- **搜索** — 按名称/说明搜索
+- **卡片网格** — 每个技能一张卡片，显示名称、版本、说明、分类、触发词
+- **⬇️ 单卡下载** — 卡片右下角下载按钮，直接下载 `.skill.md` 文件
+- **查看详情** — 点击卡片打开弹窗，包含完整正文预览
+- **新建/编辑** — 弹窗表单，分类下拉同步数据
+- **删除** — 确认后删除
+- **📤 导出全部** — 一键导出所有技能为合并文件
+- **📥 导入** — 选择 `.skill.md` 文件（支持多选），自动解析前注创建技能
 
 ## 最佳实践
 

@@ -118,3 +118,27 @@ def delete_skill(name: str):
     if not ok:
         raise HTTPException(status_code=404, detail=f"Skill '{name}' 不存在")
     return {"success": True, "message": f"Skill '{name}' 已删除"}
+
+
+# ── 分类管理 ──
+
+
+class CategoryRename(BaseModel):
+    old_name: str = Field(..., min_length=1, max_length=64)
+    new_name: str = Field(..., min_length=1, max_length=64)
+
+
+@router.get("/categories")
+def list_categories():
+    """列出所有分类及数量、是否受保护"""
+    return {"success": True, "data": sm.list_categories()}
+
+
+@router.put("/categories/rename")
+def rename_category(body: CategoryRename):
+    """重命名分类（批量更新所有同分类技能）"""
+    protected = {"development", "reference", "formatting", "workflow", "general"}
+    if body.old_name in protected:
+        raise HTTPException(status_code=403, detail=f"默认分类 '{body.old_name}' 不可重命名")
+    count = sm.rename_category(body.old_name, body.new_name)
+    return {"success": True, "message": f"已重命名 {count} 个技能", "count": count}

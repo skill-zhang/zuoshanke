@@ -249,3 +249,35 @@ triggers: {triggers_str}
             return []
         tokens = re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', text)
         return [t for t in tokens if len(t) >= 1]
+
+    # ── 分类管理 ──────────────────────────────────
+
+    def list_categories(self) -> list[dict]:
+        """列出所有分类及每个分类的技能数量"""
+        skills = self.list_all()
+        counts: dict[str, int] = {}
+        for s in skills:
+            cat = s.get("category", "general")
+            counts[cat] = counts.get(cat, 0) + 1
+        protected = {"development", "reference", "formatting", "workflow", "general"}
+        result = []
+        for cat in sorted(counts.keys()):
+            result.append({
+                "name": cat,
+                "count": counts[cat],
+                "protected": cat in protected,
+            })
+        return result
+
+    def rename_category(self, old_name: str, new_name: str) -> int:
+        """批量重命名分类，返回受影响技能数"""
+        if not new_name or not old_name:
+            return 0
+        count = 0
+        for s_meta in self.list_all():
+            if s_meta.get("category") == old_name:
+                skill = self.get(s_meta["name"])
+                if skill:
+                    self.update(s_meta["name"], category=new_name)
+                    count += 1
+        return count

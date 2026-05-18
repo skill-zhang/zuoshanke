@@ -24,10 +24,8 @@ REGISTRY_PATH = os.path.join(TOOLS_DIR, "registry.json")
 
 # ── 这些工具只给预执行用，不给 LLM 自主调用 ──
 # 原因：它们需要城市名/场景等上下文参数，预执行通过关键词提取参数更准
+# 🆕 场景全走 Agent Loop 后，get_weather/recommend/equipment 放开给 LLM 自主调
 _EXCLUDED_TOOLS = {
-    "get_weather",           # 预执行 + requires_city
-    "recommend_attractions", # 预执行 + 需要天气分类链式调用
-    "get_equipment_checklist", # 预执行 + 链式
     "geo_search_poi",        # 预执行 + requires_city
     "geo_route",             # 预执行 + requires_city
     "session_list",          # 预执行触发
@@ -253,6 +251,7 @@ def run_agent_loop(
     tools: Optional[list[dict]] = None,
     model: str = "flash",
     max_steps: int = 25,
+    system_prompt: Optional[str] = None,
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
@@ -262,6 +261,7 @@ def run_agent_loop(
         tools: 工具定义列表（None 则自动构建）
         model: 模型名
         max_steps: 最大循环步数（防止死循环）
+        system_prompt: 自定义系统提示词（None 则用默认的 build_agent_system_prompt）
 
     Yields:
         dict: 事件对象，格式：
@@ -283,11 +283,17 @@ def run_agent_loop(
         return
 
     # 2. 构建消息
-    system_prompt = build_agent_system_prompt(memory_context)
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": task},
-    ]
+    if system_prompt:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": task},
+        ]
+    else:
+        system_prompt_default = build_agent_system_prompt(memory_context)
+        messages = [
+            {"role": "system", "content": system_prompt_default},
+            {"role": "user", "content": task},
+        ]
 
     # 工具名列表（用于日志）
     tool_names = [t["function"]["name"] for t in tools]

@@ -482,6 +482,15 @@ export const updateSkill = (name: string, data: { description?: string; content?
 export const deleteSkill = (name: string) =>
   request<{ success: boolean }>('/skills/' + encodeURIComponent(name), { method: 'DELETE' });
 
+// ═══ 技能分类管理 ═══
+export interface SkillCategory {
+  name: string; count: number; protected: boolean;
+}
+export const listSkillCategories = () =>
+  request<{ success: boolean; data: SkillCategory[] }>('/skills/categories');
+export const renameSkillCategory = (old_name: string, new_name: string) =>
+  request<{ success: boolean; count: number }>('/skills/categories/rename', { method: 'PUT', body: JSON.stringify({ old_name, new_name }) });
+
 // ═══ 工具管理 ═══
 export interface ToolSummary {
   name: string; description: string; category: string; verified: boolean;
