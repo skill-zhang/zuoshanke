@@ -1694,16 +1694,6 @@ body {
 }
 .agent-char-text { vertical-align:middle; }
 
-/* Hide button (hover) */
-.agent-char-hider {
-  position:absolute; top:-2px; left:50%; transform:translateX(-50%);
-  font-size:9px; color:#484f58; cursor:pointer;
-  opacity:0; transition:opacity 0.2s;
-  line-height:1; padding:1px 4px; border-radius:4px;
-  background:rgba(22,27,34,0.6);
-}
-.agent-char-container:hover .agent-char-hider { opacity:1; }
-
 /* Status label (debug, shows on hover) */
 .agent-char-label {
   position:absolute; top:52px; left:50%; transform:translateX(-50%);

@@ -157,6 +157,7 @@ interface AppState {
   agentHidden: boolean;
   setAgentStatus: (s: AgentStatus) => void;
   setAgentMessage: (m: string) => void;
+  setAgentHidden: (h: boolean) => void;
   toggleAgentHidden: () => void;
 }
 
@@ -181,6 +182,7 @@ export const useStore = create<AppState>((set, get) => ({
   agentHidden: false,
   setAgentStatus: (s) => set({ agentStatus: s }),
   setAgentMessage: (m) => set({ agentMessage: m }),
+  setAgentHidden: (h) => set({ agentHidden: h }),
   toggleAgentHidden: () => set((s) => ({ agentHidden: !s.agentHidden })),
 
   // ═══ 项目 ═══

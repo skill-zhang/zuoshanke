@@ -11,7 +11,6 @@ interface AgentCharacterProps {
   status?: AgentStatus;
   message?: string;
   hidden?: boolean;
-  onToggle?: () => void;
 }
 
 const EYE: Record<string, { L: string; R: string }> = {
@@ -57,7 +56,7 @@ const STATE_MAP: Record<AgentStatus, {
   sad:      { eyes:'sadTears',mouth:'cry',     defaultMsg:'呜...😢',  color:'#58a6ff', classSuffix:'idle', showSadTears:true },
 };
 
-export function AgentCharacter({ status = 'idle', message, hidden = false, onToggle }: AgentCharacterProps) {
+export function AgentCharacter({ status = 'idle', message, hidden = false }: AgentCharacterProps) {
   const cfg = STATE_MAP[status] || STATE_MAP.idle;
   const msg = message ?? cfg.defaultMsg;
   const eye = EYE[cfg.eyes] || EYE.closed;
@@ -180,11 +179,6 @@ export function AgentCharacter({ status = 'idle', message, hidden = false, onTog
             <circle cx="47" cy="16" r="0.5" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
           </svg>
         </div>
-        {onToggle && (
-          <div className="agent-char-hider" onClick={e => { e.stopPropagation(); onToggle(); }} title="隐藏/显示">
-            {hidden ? '👁' : '✕'}
-          </div>
-        )}
         {/* 调试：hover 显示当前表情名称 */}
         <div className="agent-char-label">{status}</div>
       </div>

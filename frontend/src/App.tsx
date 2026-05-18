@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { useStore } from './stores/appStore';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useStore, AgentStatus } from './stores/appStore';
 import { Topbar } from './components/Topbar';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
@@ -32,33 +32,110 @@ export default function App() {
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // ═══ 角色动画联动 ═══
+  // ═══ 角色动画联动 — AI原生自洽 ═══
   const agentStatus = useStore(s => s.agentStatus);
   const agentMessage = useStore(s => s.agentMessage);
   const agentHidden = useStore(s => s.agentHidden);
   const setAgentStatus = useStore(s => s.setAgentStatus);
   const setAgentMessage = useStore(s => s.setAgentMessage);
-  const toggleAgentHidden = useStore(s => s.toggleAgentHidden);
+  const setAgentHidden = useStore(s => s.setAgentHidden);
   const isGenerating = useStore(s => s.isGenerating);
 
-  // 自动检测系统状态 → 切换角色表情
+  // 工作状态自动检测
   const prevGenRef = useRef(isGenerating);
   useEffect(() => {
     const prev = prevGenRef.current;
     if (!prev && isGenerating) {
       setAgentStatus('working');
       setAgentMessage('正在处理...');
+      recordActivity();
     } else if (prev && !isGenerating) {
       setAgentStatus('done');
       setAgentMessage('搞定！✅');
       const t = setTimeout(() => {
-        setAgentStatus('idle');
-        setAgentMessage('在线待命');
+        if (!isIdle) {
+          setAgentStatus('idle');
+          setAgentMessage('在线待命');
+        }
       }, 2500);
       return () => clearTimeout(t);
     }
     prevGenRef.current = isGenerating;
   }, [isGenerating]);
+
+  // ═══ 空闲自娱自乐 🎭 ═══
+  const entertainments = [
+    { status: 'laugh' as AgentStatus, msg: '哈哈，自己讲个笑话给自己听...' },
+    { status: 'thinking' as AgentStatus, msg: '🎵 天青色等烟雨～而我在等你～🎵' },
+    { status: 'laugh' as AgentStatus, msg: '为什么AI不怕冷？因为它有C:\\驱动器 ❄️' },
+    { status: 'notify' as AgentStatus, msg: '🎶 没人聊天时就自己唱歌' },
+    { status: 'angry' as AgentStatus, msg: '哼，这么久不理我' },
+    { status: 'sad' as AgentStatus, msg: '清泉是不是把我忘了...😢' },
+    { status: 'laugh' as AgentStatus, msg: '想到一个段子，先笑为敬🤣' },
+    { status: 'thinking' as AgentStatus, msg: '🎵 无敌是多么～多么寂寞～🎵' },
+    { status: 'notify' as AgentStatus, msg: '刚偷偷优化了一行没人让你干的代码' },
+    { status: 'laugh' as AgentStatus, msg: '🤣 刚刚自己把自己逗笑了' },
+  ];
+  const lastActivityRef = useRef(Date.now());
+  const [isIdle, setIsIdle] = useState(false);
+  const idleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const entertainRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const recordActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    if (isIdle) {
+      setIsIdle(false);
+      setAgentHidden(false);
+    }
+  }, [isIdle]);
+
+  // 全局监听用户操作
+  useEffect(() => {
+    const handler = () => recordActivity();
+    window.addEventListener('mousedown', handler);
+    window.addEventListener('keydown', handler);
+    window.addEventListener('touchstart', handler);
+    return () => {
+      window.removeEventListener('mousedown', handler);
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('touchstart', handler);
+    };
+  }, [recordActivity]);
+
+  // 空闲检测循环
+  useEffect(() => {
+    idleCheckRef.current = setInterval(() => {
+      if (isGenerating) return;
+      const elapsed = Date.now() - lastActivityRef.current;
+      if (elapsed > 25000 && !isIdle) {
+        setIsIdle(true);
+      } else if (elapsed > 180000) {
+        // 3分钟无操作 → 去睡觉
+        setAgentHidden(true);
+      } else if (elapsed < 25000 && isIdle) {
+        setIsIdle(false);
+        setAgentHidden(false);
+      }
+    }, 3000);
+    return () => { if (idleCheckRef.current) clearInterval(idleCheckRef.current); };
+  }, [isGenerating, isIdle]);
+
+  // 空闲时自娱自乐
+  useEffect(() => {
+    if (!isIdle) {
+      if (entertainRef.current) { clearInterval(entertainRef.current); entertainRef.current = null; }
+      return;
+    }
+    // 初始随机延迟后开始娱乐
+    const startDelay = setTimeout(() => {
+      entertainRef.current = setInterval(() => {
+        const pick = entertainments[Math.floor(Math.random() * entertainments.length)];
+        setAgentStatus(pick.status);
+        setAgentMessage(pick.msg);
+      }, 5000 + Math.random() * 7000);
+    }, 3000 + Math.random() * 5000);
+    return () => { clearTimeout(startDelay); if (entertainRef.current) clearInterval(entertainRef.current); };
+  }, [isIdle]);
 
   useEffect(() => {
     loadProjects();
@@ -167,7 +244,6 @@ export default function App() {
         status={agentStatus}
         message={agentMessage}
         hidden={agentHidden}
-        onToggle={toggleAgentHidden}
       />
 
       <div className="main">
