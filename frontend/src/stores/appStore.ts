@@ -435,7 +435,22 @@ export const useStore = create<AppState>((set, get) => ({
             }],
           }));
         } else if (event.type === 'model_info') {
-          set({ currentModelName: event.model });
+          set({ currentModelName: event.model, contextUsage: null, capacityWarning: null });
+        } else if (event.type === 'context_info') {
+          set({
+            contextUsage: {
+              totalTokens: event.total_tokens,
+              maxTokens: event.max_tokens,
+              percentage: event.percentage,
+              usageStr: event.usage_str,
+              progressBar: event.progress_bar,
+              historyCount: event.history_count,
+            },
+          });
+        } else if (event.type === 'capacity_warning') {
+          set({
+            capacityWarning: { message: event.message, percentage: event.percentage },
+          });
         } else if (event.type === 'user_msg') {
           set(state => ({
             messages: state.messages.map(m =>
