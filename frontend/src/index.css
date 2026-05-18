@@ -775,25 +775,10 @@ body {
 
 /* ═══ Markmap ═══ */
 #mindmap-wrap {
-  flex: 1;
-  min-height: 0;
-  padding: 20px;
+/* ── 思维导图（CustomMindMap 渲染） ── */
+.drawer-body {
+  padding: 0 !important;
 }
-#mindmap-wrap svg { width:100% !important; height:100% !important; }
-#mindmap-wrap.markmap-dark .markmap {
-  --markmap-text-color: #c9d1d9;
-  --markmap-circle-open-bg: #1c2128;
-  --markmap-a-color: #58a6ff;
-  --markmap-a-hover-color: #79c0ff;
-  --markmap-code-bg: #1c2128;
-  --markmap-code-color: #c9d1d9;
-  --markmap-highlight-bg: rgba(210,153,34,0.15);
-  --markmap-highlight-node-bg: rgba(88,166,255,0.12);
-}
-#mindmap-wrap .markmap-node > circle,
-#mindmap-wrap .markmap-node > rect { fill:#1c2128 !important; stroke:#484f58 !important; }
-#mindmap-wrap .markmap-node > g > rect { fill:#1c2128 !important; stroke:#484f58 !important; }
-#mindmap-wrap .markmap-link { stroke:#484f58 !important; }
 
 /* ═══ Hermes 实时日志面板（终端风格）═══ */
 .hermes-log-panel {

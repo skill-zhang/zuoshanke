@@ -194,8 +194,8 @@ export function ActionMapDrawer() {
     setExpandedTool(toolName);
     setToolSkillLoading(true);
     try {
-      const data = await getToolSkill(toolName);
-      setToolSkillContent(data.content);
+      const res = await getToolSkill(toolName);
+      setToolSkillContent(res.data?.content || '');
     } catch (e) {
       setToolSkillContent(`❌ 加载失败: ${e}`);
     } finally {
