@@ -545,12 +545,14 @@ def ai_scene_chat_stream(
         reply_messages.append({"role": "system", "content": (
             f"=== 用户输入背景设定 ===\n{user_context}\n====================="
         )})
-    # 🆕 跨会话记忆注入
+    # 🆕 跨会话记忆注入（user prompt 层，仅供参考，不相关可忽略）
     memory_block = _build_memory_block(db, user_content)
+    # 记忆块拼到 user 消息开头，不作为 system 铁律
+    user_msg = f"{_weather_prefix}{tree_ctx}\n\n用户说: {user_content}\n\n请分析并回复。"
     if memory_block:
-        reply_messages.append({"role": "system", "content": memory_block})
+        user_msg = memory_block + "\n\n---\n\n" + user_msg
     reply_messages.extend(history_api or [])
-    reply_messages.append({"role": "user", "content": f"{_weather_prefix}{tree_ctx}\n\n用户说: {user_content}\n\n请分析并回复。"})
+    reply_messages.append({"role": "user", "content": user_msg})
 
     full_reply = ""
     for token in _stream_qwen(reply_messages, temperature=0.7):
@@ -791,16 +793,17 @@ def ai_scene_ask_missing_stream(
         messages.append({"role": "system", "content": (
             f"=== 用户输入背景设定 ===\n{user_context}\n====================="
         )})
-    # 🆕 跨会话记忆注入
+    # 🆕 跨会话记忆注入（user prompt 层，仅供参考，不相关可忽略）
     memory_block = _build_memory_block(db, user_content)
-    if memory_block:
-        messages.append({"role": "system", "content": memory_block})
     messages.extend(history_api)
-    messages.append({"role": "user", "content": (
+    user_msg = (
         f"用户说: {user_content}\n\n"
         f"我还需要确认以下信息才能完整答复：\n{questions}\n\n"
         "请用自然的语气问用户这些问题。"
-    )})
+    )
+    if memory_block:
+        user_msg = memory_block + "\n\n---\n\n" + user_msg
+    messages.append({"role": "user", "content": user_msg})
 
     full_reply = ""
     for token in _stream_qwen(messages, temperature=0.7):
@@ -851,8 +854,13 @@ def ai_scene_light_chat_stream(
         messages.append({"role": "system", "content": (
             f"=== 用户输入背景设定 ===\n{user_context}\n====================="
         )})
+    # 🆕 跨会话记忆注入（user prompt 层，仅供参考，不相关可忽略）
+    memory_block = _build_memory_block(db, user_content)
+    user_msg = f"{_weather_prefix}{user_content}"
+    if memory_block:
+        user_msg = memory_block + "\n\n---\n\n" + user_msg
     messages.extend(history_api)
-    messages.append({"role": "user", "content": f"{_weather_prefix}{user_content}"})
+    messages.append({"role": "user", "content": user_msg})
 
     full_reply = ""
     for token in _stream_qwen(messages, temperature=0.7):

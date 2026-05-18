@@ -207,6 +207,8 @@ export type StreamEvent =
   | { type: 'tool_cards'; cards: ToolCard[] }
   | { type: 'tool_status'; tool: string; status: 'running' | 'done' | 'error'; success?: boolean; message: string }
   | { type: 'model_info'; model: string; complexity: string | null }
+  | { type: 'context_info'; total_tokens: number; max_tokens: number; percentage: number; usage_str: string; progress_bar: string; history_count: number }
+  | { type: 'capacity_warning'; total_tokens: number; max_tokens: number; percentage: number; message: string }
   | { type: 'token'; token: string }
   | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string; model?: string }
   | { type: 'error'; message: string };
@@ -417,10 +419,6 @@ export interface ActionExecutionLog {
 export const getActionMapLogs = (actionMapId: string) =>
   request<ActionExecutionLog[]>(`/action-maps/${actionMapId}/logs`);
 
-// ═══ 工具文档 ═══
-export const getToolSkill = (toolName: string) =>
-  request<{ name: string; content: string }>(`/tools/${toolName}/skill`);
-
 
 // ═══ 记忆系统 🆕 ═══
 export interface AgentMemory {
@@ -462,6 +460,48 @@ export const updateSkill = (name: string, data: { description?: string; content?
   request<{ success: boolean }>('/skills/' + encodeURIComponent(name), { method: 'PUT', body: JSON.stringify(data) });
 export const deleteSkill = (name: string) =>
   request<{ success: boolean }>('/skills/' + encodeURIComponent(name), { method: 'DELETE' });
+
+// ═══ 工具管理 ═══
+export interface ToolSummary {
+  name: string; description: string; category: string; verified: boolean;
+  params_count: number; preexecute_enabled: boolean;
+  preexecute_triggers_count: number; has_skill: boolean;
+}
+export interface ToolParam {
+  name: string; type: string; required: boolean; description: string;
+}
+export interface ToolDetail {
+  name: string; description: string; file: string; function: string;
+  parameters: ToolParam[]; returns: string; category: string; verified: boolean;
+  preexecute: { enabled: boolean; triggers: string[]; requires_city: boolean };
+  has_skill: boolean; skill_content: string | null;
+}
+export const listTools = (category?: string) => {
+  const qs = category ? '?category=' + encodeURIComponent(category) : '';
+  return request<{ success: boolean; data: ToolSummary[] }>('/tools' + qs);
+};
+export const getTool = (name: string) =>
+  request<{ success: boolean; data: ToolDetail }>('/tools/' + encodeURIComponent(name));
+export const createTool = (data: {
+  name: string; description: string; file: string; function: string;
+  parameters?: ToolParam[]; returns?: string; category?: string; verified?: boolean;
+  preexecute?: { enabled?: boolean; triggers?: string[]; requires_city?: boolean };
+}) => request<{ success: boolean; data: ToolDetail }>('/tools', { method: 'POST', body: JSON.stringify(data) });
+export const updateTool = (name: string, data: {
+  description?: string; file?: string; function?: string;
+  parameters?: ToolParam[]; returns?: string; category?: string; verified?: boolean;
+}) => request<{ success: boolean; data: ToolDetail }>('/tools/' + encodeURIComponent(name), { method: 'PUT', body: JSON.stringify(data) });
+export const deleteTool = (name: string) =>
+  request<{ success: boolean }>('/tools/' + encodeURIComponent(name), { method: 'DELETE' });
+export const updatePreexecute = (name: string, data: {
+  enabled?: boolean; triggers?: string[]; requires_city?: boolean;
+}) => request<{ success: boolean; data: ToolDetail }>('/tools/' + encodeURIComponent(name) + '/preexecute', { method: 'PUT', body: JSON.stringify(data) });
+export const getToolSkill = (name: string) =>
+  request<{ success: boolean; data: { name: string; content: string } }>('/tools/' + encodeURIComponent(name) + '/skill');
+export const putToolSkill = (name: string, content: string) =>
+  request<{ success: boolean }>('/tools/' + encodeURIComponent(name) + '/skill', { method: 'PUT', body: JSON.stringify({ content }) });
+export const deleteToolSkill = (name: string) =>
+  request<{ success: boolean }>('/tools/' + encodeURIComponent(name) + '/skill', { method: 'DELETE' });
 
 // ═══ 系统设置 ═══
 export interface RouteConfig {

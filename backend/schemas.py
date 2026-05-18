@@ -299,6 +299,7 @@ class RouteConfig(BaseModel):
     temperature: float
     max_tokens: int
     repeat_penalty: float
+    context_length: int = 32768  # 模型最大上下文 Token 数（默认 32K）
 
 class SystemPrompts(BaseModel):
     """人设配置"""

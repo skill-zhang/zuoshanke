@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { PlazaView } from './components/PlazaView';
 import { WorkshopView } from './components/WorkshopView';
+import { ToolsView } from './components/ToolsView';
 import { ProjectList } from './components/ProjectList';
 import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
 import { ActionMapDrawer } from './components/ActionMapDrawer';
@@ -143,6 +144,9 @@ export default function App() {
              onEnterScene={handleEnterScene}
              onCreateScene={handleCreateScene}
            />
+         ) :
+         view === 'tools' ? (
+           <ToolsView />
          ) : (
            <ChatView />
          )}

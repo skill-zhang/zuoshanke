@@ -29,14 +29,17 @@ SCENE_SYSTEM_PROMPT = (
 
 
 def _build_memory_block(db, query: str) -> str:
-    """从记忆系统提取相关记忆，格式化为注入文本"""
+    """从记忆系统提取相关记忆，格式化为注入文本
+
+    返回格式为「仅供参考」的 User Prompt 层内容，不再是 System Prompt 铁律。
+    """
     if db is None:
         return ""
     mm = MemoryManager(db)
     memories = mm.get_top_for_context(query, max_count=5)
     if not memories:
         return ""
-    lines = ["## 关于用户（跨会话记忆）"]
+    lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
     for mem in memories:
         level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
         icon = level_icon.get(mem["priority_level"], "📝")
@@ -91,12 +94,10 @@ def build_scene_context(
     if user_context:
         system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
 
-    # ── 2. 🆕 记忆块 ──
+    # ── 2. 记忆块 — 从 system 移到 user prompt（见下方 #8） ──
     memory_block = _build_memory_block(db, user_content)
-    if memory_block:
-        system_parts.append(memory_block)
 
-    # ── 3. 🆕 技能块 ──
+    # ── 3. 技能块 ──
     skill_block = _build_skill_block(user_content)
     if skill_block:
         system_parts.append(skill_block)
@@ -147,12 +148,14 @@ def build_scene_context(
             role = "assistant" if m["role"] == "ai" else m["role"]
             messages.append({"role": role, "content": m["content"]})
 
-    # ── 8. 天气桥接上下文 ──
+    # ── 8. 天气桥接上下文 + 用户消息 + 记忆块（仅供参考） ──
     user_parts = []
+    if memory_block:
+        user_parts.append(memory_block)
     if weather_context:
         user_parts.append(weather_context)
     user_parts.append(user_content)
-    user_msg = "\n\n".join(user_parts)
+    user_msg = "\n\n---\n\n".join(user_parts)
 
     messages.append({"role": "user", "content": user_msg})
 

@@ -450,6 +450,67 @@ body {
   border-top: 1px solid rgba(48,54,61,0.4);
   flex-shrink: 0;
 }
+
+/* ═══ Token 用量状态条 ═══ */
+.token-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  margin: 0 8px 4px;
+  font-size: 11px;
+  color: #8b949e;
+  border: 1px solid rgba(48,54,61,0.6);
+  border-radius: 8px;
+  background: rgba(13,17,23,0.6);
+}
+.token-bar-label {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.token-bar-text {
+  flex-shrink: 0;
+  font-family: monospace;
+  min-width: 100px;
+}
+.token-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(48,54,61,0.6);
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 200px;
+}
+.token-bar-fill {
+  height: 100%;
+  background: #4CAF50;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.token-bar-fill.token-bar-warn {
+  background: #FF9800;
+}
+.token-bar-fill.token-bar-danger {
+  background: #f44336;
+}
+.token-bar-pct {
+  flex-shrink: 0;
+  font-family: monospace;
+  min-width: 80px;
+}
+
+/* ═══ 容量警告 ═══ */
+.capacity-warning {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  margin: 0 8px 4px;
+  font-size: 12px;
+  color: #d84315;
+  background: rgba(255, 243, 224, 0.15);
+  border: 1px solid rgba(216, 67, 21, 0.3);
+  border-radius: 8px;
+}
 .chat-input-collapse-bar {
   display: flex; align-items: center;
   height: 8px; padding: 0 10px; cursor: pointer; user-select: none;

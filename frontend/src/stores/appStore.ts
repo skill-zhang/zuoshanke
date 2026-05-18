@@ -19,7 +19,7 @@ import {
   SettingsData, ServiceStatus, RouteConfig,
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop';
+export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools';
 
 interface AppState {
   view: ViewPage;
@@ -91,6 +91,8 @@ interface AppState {
   // ═══ 流式状态 ═══
   isGenerating: boolean;
   currentModelName: string | null;   // 当前使用的模型名（来自 SSE model_info 事件）
+  contextUsage: { totalTokens: number; maxTokens: number; percentage: number; usageStr: string; progressBar: string; historyCount: number } | null;
+  capacityWarning: { message: string; percentage: number } | null;
   currentToolCards: ToolCard[];      // 当前 AI 回复的工具卡片数据
   currentToolLogs: ToolLog[];        // 当前工具执行记录（纯前端，不存库）
 
@@ -137,6 +139,8 @@ export const useStore = create<AppState>((set, get) => ({
   setView: (v) => set({ view: v }),
   isGenerating: false,
   currentModelName: null,
+  contextUsage: null,
+  capacityWarning: null,
   currentToolCards: [],
   currentToolLogs: [],
 
@@ -458,7 +462,22 @@ export const useStore = create<AppState>((set, get) => ({
 
       for await (const event of stream) {
         if (event.type === 'model_info') {
-          set({ currentModelName: event.model });
+          set({ currentModelName: event.model, contextUsage: null, capacityWarning: null });
+        } else if (event.type === 'context_info') {
+          set({
+            contextUsage: {
+              totalTokens: event.total_tokens,
+              maxTokens: event.max_tokens,
+              percentage: event.percentage,
+              usageStr: event.usage_str,
+              progressBar: event.progress_bar,
+              historyCount: event.history_count,
+            },
+          });
+        } else if (event.type === 'capacity_warning') {
+          set({
+            capacityWarning: { message: event.message, percentage: event.percentage },
+          });
         } else if (event.type === 'user_msg') {
           // 收到服务器确认的用户消息 → 替换临时 ID
           set(state => ({

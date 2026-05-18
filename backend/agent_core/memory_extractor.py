@@ -33,6 +33,30 @@ QWEN_API = "http://localhost:8083/v1/chat/completions"
 FAST_TRIGGERS = ["记住", "别忘了", "牢记", "很重要", "非常重要",
                  "以后都这样", "记住了", "记牢"]
 
+# ── 话题域（每个记忆提取时都要打一个 topic 标签） ──
+TOPIC_DOMAINS = [
+    "personal_info",  # 姓名、年龄、职业、所在地等身份信息
+    "preference",     # 喜好、偏好（颜色、温度、食物、话题等）
+    "habit",          # 习惯、日常作息
+    "work",           # 工作、项目、技术约束
+    "entertainment",  # 娱乐、影视、游戏、小说、音乐
+    "food",           # 饮食、餐饮、烹饪
+    "travel",         # 旅游、出行、景点
+    "tech",           # 技术、编程、工具
+    "shopping",       # 购物、消费
+    "health",         # 健康、运动、养生
+    "education",      # 学习、课程、教学
+    "general",        # 通用/兜底（不属于以上任何分类）
+]
+
+# 快速通道模式 → topic 映射
+_FAST_TOPIC_MAP = {
+    "preference": ["我喜欢", "我爱", "我偏爱", "我倾向于", "偏好", "偏爱"],
+    "personal_info": ["我叫", "我是", "我的名字叫", "名字叫", "英文名",
+                      "我住在", "我居住在", "我家在", "居住在"],
+    "habit": ["我习惯", "我通常", "我一般", "我总是", "我经常"],
+}
+
 # ── 提取器的 System Prompt ──
 EXTRACTOR_SYSTEM_PROMPT = """你是记忆提取专家，负责从对话中提炼出值得长期记住的信息。
 
@@ -61,6 +85,7 @@ EXTRACTOR_SYSTEM_PROMPT = """你是记忆提取专家，负责从对话中提炼
     "content": "记忆内容，清晰完整的陈述句",
     "category": "user",
     "tags": ["标签1", "标签2"],
+    "topic": "personal_info | preference | habit | work | entertainment | food | travel | tech | shopping | health | education | general",
     "confidence": 0.0-1.0
   }
 ]
@@ -69,6 +94,20 @@ action 含义：
 - create: 创建新记忆
 - reinforce: 强化已有记忆（当新对话确认/补充了已有记忆时）
 - ignore: 本条不处理（confidence < 0.6 时使用）
+
+topic 含义：该记忆属于哪个话题域。用来在注入时做话题匹配，避免问电影时把"喜欢修仙"塞进来。
+- personal_info: 姓名/年龄/职业/所在地等身份信息
+- preference: 喜好、偏好
+- habit: 习惯、日常作息
+- entertainment: 娱乐、影视、游戏、小说、音乐
+- food: 饮食、餐饮、烹饪
+- travel: 旅游、出行、景点
+- tech: 技术、编程、工具
+- shopping: 购物、消费
+- health: 健康、运动、养生
+- education: 学习、课程、教学
+- work: 工作、项目、技术约束
+- general: 不属于以上任何分类时用这个兜底
 
 confidence 含义：
 - ≥0.9: 非常确定，直接入库
@@ -130,23 +169,47 @@ class MemoryExtractor:
                 extracted = self.mm._extract_fact(user_content)
                 if extracted:
                     key, content = extracted
+                    # 推断 topic：根据匹配的模式确定话题域
+                    topic = self._infer_topic_from_pattern(user_content, key)
+                    tags = [topic]
+
                     existing = self.mm.get(key)
                     if existing:
                         self.mm.mark_explicit(key)
-                        self.mm.update(key, content=content)
+                        self.mm.update(key, content=content, tags=tags)
                         results.append({"action": "reinforce_pin",
                                         "key": key, "content": content, "boost": 3.0,
-                                        "source": "fast_path"})
+                                        "source": "fast_path", "topic": topic})
                     else:
-                        self.mm.add("user", key, content, tags=["自动提取"],
+                        self.mm.add("user", key, content, tags=tags,
                                     source="llm", base_weight=4)
                         self.mm.mark_explicit(key)
                         results.append({"action": "create",
                                         "key": key, "content": content, "boost": 3.0,
-                                        "source": "fast_path"})
+                                        "source": "fast_path", "topic": topic})
                 # 至少处理一个信号，避免重复
                 break
         return results
+
+    def _infer_topic_from_pattern(self, text: str, key: str) -> str:
+        """根据提取的关键词和模式推断话题域"""
+        # 先看 key 前缀
+        key_prefix_map = {
+            "name": "personal_info",
+            "city": "personal_info",
+            "preference": "preference",
+            "habit": "habit",
+            "my_": "personal_info",
+        }
+        for prefix, topic in key_prefix_map.items():
+            if key.startswith(prefix):
+                return topic
+        # 再看文本中的关键词
+        for topic, triggers in _FAST_TOPIC_MAP.items():
+            for t in triggers:
+                if t in text:
+                    return topic
+        return "general"
 
     # ── LLM 通道 ──
 
@@ -261,7 +324,11 @@ class MemoryExtractor:
             key = act.get("key", "")
             content = act.get("content", "")
             category = act.get("category", "user")
-            tags = act.get("tags", ["自动提取"])
+            tags = act.get("tags", ["general"])
+            topic = act.get("topic", "general")
+            # topic 作为 tags 的第一个元素，确保话题匹配可用
+            if topic not in tags:
+                tags = [topic] + [t for t in tags if t != topic]
             confidence = act.get("confidence", 0.5)
 
             if action == "ignore" or confidence < 0.7:

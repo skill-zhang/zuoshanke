@@ -138,9 +138,46 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
                         content=user_msg.content, created_at=user_msg.created_at.isoformat())
 
         # 2. 模型信息
-        yield sse_event("model_info", model="Qwen3.5 本地", complexity=None)
+        route_cfg = _get_route_cfg("channel")
+        model_name = route_cfg.get("model", "qwen3.5-9b")
+        yield sse_event("model_info", model=model_name, complexity=None)
 
-        # 3. 流式 AI 回复
+        # 3. Context 用量估算
+        from agent_core.token_counter import (
+            estimate_messages_tokens, get_context_length_from_route,
+            context_usage_str, progress_bar,
+        )
+        # 构建实际的 API 消息来计算 token
+        api_msgs = _build_channel_msgs(history_dicts, channel.is_default)
+        total_tokens = estimate_messages_tokens(api_msgs) + estimate_messages_tokens(
+            [{"role": "user", "content": data.content}]
+        )
+        max_tokens = get_context_length_from_route(route_cfg)
+        pct = round(total_tokens / max_tokens * 100, 1) if max_tokens > 0 else 0
+
+        usage_info = {
+            "total_tokens": total_tokens,
+            "max_tokens": max_tokens,
+            "percentage": pct,
+            "usage_str": context_usage_str(total_tokens, max_tokens),
+            "progress_bar": progress_bar(pct),
+            "history_count": len(history_dicts),
+        }
+        yield sse_event("context_info", **usage_info)
+
+        # 4. 容量警告（>= 75%）
+        if pct >= 75:
+            yield sse_event("capacity_warning",
+                total_tokens=total_tokens,
+                max_tokens=max_tokens,
+                percentage=pct,
+                message=(
+                    f"⚠️ 上下文已使用 {context_usage_str(total_tokens, max_tokens)}，"
+                    f"建议压缩摘要或重置会话以避免达到上限。"
+                ),
+            )
+
+        # 5. 流式 AI 回复
         full_content = ""
         for token in ai_channel_chat_stream(history_dicts, is_default=channel.is_default):
             if token is None:
@@ -149,22 +186,22 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
             full_content += token
             yield sse_event("token", token=token)
 
-        # 4. 保存 AI 消息（独立 DB session）
+        # 6. 保存 AI 消息（独立 DB session）
         ai_msg_id = make_id("msg")
         new_db = SessionLocal()
         try:
             ai_msg = Message(
                 id=ai_msg_id, channel_id=channel_id,
-                role="ai", content=full_content, model="Qwen3.5 本地",
+                role="ai", content=full_content, model=model_name,
             )
             new_db.add(ai_msg)
             new_db.commit()
             new_db.refresh(ai_msg)
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_content,
                             created_at=ai_msg.created_at.isoformat(),
-                            model="Qwen3.5 本地")
+                            model=model_name)
 
-            # ── 5. 自动提取记忆（双通道） ──
+            # ── 自动提取记忆（双通道） ──
             try:
                 extract_msgs = history_dicts + [
                     {"role": "user", "content": data.content},
@@ -205,3 +242,35 @@ def _get_channel_history(db: Session, channel_id: str) -> list:
     )
     history.reverse()
     return [{"role": m.role, "content": m.content} for m in history]
+
+
+def _build_channel_msgs(messages: list[dict], is_default: bool = False) -> list[dict]:
+    """构建频道闲聊的完整 API 消息列表（含 system prompt + role 映射）
+    与 ai_engine._build_channel_messages 保持一致，用于 token 预估算。
+    """
+    if is_default:
+        system_content = (
+            "你是坐山客，来自科幻宇宙《吞噬星空》的AI智能体——"
+            "你曾是神王级炼宝宗师，如今化作数字形态，"
+            "以未来科技视角和广博学识与用户交流。"
+            "你不是道士/隐士。"
+            "用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。"
+        )
+    else:
+        system_content = "你是一个专业的AI智能助手，用Markdown格式回复用户的问题。"
+
+    api = [{"role": "system", "content": system_content}]
+    api += [
+        {"role": "assistant" if m["role"] == "ai" else m["role"], "content": m["content"]}
+        for m in messages
+    ]
+    return api
+
+
+def _get_route_cfg(route_name: str = "channel") -> dict:
+    """获取指定路由的配置（含 context_length）"""
+    try:
+        from ai_engine import get_settings
+        return get_settings(route_name)
+    except Exception:
+        return {"model": "qwen3.5-9b", "context_length": 32768}

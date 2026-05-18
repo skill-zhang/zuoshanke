@@ -8,6 +8,7 @@ from router.channels import router as channels_router
 from router.messages import router as messages_router
 from router.action_maps import router as action_maps_router
 from router.tools import router as tools_router
+from router.tools_crud import router as tools_crud_router
 from router.settings import router as settings_router
 from router.memory import router as memory_router      # 🆕 Schema v0.5
 from router.skills import router as skills_router       # 🆕 Schema v0.5
@@ -24,6 +25,7 @@ def register_all_routers(app: FastAPI):
     app.include_router(messages_router)
     app.include_router(action_maps_router)
     app.include_router(tools_router)
+    app.include_router(tools_crud_router)
     app.include_router(settings_router)
     app.include_router(memory_router)     # 🆕
     app.include_router(skills_router)      # 🆕

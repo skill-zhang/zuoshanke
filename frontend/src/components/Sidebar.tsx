@@ -358,6 +358,14 @@ export function Sidebar() {
           <div className="sidebar-label">🧰 系统工具</div>
         </div>
 
+        <div className="sidebar-nav" onClick={() => {
+          setView('tools');
+          useStore.getState().setCurrentScene(null);
+        }}>
+          <span className="nav-icon">🛠️</span>
+          <span>工具管理</span>
+        </div>
+
         <div className="sidebar-nav" onClick={() => useStore.getState().openMemoryDrawer()}>
           <span className="nav-icon">🧠</span>
           <span>记忆管理</span>

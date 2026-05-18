@@ -360,6 +360,8 @@ export function ChatView() {
     sessions, loadSceneSessions, switchSceneSession,
     isGenerating,
     currentModelName,
+    contextUsage,
+    capacityWarning,
     currentToolCards,
     currentToolLogs,
     userContext, saveUserContext,
@@ -767,6 +769,29 @@ export function ChatView() {
 
         {/* 输入区 */}
         <div className="chat-input-area" ref={inputAreaRef}>
+
+          {/* ═══ 容量警告 ═══ */}
+          {capacityWarning && (
+            <div className="capacity-warning">
+              <span>⚠️ {capacityWarning.message}</span>
+            </div>
+          )}
+
+          {/* ═══ Token 用量状态条 ═══ */}
+          {contextUsage && (
+            <div className="token-bar">
+              <span className="token-bar-label">⚡ Token</span>
+              <span className="token-bar-text">{contextUsage.usageStr}</span>
+              <div className="token-bar-track">
+                <div
+                  className={`token-bar-fill ${contextUsage.percentage >= 75 ? 'token-bar-danger' : contextUsage.percentage >= 50 ? 'token-bar-warn' : ''}`}
+                  style={{ width: `${Math.min(contextUsage.percentage, 100)}%` }}
+                />
+              </div>
+              <span className="token-bar-pct">{contextUsage.progressBar}</span>
+            </div>
+          )}
+
           <div className="chat-input-collapse-bar">
             <div className="chat-input-collapse-bar-left" />
             <div className="chat-input-collapse-bar-center" onClick={() => setInputCollapsed(!inputCollapsed)} title={inputCollapsed ? '展开输入区' : '收起输入区'}>
