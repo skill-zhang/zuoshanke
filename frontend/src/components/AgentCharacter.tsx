@@ -99,7 +99,7 @@ export function AgentCharacter({ status = 'idle', message, hidden = false, onTog
             <span className="agent-char-text">{msg}</span>
           </div>
           <div className="agent-char-canvas">
-            <svg viewBox="10 0 52 50" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="10 0 52 50" width="56" height="56" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="#00d4ff" stopOpacity="0.09"/>
