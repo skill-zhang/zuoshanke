@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 科技男孩 v2.2</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif;
+  background:#0d1117; color:#c9d1d9;
+  min-height:100vh; display:flex; flex-direction:column;
+}
+.topbar {
+  height:46px; background:#161b22; border-bottom:1px solid #30363d;
+  display:flex; align-items:center; padding:0 18px; gap:24px; flex-shrink:0;
+}
+.logo-group { display:flex; align-items:center; gap:10px; cursor:pointer; flex-shrink:0; }
+.logo-text {
+  font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+  font-weight:900; font-size:24px; letter-spacing:2px;
+  background:linear-gradient(180deg,#ffd700,#f0c040 30%,#c8a84e 60%,#a08030 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  filter:drop-shadow(0 0 6px rgba(255,215,0,0.3));
+}
+.spacer { flex:1; }
+.btn { padding:5px 12px; border-radius:5px; border:1px solid #30363d; background:#21262d; color:#c9d1d9; font-size:13px; cursor:pointer; white-space:nowrap; }
+.btn:hover { background:#1c2128; }
+
+/* ═══ Character ═══ */
+.char-float-area {
+  position:fixed; top:0; left:0; width:100%;
+  z-index:100;
+  display:flex; justify-content:center;
+  pointer-events:none;
+}
+.char-container {
+  position:relative;
+  width:60px; height:66px;
+  pointer-events:auto;
+  cursor:pointer;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.char-container.hidden-char {
+  opacity:0; transform:translateY(-20px) scale(0.8);
+  pointer-events:none;
+}
+.char-canvas {
+  width:56px; height:56px;
+  position:absolute;
+  top:4px;
+  left:50%;
+  transform:translateX(-50%);
+  filter:drop-shadow(0 2px 16px rgba(0,212,255,0.12));
+  transition:filter 0.3s;
+}
+.char-canvas:hover {
+  filter:drop-shadow(0 2px 28px rgba(0,212,255,0.25));
+}
+.char-canvas svg { width:100%; height:100%; }
+
+/* ═══ Speech Bubble — RIGHT side ═══ */
+.speech-bubble {
+  position:absolute;
+  top:10px;
+  left:64px;
+  background:#1a2332;
+  border:1px solid #00d4ff55;
+  border-radius:7px;
+  padding:3px 9px;
+  font-size:11px;
+  color:#c9d1d9;
+  white-space:nowrap;
+  max-width:180px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  opacity:0;
+  transform:translateX(-4px) scale(0.92);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events:none;
+  z-index:101;
+}
+.speech-bubble.show {
+  opacity:1;
+  transform:translateX(0) scale(1);
+}
+.speech-bubble::before {
+  content:'';
+  position:absolute;
+  left:-4px;
+  top:7px;
+  border:4px solid transparent;
+  border-right-color:#1a2332;
+}
+.speech-bubble .dot {
+  display:inline-block; width:4px; height:4px; border-radius:50%;
+  margin-right:3px; vertical-align:middle;
+  animation:pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Toggle hint */
+.toggle-char-btn {
+  position:fixed; top:6px; left:50%; transform:translateX(-50%);
+  z-index:102;
+  background:#21262d; border:1px solid #30363d;
+  border-radius:8px; padding:2px 8px; font-size:10px; color:#484f58;
+  cursor:pointer; transition:all 0.2s;
+  opacity:0; pointer-events:none;
+}
+.toggle-char-btn:hover { color:#8b949e; border-color:#58a6ff55; }
+.toggle-char-btn.show-btn { opacity:1; pointer-events:auto; }
+
+/* Statusbar */
+.statusbar {
+  height:26px; background:#161b22; border-top:1px solid #30363d;
+  display:flex; align-items:center; padding:0 14px; gap:14px;
+  font-size:12px; color:#8b949e; flex-shrink:0;
+}
+.statusbar .dot { width:7px; height:7px; border-radius:50%; }
+.statusbar .dot.green { background:#3fb950; }
+
+/* Main */
+.main { flex:1; display:flex; overflow:hidden; }
+.chat-panel { flex:1; display:flex; flex-direction:column; padding:20px; }
+
+.control-panel {
+  background:#161b22; border:1px solid #30363d; border-radius:8px;
+  padding:14px 18px; margin-bottom:14px;
+}
+.control-panel h3 { font-size:12px; color:#8b949e; margin-bottom:8px; letter-spacing:1px; }
+.state-buttons { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px; }
+.state-btn {
+  padding:4px 10px; border-radius:5px; border:1px solid #30363d;
+  background:#0d1117; color:#8b949e; font-size:11px; cursor:pointer; transition:all 0.15s;
+}
+.state-btn:hover { border-color:#00d4ff77; color:#c9d1d9; }
+.state-btn.active { background:#0a2a3f; border-color:#00d4ff; color:#00d4ff; }
+.custom-msg-input { display:flex; gap:6px; align-items:center; }
+.custom-msg-input input {
+  flex:1; background:#0d1117; border:1px solid #30363d;
+  border-radius:4px; padding:4px 8px; color:#c9d1d9; font-size:12px; outline:none;
+}
+.custom-msg-input input:focus { border-color:#00d4ff; }
+.demo-chat {
+  flex:1; display:flex; flex-direction:column; gap:8px;
+  padding:14px 18px; background:rgba(22,27,34,0.6);
+  border:1px solid #30363d44; border-radius:8px; min-height:140px;
+}
+.msg { padding:6px 12px; border-radius:6px; max-width:70%; font-size:13px; line-height:1.5; }
+.msg.user { align-self:flex-end; background:#0a2a3f; border:1px solid #00d4ff44; }
+.msg.agent { align-self:flex-start; background:#1a2332; border:1px solid #30363d; }
+
+@keyframes pulse-dot { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.3)} }
+@keyframes hud-float { 0%,100%{transform:translateY(0) rotate(0);opacity:0.55} 50%{transform:translateY(-1px) rotate(1deg);opacity:0.85} }
+.hud-element { animation:hud-float 2.5s ease-in-out infinite; }
+@keyframes scan-pulse { 0%,100%{opacity:0.08} 50%{opacity:0.25} }
+.scan-line { animation:scan-pulse 1.5s ease-in-out infinite; }
+@keyframes visor-pulse { 0%,100%{opacity:0.35;filter:drop-shadow(0 0 1px #00d4ff)} 50%{opacity:0.6;filter:drop-shadow(0 0 4px #00d4ff)} }
+.visor-glow { animation:visor-pulse 2s ease-in-out infinite; }
+@keyframes breathe-sm { 0%,100%{transform:scale(1)} 50%{transform:scale(1.008)} }
+.char-idle .char-canvas { animation:breathe-sm 3s ease-in-out infinite; }
+@keyframes greet-bounce-sm {
+  0%,100%{transform:translateX(-50%) translateY(0)}
+  30%{transform:translateX(-50%) translateY(-5px)}
+  60%{transform:translateX(-50%) translateY(-1px)}
+}
+.char-greeting .char-canvas { animation:greet-bounce-sm 0.8s ease-out 2; }
+@keyframes think-tilt-sm { 0%,100%{transform:translateX(-50%) rotate(0)} 50%{transform:translateX(-50%) rotate(3deg)} }
+.char-thinking .char-canvas { animation:think-tilt-sm 1.2s ease-in-out infinite; }
+@keyframes work-pulse-sm { 0%,100%{transform:translateX(-50%) scale(1)} 50%{transform:translateX(-50%) scale(1.025)} }
+.char-working .char-canvas { animation:work-pulse-sm 0.5s ease-in-out infinite; }
+@keyframes done-pop-sm {
+  0%{transform:translateX(-50%) scale(1)}
+  30%{transform:translateX(-50%) scale(1.1) rotate(-3deg)}
+  60%{transform:translateX(-50%) scale(1.12) rotate(3deg)}
+  100%{transform:translateX(-50%) scale(1)}
+}
+.char-done .char-canvas { animation:done-pop-sm 0.7s ease-out 1; }
+@keyframes shake-sm { 0%,100%{transform:translateX(-50%)} 15%{transform:translateX(-50%) translateY(-3px)} 30%{transform:translateX(-50%) translateY(3px)} 45%{transform:translateX(-50%) translateY(-2px)} 60%{transform:translateX(-50%) translateY(2px)} }
+.char-error .char-canvas { animation:shake-sm 0.5s ease-in-out 2; }
+@keyframes notify-pulse-sm { 0%,100%{filter:drop-shadow(0 0 6px rgba(0,212,255,0.15))} 50%{filter:drop-shadow(0 0 18px rgba(0,212,255,0.4))} }
+.char-notify .char-canvas { animation:notify-pulse-sm 1s ease-in-out 3; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-group">
+    <svg width="28" height="28" viewBox="0 0 40 40">
+      <polygon points="20,3 38,35 2,35" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+      <polygon points="20,11 31,32 9,32" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round"/>
+      <line x1="20" y1="20" x2="20" y2="27" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="20" cy="18" r="2.5" fill="#58a6ff"/>
+    </svg>
+    <span class="logo-text">坐山客</span>
+  </div>
+  <span class="breadcrumb" style="color:#484f58;">› 天气查询</span>
+  <span class="spacer"></span>
+  <button class="btn">🧠 TM</button>
+  <button class="btn">⚡ AM</button>
+  <button class="btn">⚙</button>
+</div>
+
+<div class="char-float-area">
+  <div class="char-container" id="charContainer">
+
+    <div class="speech-bubble" id="speechBubble">
+      <span class="dot" id="statusDot" style="background:#58a6ff;"></span>
+      <span id="speechText">在线待命</span>
+    </div>
+
+    <div class="char-canvas" id="charCanvas">
+      <svg viewBox="10 0 52 50" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.09"/>
+            <stop offset="60%" stop-color="#00d4ff" stop-opacity="0.025"/>
+            <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="skinTone" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#2a2a3e"/>
+            <stop offset="50%" stop-color="#1e1e32"/>
+            <stop offset="100%" stop-color="#1a1a2e"/>
+          </linearGradient>
+          <linearGradient id="hairGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#1a1a2e"/>
+            <stop offset="50%" stop-color="#16213e"/>
+            <stop offset="100%" stop-color="#0f3460"/>
+          </linearGradient>
+          <linearGradient id="hairStreak" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#00d4ff"/>
+            <stop offset="100%" stop-color="#7b2ff7"/>
+          </linearGradient>
+          <linearGradient id="jacketGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1a2332"/>
+            <stop offset="100%" stop-color="#0f1624"/>
+          </linearGradient>
+          <linearGradient id="visorGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.3"/>
+            <stop offset="50%" stop-color="#00d4ff" stop-opacity="0.06"/>
+            <stop offset="100%" stop-color="#00d4ff" stop-opacity="0.18"/>
+          </linearGradient>
+          <filter id="neonGlow"><feGaussianBlur stdDeviation="0.8"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="softGlow"><feGaussianBlur stdDeviation="0.5"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+
+        <!-- BG Glow -->
+        <circle cx="36" cy="28" r="28" fill="url(#bgGlow)"/>
+
+        <!-- Circuit traces -->
+        <path d="M4 36 L8 32 L8 28 L14 28" fill="none" stroke="#00d4ff" stroke-width="0.8" opacity="0.22" class="scan-line"/>
+        <path d="M68 36 L64 32 L64 28 L58 28" fill="none" stroke="#00d4ff" stroke-width="0.8" opacity="0.22" class="scan-line"/>
+        <circle cx="14" cy="28" r="1" fill="#00d4ff" opacity="0.35"/>
+        <circle cx="58" cy="28" r="1" fill="#00d4ff" opacity="0.35"/>
+
+        <!-- HUD hexes -->
+        <g class="hud-element" style="transform-origin:14px 10px;">
+          <polygon points="12,8 14,7 16,8 16,10 14,11 12,10" fill="none" stroke="#00d4ff" stroke-width="0.5" opacity="0.4"/>
+        </g>
+        <g class="hud-element" style="transform-origin:58px 10px; animation-delay:0.8s;">
+          <polygon points="56,8 58,7 60,8 60,10 58,11 56,10" fill="none" stroke="#7b2ff7" stroke-width="0.5" opacity="0.4"/>
+        </g>
+        <!-- crosshair -->
+        <g opacity="0.1">
+          <line x1="36" y1="6" x2="36" y2="10" stroke="#00d4ff" stroke-width="0.5"/>
+          <line x1="36" y1="48" x2="36" y2="44" stroke="#00d4ff" stroke-width="0.5"/>
+          <line x1="8" y1="28" x2="12" y2="28" stroke="#00d4ff" stroke-width="0.5"/>
+          <line x1="64" y1="28" x2="60" y2="28" stroke="#00d4ff" stroke-width="0.5"/>
+        </g>
+
+        <!-- ═══ UPPER BODY — Dark Jacket ═══ -->
+        <!-- Shoulders base -->
+        <path d="M14 42 L10 44 L12 50 L16 54 L56 54 L60 50 L62 44 L58 42" fill="url(#jacketGrad)" stroke="#1e2a3a" stroke-width="0.8"/>
+        <!-- Collar behind -->
+        <path d="M26 34 Q22 32 24 28 L48 28 Q50 32 46 34 Z" fill="#1a2332" stroke="#1e2a3a" stroke-width="0.6"/>
+        <!-- Collar seams -->
+        <path d="M28 34 L26 28" fill="none" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+        <path d="M44 34 L46 28" fill="none" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+        <!-- Zipper -->
+        <line x1="36" y1="38" x2="36" y2="54" stroke="#1e2a3a" stroke-width="1"/>
+        <!-- Chest armor -->
+        <path d="M24 38 Q30 36 36 36 Q42 36 48 38 L48 46 Q42 48 36 48 Q30 48 24 46 Z" fill="url(#jacketGrad)" stroke="#1e2a3a" stroke-width="0.5" opacity="0.7"/>
+        <!-- Chest emblem -->
+        <polygon points="34,40 36,38 38,40 36,42" fill="none" stroke="#00d4ff" stroke-width="0.6" opacity="0.45" filter="url(#softGlow)"/>
+        <!-- Shoulder dots -->
+        <circle cx="12" cy="46" r="1" fill="#00d4ff" opacity="0.4" filter="url(#softGlow)"/>
+        <circle cx="60" cy="46" r="1" fill="#00d4ff" opacity="0.4" filter="url(#softGlow)"/>
+
+        <!-- ═══ NECK ═══ -->
+        <rect x="32" y="28" width="8" height="6" rx="2" fill="url(#skinTone)" stroke="#2d3748" stroke-width="0.4"/>
+
+        <!-- ═══ FACE ═══ -->
+        <ellipse cx="36" cy="20" rx="10" ry="10.5" fill="url(#skinTone)" stroke="#2d3748" stroke-width="0.6"/>
+        <path d="M26 20 Q26 28 30 30 Q36 31 42 30 Q46 28 46 20" fill="none" stroke="#2d3748" stroke-width="0.4" opacity="0.4"/>
+        <path d="M33 29 Q36 30.5 39 29" fill="none" stroke="#3d4a5c" stroke-width="0.3" opacity="0.25"/>
+
+        <!-- ═══ HAIR ═══ -->
+        <path d="M25 16 Q25 6 30 4 Q33 2 36 3 Q39 2 42 4 Q47 6 47 16 Q43 10 36 9 Q29 10 25 16 Z" fill="url(#hairGrad)"/>
+        <path d="M26 14 Q24 10 27 8 Q29 7 31 8 Q29 10 28 13 Z" fill="url(#hairGrad)"/>
+        <path d="M31 4 Q31 2 32 1 L33 4 Z" fill="url(#hairGrad)"/>
+        <path d="M36 3 Q36 1 37 0 L38 3 Z" fill="url(#hairGrad)"/>
+        <path d="M40 4 Q41 2 42 2 L42 4 Z" fill="url(#hairGrad)"/>
+        <!-- Neon streak -->
+        <path d="M29 13 Q30 9 33 8" fill="none" stroke="url(#hairStreak)" stroke-width="1.5" stroke-linecap="round" filter="url(#softGlow)"/>
+        <path d="M37 10 Q39 7 42 7" fill="none" stroke="url(#hairStreak)" stroke-width="0.8" stroke-linecap="round" opacity="0.5" filter="url(#softGlow)"/>
+
+        <!-- ═══ VISOR ═══ -->
+        <path d="M24 16 Q28 14 36 14 Q44 14 48 16 L48 20 Q44 22 36 22 Q28 22 24 20 Z" fill="url(#visorGrad)" stroke="#00d4ff" stroke-width="0.7" opacity="0.7" class="visor-glow"/>
+        <path d="M26 17 Q30 16 34 16 L35 17 L33 18 Q29 18 26 17 Z" fill="#00d4ff" opacity="0.1"/>
+        <circle cx="36" cy="18" r="1.3" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
+        <circle cx="26" cy="18" r="0.7" fill="#00d4ff" opacity="0.3" filter="url(#neonGlow)"/>
+        <circle cx="46" cy="18" r="0.7" fill="#00d4ff" opacity="0.3" filter="url(#neonGlow)"/>
+        <path d="M25 16 Q31 14.5 36 14.5 Q41 14.5 47 16" fill="none" stroke="#00d4ff" stroke-width="0.35" opacity="0.45"/>
+
+        <!-- ═══ EYES ═══ -->
+        <g id="visorEyes">
+          <path d="M31 17 Q33 16 35 17" fill="none" stroke="#00d4ff" stroke-width="1" stroke-linecap="round" id="eyeL"/>
+          <path d="M37 17 Q39 16 41 17" fill="none" stroke="#00d4ff" stroke-width="1" stroke-linecap="round" id="eyeR"/>
+        </g>
+
+        <!-- ═══ MOUTH ═══ -->
+        <path d="M33 24 Q36 25.5 39 24" fill="none" stroke="#3d4a5c" stroke-width="0.7" stroke-linecap="round" id="mouth"/>
+
+        <!-- Earpiece -->
+        <circle cx="47" cy="16" r="2" fill="none" stroke="#00d4ff" stroke-width="0.4" opacity="0.3"/>
+        <circle cx="47" cy="16" r="0.5" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
+
+        <!-- Bottom data bar -->
+        <g opacity="0.08">
+          <rect x="30" y="52" width="12" height="1.2" rx="0.6" fill="#00d4ff"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="toggle-char-btn" id="toggleHint" onclick="toggleChar()">✕ 隐藏</div>
+
+  </div>
+</div>
+
+<div class="main">
+  <div class="chat-panel">
+    <div class="control-panel">
+      <h3>🎮 坐山客 · 暗色酷版 v2.2（回v2风格+身体+顶贴+气泡右）</h3>
+      <div class="state-buttons">
+        <button class="state-btn active" data-state="idle" onclick="setState('idle')">💤 待命</button>
+        <button class="state-btn" data-state="greeting" onclick="setState('greeting')">👋 招呼</button>
+        <button class="state-btn" data-state="thinking" onclick="setState('thinking')">🤔 思考</button>
+        <button class="state-btn" data-state="working" onclick="setState('working')">⚡ 执行</button>
+        <button class="state-btn" data-state="done" onclick="setState('done')">✅ 搞定</button>
+        <button class="state-btn" data-state="error" onclick="setState('error')">⚠️ 出错</button>
+        <button class="state-btn" data-state="notify" onclick="setState('notify')">🔔 通知</button>
+      </div>
+      <div class="custom-msg-input">
+        <input type="text" id="customMsg" placeholder="自定义..." value="北京今日晴，24°C">
+        <button class="state-btn" onclick="setCustomMsg()">💬</button>
+        <button class="state-btn" style="color:#6e7681;" onclick="toggleChar()">👁 隐</button>
+      </div>
+    </div>
+    <div class="demo-chat">
+      <div class="msg agent">‎👋 来了来了，今天啥事？</div>
+      <div class="msg user">查北京天气</div>
+      <div class="msg agent">‎🤔 扫一下...</div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span class="dot green"></span>
+  坐山客 v2.2
+  <span>|</span>
+  角色: <span id="statusBarState">待命</span>
+  <span>|</span>
+  <span style="color:#484f58;cursor:pointer;" onclick="toggleChar()">[隐藏]</span>
+</div>
+
+<script>
+const states = {
+  idle:     { label:'待命', color:'#58a6ff', bubble:'在线待命',           face:{eyes:'closed',mouth:'smile'} },
+  greeting: { label:'招呼', color:'#00d4ff', bubble:'清泉，来了啊！👋',   face:{eyes:'open',mouth:'bigSmile'} },
+  thinking: { label:'思考', color:'#d29922', bubble:'唔...我看看',        face:{eyes:'side',mouth:'pursed'} },
+  working:  { label:'执行', color:'#bc8cff', bubble:'处理中，别急',       face:{eyes:'focused',mouth:'neutral'} },
+  done:     { label:'搞定', color:'#3fb950', bubble:'搞定！✅',           face:{eyes:'happy',mouth:'big'} },
+  error:    { label:'出错', color:'#f85149', bubble:'啧，出问题了 ⚠️',   face:{eyes:'worried',mouth:'frown'} },
+  notify:   { label:'通知', color:'#00d4ff', bubble:'有情况！',          face:{eyes:'open',mouth:'smile'} },
+};
+let currentState='idle', hidden=false;
+
+const eyeShapes = {
+  closed:  { L:'M31 17 Q33 16 35 17',    R:'M37 17 Q39 16 41 17' },
+  open:    { L:'M30 16 Q32 14.5 34 16',  R:'M38 16 Q40 14.5 42 16' },
+  side:    { L:'M30 16 Q31 15 32 16',    R:'M38 16 Q39 15 40 16' },
+  focused: { L:'M30 16 Q32 15 34 16',    R:'M38 16 Q40 15 42 16' },
+  happy:   { L:'M30.5 15.5 Q32 14.5 33.5 15.5', R:'M38.5 15.5 Q40 14.5 41.5 15.5' },
+  worried: { L:'M30.5 18 Q32 19 33.5 18', R:'M38.5 18 Q40 19 41.5 18' },
+};
+const mouthShapes = {
+  smile:   'M33 24 Q36 25.5 39 24',
+  bigSmile:'M32 24 Q36 27 40 24',
+  neutral: 'M33 24 L39 24',
+  pursed:  'M33.5 24 Q36 23.5 38.5 24',
+  big:     'M32 24 Q36 27.5 40 24',
+  frown:   'M33 25 Q36 23.5 39 25',
+};
+
+function updateFace(state) {
+  const e=state.face.eyes, m=state.face.mouth;
+  const eyeL=document.getElementById('eyeL'), eyeR=document.getElementById('eyeR');
+  const mouth=document.getElementById('mouth');
+  if(eyeShapes[e]){eyeL.setAttribute('d',eyeShapes[e].L);eyeR.setAttribute('d',eyeShapes[e].R);}
+  if(mouthShapes[m]) mouth.setAttribute('d',mouthShapes[m]);
+}
+
+function setState(name){
+  const state=states[name]; if(!state) return;
+  currentState=name;
+  document.querySelectorAll('.state-btn').forEach(b=>b.classList.toggle('active',b.dataset.state===name));
+  const c=document.getElementById('charContainer');
+  c.className='char-container'+(hidden?' hidden-char':'');
+  c.classList.add('char-'+name);
+  updateFace(state);
+  const b=document.getElementById('speechBubble'), t=document.getElementById('speechText'), d=document.getElementById('statusDot');
+  t.textContent=state.bubble; d.style.background=state.color; b.classList.add('show');
+  document.getElementById('statusBarState').textContent=state.label;
+}
+
+function setCustomMsg(){
+  const m=document.getElementById('customMsg').value.trim();
+  if(!m) return;
+  document.getElementById('speechText').textContent=m;
+  document.getElementById('speechBubble').classList.add('show');
+  setState('notify');
+  document.getElementById('statusBarState').textContent='说话中';
+}
+function toggleChar(){
+  hidden=!hidden;
+  const c=document.getElementById('charContainer');
+  c.classList.toggle('hidden-char',hidden);
+  document.getElementById('toggleHint').textContent=hidden?'👁 显示':'✕ 隐藏';
+  document.getElementById('toggleHint').classList.toggle('show-btn',hidden);
+  document.getElementById('statusBarState').textContent=hidden?'已隐藏':(currentState==='idle'?'待命':states[currentState]?.label||'...');
+}
+setState('idle');
+</script>
+</body>
+</html>
