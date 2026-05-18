@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories, renameCategory } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories, renameCategory, listTools, listSkills } from '../api/client';
 import { ChannelSvg } from './Logo';
 
 const CATEGORIES = [
@@ -32,10 +32,18 @@ export function Sidebar() {
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
   const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
   const [catManageOpen, setCatManageOpen] = useState(false);
+  const [toolsCount, setToolsCount] = useState(0);
+  const [skillsCount, setSkillsCount] = useState(0);
 
   useEffect(() => { loadChannels(); }, []);
   // 侧边栏需要工坊数据来展示场景列表和计数，不管当前在哪个视图
   useEffect(() => { loadWorkshopScenes(); }, []);
+
+  // 加载工具和技能数量
+  useEffect(() => {
+    listTools().then(r => { if (r.success) setToolsCount(r.data.length); }).catch(() => {});
+    listSkills().then(r => { if (r.success) setSkillsCount(r.data.length); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (view === 'workshop') {
@@ -364,6 +372,7 @@ export function Sidebar() {
         }}>
           <span className="nav-icon">🛠️</span>
           <span>工具管理</span>
+          <span className="badge">{toolsCount}</span>
         </div>
 
         <div className="sidebar-nav" onClick={() => useStore.getState().openMemoryDrawer()}>
@@ -375,6 +384,7 @@ export function Sidebar() {
         <div className="sidebar-nav" onClick={() => useStore.getState().openSkillsDrawer()}>
           <span className="nav-icon">📘</span>
           <span>技能管理</span>
+          <span className="badge">{skillsCount}</span>
         </div>
       </div>
 

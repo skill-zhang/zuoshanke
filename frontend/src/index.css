@@ -1606,3 +1606,14 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ═══ 工坊卡片 hover 操作按钮 ═══ */
+.ws-card-actions {
+  opacity: 0;
+  transition: opacity .12s;
+  pointer-events: none;
+}
+.ws-card-wrapper:hover .ws-card-actions {
+  opacity: 1 !important;
+  pointer-events: auto;
+}

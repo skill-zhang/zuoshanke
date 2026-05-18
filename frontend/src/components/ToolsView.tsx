@@ -98,60 +98,22 @@ export function ToolsView() {
   // ── 测试（模拟） ──
   const runTest = (name: string, params: Record<string, any>) => {
     // 模拟延迟后返回结果
-    const mockResults: Record<string, string> = {
-      get_weather: `## 🌤 ${params.city || '北京'} 天气
-
-**当前**：18°C，小雨，湿度 65%，东北风 3级
-
-**未来 ${params.forecast_days || 3} 天预报**：
-| 日期 | 温度 | 天气 |
-|------|------|------|
-| 明天 | 22°C | ☀️ 晴 |
-| 后天 | 20°C | ⛅ 多云 |
-| 大后天 | 16°C | 🌧 小雨 |
-
-> 💡 建议：今天出门带伞，明天适合户外活动`,
-      web_search: `## 🔍 搜索结果：${params.query || '今天新闻'}
-
-**共找到 3 条结果**（来源：SearXNG + DuckDuckGo）
-
----
-
-### 1. 全球科技巨头宣布新一代AI芯片
-> 某科技公司今日发布新一代AI训练芯片，性能提升3倍...
-[查看原文](https://example.com/news/1)
-
-### 2. 今日财经：股市全线飘红
-> 受利好消息影响，三大指数集体上涨...
-[查看原文](https://example.com/news/2)
-
-### 3. 天气预报：未来三天全国大部晴好
-> 中央气象台发布最新预报...
-[查看原文](https://example.com/news/3)`,
-      todo_list: `## 📋 我的任务（2项待办）
-
-| 状态 | 内容 | 优先级 |
-|------|------|--------|
-| 🔄 进行中 | 完成工具管理界面 | 高 |
-| ⏳ 待办 | 提交代码评审 | 中 |
-| ✅ 已完成 | 修复天气工具bug | 高 |
-| ✅ 已完成 | 更新registry.json | 低 |
-
-**进度**：2/4 ✅`,
-      geo_route: `## 🚗 路线规划
-
-**${params.origin || '北京站'} → ${params.destination || '天安门'}**
-**方式**：🚗 驾车
-
-| 指标 | 数据 |
-|------|------|
-| 距离 | 5.2 km |
-| 预计时间 | 15 分钟 |
-| 路线 | 沿长安街直行 |
-
-> 🅿️ 目的地附近有停车场`,
+    const mockResults: Record<string, (p: Record<string, any>) => string> = {
+      get_weather: (p) => {
+        const days = Math.min(Math.max(Number(p.forecast_days) || 3, 1), 7);
+        const labels = ['明天', '后天', '大后天', '第四天', '第五天', '第六天', '第七天'];
+        const temps = ['22°C', '20°C', '16°C', '18°C', '24°C', '21°C', '19°C'];
+        const icons = ['☀️', '⛅', '🌧', '☀️', '⛅', '🌧', '☀️'];
+        const rows = Array.from({ length: days }, (_, i) =>
+          `| ${labels[i]} | ${temps[i]} | ${icons[i]} 晴${i === 0 ? '' : i === 2 ? '雨' : i % 2 ? '转阴' : ''} |`
+        ).join('\n');
+        return `## 🌤 ${p.city || '北京'} 天气\n\n**当前**：18°C，小雨，湿度 65%，东北风 3级\n\n**未来 ${days} 天预报**：\n| 日期 | 温度 | 天气 |\n|------|------|------|\n${rows}\n\n> 💡 建议：今天出门带伞${days >= 2 ? '，明天适合户外活动' : ''}`;
+      },
+      web_search: (p) => `## 🔍 搜索结果：${p.query || '今天新闻'}\n\n**共找到 3 条结果**（来源：SearXNG + DuckDuckGo）\n\n---\n\n### 1. 全球科技巨头宣布新一代AI芯片\n> 某科技公司今日发布新一代AI训练芯片，性能提升3倍...\n[查看原文](https://example.com/news/1)\n\n### 2. 今日财经：股市全线飘红\n> 受利好消息影响，三大指数集体上涨...\n[查看原文](https://example.com/news/2)\n\n### 3. 天气预报：未来三天全国大部晴好\n> 中央气象台发布最新预报...\n[查看原文](https://example.com/news/3)`,
+      todo_list: (p) => `## 📋 我的任务（2项待办）\n\n| 状态 | 内容 | 优先级 |\n|------|------|--------|\n| 🔄 进行中 | 完成工具管理界面 | 高 |\n| ⏳ 待办 | 提交代码评审 | 中 |\n| ✅ 已完成 | 修复天气工具bug | 高 |\n| ✅ 已完成 | 更新registry.json | 低 |\n\n**进度**：2/4 ✅`,
+      geo_route: (p) => `## 🚗 路线规划\n\n**${p.origin || '北京站'} → ${p.destination || '天安门'}**\n**方式**：🚗 驾车\n\n| 指标 | 数据 |\n|------|------|\n| 距离 | 5.2 km |\n| 预计时间 | 15 分钟 |\n| 路线 | 沿长安街直行 |\n\n> 🅿️ 目的地附近有停车场`,
     };
-    return mockResults[name] || `## ✅ 工具执行成功\n\n**工具**：\`${name}\`\n\n> 返回数据已就绪，可在对话中使用`;
+    return mockResults[name]?.(params) ?? `## ✅ 工具执行成功\n\n**工具**：\`${name}\`\n\n> 返回数据已就绪，可在对话中使用`;
   };
 
   // ── 渲染 ──
@@ -380,7 +342,7 @@ function DetailModal({ tool, onClose, onUnreg, onTest }: {
                   <span style={{ color: '#6e7681', fontSize: 11 }}>{p.type}</span>
                 </label>
                 <input
-                  value={testParams[p.name] || (p.name === 'city' ? '北京' : p.name === 'query' ? '今天新闻' : p.name === 'forecast_days' ? '3' : p.name === 'origin' ? '北京站' : p.name === 'destination' ? '天安门' : '')}
+                  value={testParams[p.name] ?? (p.name === 'city' ? '北京' : p.name === 'query' ? '今天新闻' : p.name === 'forecast_days' ? '3' : p.name === 'origin' ? '北京站' : p.name === 'destination' ? '天安门' : '')}
                   onChange={e => setTestParams(prev => ({ ...prev, [p.name]: e.target.value }))}
                   placeholder={p.description}
                   style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', borderRadius: 6, padding: '8px 12px', color: '#e6edf3', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}

@@ -1,79 +1,87 @@
-/** 🛠 工坊 — 管理自己创作的场景（草稿 + 已发布） */
+/** 🛠 创作空间 — 全页卡片网格，管理所有场景（草稿 + 已发布） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { Scene, updateScene, renameCategory } from '../api/client';
+import { Scene, updateScene, deleteScene, renameCategory } from '../api/client';
 
-const CATEGORY_META: Record<string, { icon: string; label: string }> = {
-  life: { icon: '🌿', label: '生活' },
-  ecommerce: { icon: '🛒', label: '电商' },
-  work: { icon: '💼', label: '工作' },
-  learn: { icon: '📚', label: '学习' },
-  create: { icon: '🎨', label: '创作' },
-  finance: { icon: '📈', label: '金融' },
-  media: { icon: '💬', label: '自媒体' },
-  other: { icon: '📦', label: '其他' },
+// ── 分类配置 ──
+const CATEGORIES = [
+  { key: 'all', icon: '🔍', label: '全部' },
+  { key: 'life', icon: '🌿', label: '生活' },
+  { key: 'ecommerce', icon: '🛒', label: '电商' },
+  { key: 'work', icon: '💼', label: '工作' },
+  { key: 'learn', icon: '📚', label: '学习' },
+  { key: 'create', icon: '🎨', label: '创作' },
+  { key: 'finance', icon: '📈', label: '金融' },
+  { key: 'media', icon: '💬', label: '自媒体' },
+  { key: 'other', icon: '📦', label: '其他' },
+];
+const CATEGORY_META: Record<string, { icon: string; label: string }> = {};
+CATEGORIES.forEach(c => { if (c.key !== 'all') CATEGORY_META[c.key] = { icon: c.icon, label: c.label }; });
+
+const ICON_STYLE: React.CSSProperties = {
+  width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  background: '#21262d', borderRadius: 6, fontSize: 13, flexShrink: 0,
 };
 
-const CATEGORY_ORDER = ['life', 'ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other'];
-
 interface WorkshopViewProps {
-  filterCat?: string | null;
   onEnterScene: (scene: Scene) => void;
   onCreateScene: () => void;
 }
 
-export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: WorkshopViewProps) {
+export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps) {
   const { workshopScenes, loadWorkshopScenes, loadingWorkshop, publishSceneVersion } = useStore();
+
+  // ── 筛选状态 ──
+  const [category, setCategory] = useState('all');
+  const [search, setSearch] = useState('');
+
+  // ── 编辑弹窗 ──
+  const [editModal, setEditModal] = useState<Scene | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', icon: '', description: '', category: '', guide_text: '' });
+  const [editing, setEditing] = useState(false);
+
+  // ── 发布弹窗 ──
   const [publishModal, setPublishModal] = useState<Scene | null>(null);
   const [publishVersion, setPublishVersion] = useState('');
   const [publishChangelog, setPublishChangelog] = useState('');
   const [publishing, setPublishing] = useState(false);
-  const [editModal, setEditModal] = useState<Scene | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', icon: '', description: '', category: '', guide_text: '' });
-  const [editing, setEditing] = useState(false);
+
+  // ── 删除确认 ──
+  const [deleteTarget, setDeleteTarget] = useState<Scene | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // ── 类别管理 ──
   const [catManageOpen, setCatManageOpen] = useState(false);
 
-  useEffect(() => {
-    loadWorkshopScenes(filterCat ? { category: filterCat } : undefined);
-  }, [filterCat]);
+  useEffect(() => { loadWorkshopScenes(); }, []);
 
-  const grouped = CATEGORY_ORDER
-    .map(k => ({
-      key: k,
-      ...CATEGORY_META[k],
-      items: workshopScenes.filter(s => s.category === k),
-    }))
-    .filter(g => g.items.length > 0);
-
-  const handlePublish = async () => {
-    if (!publishModal || !publishVersion.trim()) return;
-    setPublishing(true);
-    try {
-      const result = await publishSceneVersion(publishModal.id, publishVersion.trim(), publishChangelog.trim() || undefined);
-      if (result) {
-        setPublishModal(null);
-        setPublishVersion('');
-        setPublishChangelog('');
-      } else {
-        alert('发布失败，请检查版本号或重试');
-      }
-    } catch (e: any) {
-      alert(e.message || '发布失败');
-    } finally {
-      setPublishing(false);
+  // ── 前端过滤 ──
+  const filtered = workshopScenes.filter(s => {
+    if (category !== 'all' && s.category !== category) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q);
     }
+    return true;
+  });
+
+  // ── 日期格式化 ──
+  const formatDate = (d: string | null) => {
+    if (!d) return '';
+    try {
+      const date = new Date(d);
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      const days = Math.floor(diff / 86400000);
+      if (days === 0) return '今天';
+      if (days === 1) return '昨天';
+      if (days < 7) return `${days}天前`;
+      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    } catch { return ''; }
   };
 
-  const openPublishModal = (scene: Scene) => {
-    const curVer = scene.version === '0.0' ? '0.0' : scene.version;
-    const parts = curVer.split('.').map(Number);
-    const sugg = parts.length === 2 ? `${parts[0]}.${parts[1] + 1}` : '1.0';
-    setPublishVersion(sugg);
-    setPublishChangelog('');
-    setPublishModal(scene);
-  };
-
-  const openEditModal = (scene: Scene) => {
+  // ── 编辑 ──
+  const openEdit = (scene: Scene) => {
     setEditForm({
       name: scene.name,
       icon: scene.icon || '📦',
@@ -83,8 +91,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
     });
     setEditModal(scene);
   };
-
-  const handleEditSave = async () => {
+  const saveEdit = async () => {
     if (!editModal || !editForm.name.trim()) return;
     setEditing(true);
     try {
@@ -104,6 +111,35 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
     }
   };
 
+  // ── 发布 ──
+  const openPublish = (scene: Scene) => {
+    const curVer = scene.version === '0.0' ? '0.0' : scene.version;
+    const parts = curVer.split('.').map(Number);
+    const sugg = parts.length === 2 ? `${parts[0]}.${parts[1] + 1}` : '1.0';
+    setPublishVersion(sugg);
+    setPublishChangelog('');
+    setPublishModal(scene);
+  };
+  const doPublish = async () => {
+    if (!publishModal || !publishVersion.trim()) return;
+    setPublishing(true);
+    try {
+      const result = await publishSceneVersion(publishModal.id, publishVersion.trim(), publishChangelog.trim() || undefined);
+      if (result) {
+        setPublishModal(null);
+        setPublishVersion('');
+        setPublishChangelog('');
+      } else {
+        alert('发布失败，请检查版本号或重试');
+      }
+    } catch (e: any) {
+      alert(e.message || '发布失败');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // ── 导出 ──
   const handleExport = async (scene: Scene) => {
     try {
       const { exportScene } = await import('../api/client');
@@ -121,91 +157,172 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
     }
   };
 
-  const formatDate = (d: string | null) => {
-    if (!d) return '';
+  // ── 删除 ──
+  const doDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const date = new Date(d);
-      const now = new Date();
-      const diff = now.getTime() - date.getTime();
-      const days = Math.floor(diff / 86400000);
-      if (days === 0) return '今天';
-      if (days === 1) return '昨天';
-      if (days < 7) return `${days}天前`;
-      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-    } catch { return ''; }
+      await deleteScene(deleteTarget.id);
+      setDeleteTarget(null);
+      loadWorkshopScenes();
+    } catch (e: any) {
+      alert('删除失败: ' + (e.message || ''));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
-    <div className="workshop">
-      <div className="ws-header">
-        <div className="ws-header-title">
-          🛠 工坊
-          <span style={{ fontSize: 13, color: '#6e7681', fontWeight: 400 }}>
-            · {filterCat ? CATEGORY_META[filterCat]?.label || filterCat : '全部类别'}
-          </span>
-        </div>
-        <div className="ws-header-actions">
-          <button className="btn" onClick={onCreateScene}>✨ 新建场景</button>
-          <button className="btn" onClick={() => setCatManageOpen(true)}>📁 管理类别</button>
-        </div>
-      </div>
-
-      <div className="ws-list">
-        {loadingWorkshop ? (
-          <div className="empty-state">
-            <div className="empty-state-text">加载中...</div>
-          </div>
-        ) : grouped.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">📭</div>
-            <div className="empty-state-text">暂无场景</div>
-            <div className="empty-state-desc">创建一个新场景吧</div>
-          </div>
-        ) : grouped.map(g => (
-          <div key={g.key} className="category-group">
-            <div className="cat-group-header">
-              <span>{g.icon} {g.label}</span>
-              <span className="cat-count">{g.items.length} 个场景</span>
-            </div>
-            {g.items.map(s => {
-              const isPublished = s.version !== '0.0';
-              return (
-                <div key={s.id} className="ws-scene-item" onClick={() => onEnterScene(s)}>
-                  <div className="ws-scene-icon">{s.icon || '📦'}</div>
-                  <div className="ws-scene-info">
-                    <div className="ws-scene-name">
-                      {s.name}
-                      <span className="scene-card-version">v{s.version}</span>
-                      <span className={`status-badge ${isPublished ? 'status-published' : 'status-draft'}`}>
-                        {isPublished ? '已发布' : '草稿'}
-                      </span>
-                    </div>
-                    <div className="ws-scene-desc">
-                      {s.description || '暂无简介'} · {formatDate(s.updated_at)}
-                    </div>
-                  </div>
-                  <div className="ws-scene-meta">
-                    {isPublished ? (
-                      <span style={{ fontSize: 11, color: '#6e7681' }}>
-                        {s.changelog ? s.changelog.substring(0, 20) + (s.changelog.length > 20 ? '…' : '') : ''}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="ws-scene-actions">
-                    <button className="btn-sm" onClick={e => { e.stopPropagation(); openEditModal(s); }}>✏️</button>
-                    <button className="btn-sm" onClick={e => { e.stopPropagation(); openPublishModal(s); }}>
-                      {isPublished ? '🔄' : '📦'}
-                    </button>
-                    <button className="btn-sm" onClick={e => { e.stopPropagation(); handleExport(s); }}>📤</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* ═══ 分类 Tabs ═══ */}
+      <div style={{ display: 'flex', gap: 6, padding: '16px 24px 0', overflowX: 'auto', flexShrink: 0 }}>
+        {CATEGORIES.map(c => (
+          <div key={c.key}
+            onClick={() => setCategory(c.key)}
+            style={{
+              padding: '6px 16px', borderRadius: 20, whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 13,
+              background: category === c.key ? '#1f6feb33' : 'transparent',
+              color: category === c.key ? '#58a6ff' : '#8b949e',
+              border: category === c.key ? '1px solid #1f6feb66' : '1px solid transparent',
+              transition: 'all .15s',
+            }}
+          >{c.icon} {c.label}</div>
         ))}
       </div>
 
-      {/* ═══ 场景编辑弹窗 ═══ */}
+      {/* ═══ 工具栏 ═══ */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 24px', flexShrink: 0, flexWrap: 'wrap', gap: 8,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', background: '#161b22',
+          border: '1px solid #30363d', borderRadius: 6, padding: '6px 12px', width: 280, gap: 8,
+        }}>
+          <span>🔍</span>
+          <input type="text" placeholder="搜索场景..." value={search} onChange={e => setSearch(e.target.value)}
+            style={{ background: 'none', border: 'none', color: '#e6edf3', fontSize: 13, outline: 'none', flex: 1, fontFamily: 'inherit' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => setCatManageOpen(true)}
+            style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #30363d', background: 'transparent', color: '#e6edf3', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            📁 管理类别
+          </button>
+          <button className="btn btn-primary" onClick={onCreateScene}
+            style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #2ea043', background: '#238636', color: '#fff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            ✨ 新建场景
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ 场景卡片网格 ═══ */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '0 24px 24px',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, alignContent: 'start',
+      }}>
+        {loadingWorkshop ? (
+          <div className="empty-state" style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: '#6e7681' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
+            <div style={{ fontSize: 15 }}>加载中...</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state" style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: '#6e7681' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+            <div style={{ fontSize: 15, marginBottom: 8 }}>暂无场景</div>
+            <div style={{ fontSize: 13, color: '#8b949e' }}>{search ? '试试其他搜索词' : '创建一个新场景吧'}</div>
+          </div>
+        ) : filtered.map(s => {
+          const isPublished = s.version !== '0.0';
+          const catMeta = CATEGORY_META[s.category];
+          return (
+            <div key={s.id}
+              className="ws-card-wrapper"
+              onClick={() => onEnterScene(s)}
+              style={{
+                background: '#161b22', border: '1px solid #30363d', borderRadius: 10, padding: 20, cursor: 'pointer',
+                transition: 'all .15s', display: 'flex', flexDirection: 'column', position: 'relative',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#6e7681';
+                e.currentTarget.style.background = '#1c2128';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,.3)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = '#30363d';
+                e.currentTarget.style.background = '#161b22';
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {/* 图标 */}
+              <div style={{ fontSize: 32, lineHeight: 1, marginBottom: 10 }}>{s.icon || '📦'}</div>
+
+              {/* 名称 + 版本 */}
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {s.name}
+                <span style={{
+                  fontSize: 11, color: '#6e7681', background: '#21262d', borderRadius: 4,
+                  padding: '1px 6px', fontWeight: 400, whiteSpace: 'nowrap',
+                }}>
+                  v{s.version}
+                </span>
+              </div>
+
+              {/* 状态标签行 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <span style={{
+                  fontSize: 11, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
+                  background: isPublished ? '#23863633' : '#d2992233',
+                  color: isPublished ? '#3fb950' : '#d29922',
+                }}>
+                  {isPublished ? '✅ 已发布' : '📝 草稿'}
+                </span>
+                {catMeta && (
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
+                    background: '#21262d', color: '#8b949e',
+                  }}>
+                    {catMeta.icon} {catMeta.label}
+                  </span>
+                )}
+              </div>
+
+              {/* 描述 */}
+              <div style={{
+                fontSize: 13, color: '#8b949e', lineHeight: 1.5, flex: 1,
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+              }}>
+                {s.description || '暂无简介'}
+              </div>
+
+              {/* 底部信息 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginTop: 10, paddingTop: 8, borderTop: '1px solid #21262d',
+                fontSize: 11, color: '#6e7681',
+              }}>
+                <span>{formatDate(s.updated_at)}</span>
+              </div>
+
+              {/* hover 操作按钮 */}
+              <div className="ws-card-actions"
+                style={{
+                  position: 'absolute', top: 12, right: 12,
+                  display: 'flex', gap: 2,
+                }}
+              >
+                <ActionBtn icon="✏️" title="编辑" onClick={e => { e.stopPropagation(); openEdit(s); }} />
+                <ActionBtn icon={isPublished ? '🔄' : '📦'} title={isPublished ? '发布新版本' : '发布'} onClick={e => { e.stopPropagation(); openPublish(s); }} />
+                <ActionBtn icon="📤" title="导出" onClick={e => { e.stopPropagation(); handleExport(s); }} />
+                <ActionBtn icon="🗑" title="删除" danger onClick={e => { e.stopPropagation(); setDeleteTarget(s); }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ═══ 编辑弹窗 ═══ */}
       <div className={`modal-overlay${editModal ? ' show' : ''}`} onClick={() => !editing && setEditModal(null)}>
         <div className="modal" onClick={e => e.stopPropagation()}>
           <div className="modal-title">
@@ -225,8 +342,8 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
               <div className="form-group">
                 <label className="form-label">类别</label>
                 <select className="form-select" value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
-                  {CATEGORY_ORDER.map(k => (
-                    <option key={k} value={k}>{CATEGORY_META[k]?.icon} {CATEGORY_META[k]?.label}</option>
+                  {Object.entries(CATEGORY_META).map(([k, v]) => (
+                    <option key={k} value={k}>{v.icon} {v.label}</option>
                   ))}
                 </select>
               </div>
@@ -240,7 +357,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
               </div>
               <div className="modal-actions">
                 <button className="btn" onClick={() => setEditModal(null)} disabled={editing}>取消</button>
-                <button className="btn btn-primary" onClick={handleEditSave} disabled={editing || !editForm.name.trim()}>
+                <button className="btn btn-primary" onClick={saveEdit} disabled={editing || !editForm.name.trim()}>
                   {editing ? '保存中...' : '保存'}
                 </button>
               </div>
@@ -275,7 +392,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
               </div>
               <div className="modal-actions">
                 <button className="btn" onClick={() => setPublishModal(null)} disabled={publishing}>取消</button>
-                <button className="btn btn-primary" onClick={handlePublish} disabled={publishing || !publishVersion.trim()}>
+                <button className="btn btn-primary" onClick={doPublish} disabled={publishing || !publishVersion.trim()}>
                   {publishing ? '发布中...' : '确认发布'}
                 </button>
               </div>
@@ -283,6 +400,44 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
           )}
         </div>
       </div>
+
+      {/* ═══ 删除确认弹窗 ═══ */}
+      {deleteTarget && (
+        <div className="modal-overlay show"
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,.6)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null); }}>
+          <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: 12, width: 420, padding: 24 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              ⚠️ 确认删除场景
+              <button className="modal-close" onClick={() => setDeleteTarget(null)}
+                style={{ background: 'none', border: 'none', color: '#8b949e', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '4px 0 16px' }}>
+              <span style={{ fontSize: 40, lineHeight: 1 }}>🗑️</span>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 500, color: '#e6edf3', marginBottom: 6 }}>
+                  {deleteTarget.icon} {deleteTarget.name}
+                </div>
+                <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.6 }}>
+                  删除后，该场景及其所有聊天记录将被永久移除，<br />
+                  无法恢复。
+                </div>
+                <div style={{ marginTop: 10, background: '#f8514915', border: '1px solid #f8514933', borderRadius: 6, padding: 10, fontSize: 13, color: '#f85149' }}>
+                  ⚠️ 此操作不可撤销。场景中的所有数据和配置将会丢失。
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid #21262d' }}>
+              <button className="btn" onClick={() => setDeleteTarget(null)} disabled={deleting}
+                style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #30363d', background: 'transparent', color: '#e6edf3', cursor: 'pointer', fontSize: 13 }}>取消</button>
+              <button onClick={doDelete} disabled={deleting}
+                style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #f85149', background: '#f85149', color: '#fff', cursor: 'pointer', fontSize: 13 }}>
+                {deleting ? '删除中...' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ 类别管理弹窗 ═══ */}
       <div className={`modal-overlay${catManageOpen ? ' show' : ''}`} onClick={() => setCatManageOpen(false)}>
@@ -310,7 +465,7 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
                       <span style={{ fontSize: 20 }}>{meta?.icon || '📁'}</span>
                       <span style={{ flex: 1, fontSize: 14 }}>{meta?.label || catKey}</span>
                       <span style={{ fontSize: 12, color: '#6e7681' }}>{count} 个场景</span>
-                      <span className="sidebar-menu-btn" style={{ fontSize: 13 }}
+                      <span style={{ fontSize: 13, cursor: 'pointer', color: '#8b949e' }}
                         onClick={async () => {
                           const name = prompt('新类别名称：', meta?.label || catKey);
                           if (!name || name === (meta?.label || catKey)) return;
@@ -327,19 +482,38 @@ export function WorkshopView({ filterCat, onEnterScene, onCreateScene }: Worksho
                     </div>
                   );
                 })}
-            <div style={{ borderTop: '1px solid #21262d', paddingTop: 8, marginTop: 4 }}>
-              <span className="sidebar-menu-btn" style={{ fontSize: 13, color: '#58a6ff' }}
-                onClick={() => {
-                  setCatManageOpen(false);
-                  useStore.getState().setCreateSceneModalOpen(true);
-                }}
-              >➕ 新建类别</span>
-            </div>
-            </>
+                <div style={{ borderTop: '1px solid #21262d', paddingTop: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 13, color: '#58a6ff', cursor: 'pointer' }}
+                    onClick={() => {
+                      setCatManageOpen(false);
+                      useStore.getState().setCreateSceneModalOpen(true);
+                    }}
+                  >➕ 新建类别</span>
+                </div>
+              </>
             );
           })()}
         </div>
       </div>
     </div>
+  );
+}
+
+// ═══ 小型操作按钮 ═══
+function ActionBtn({ icon, title, danger, onClick }: {
+  icon: string; title: string; danger?: boolean; onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button onClick={onClick} title={title}
+      style={{
+        width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: 'none', borderRadius: 4, fontSize: 13, cursor: 'pointer',
+        background: danger ? '#f8514915' : '#21262d',
+        color: danger ? '#f85149' : '#8b949e',
+        transition: 'background .12s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = danger ? '#f8514933' : '#30363d'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = danger ? '#f8514915' : '#21262d'; }}
+    >{icon}</button>
   );
 }
