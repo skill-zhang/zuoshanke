@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 — 工具管理 原型 v1.0</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg: #0d1117;
+  --sidebar-bg: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --text-muted: #6e7681;
+  --hover-bg: #1c2128;
+  --accent: #58a6ff;
+  --card-bg: #161b22;
+  --card-border: #30363d;
+  --green: #3fb950;
+  --orange: #d29922;
+  --red: #f85149;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+/* ═══ Sidebar ═══ */
+.sidebar {
+  width: 230px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-list { flex:1; overflow-y:auto; }
+.sidebar-section { padding: 12px 16px 6px; border-bottom:1px solid #21262d; }
+.sidebar-label {
+  font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px;
+}
+.sidebar-label svg { width:16px; height:16px; flex-shrink:0; }
+.sidebar-item {
+  padding: 6px 16px 6px 30px; display: flex; align-items: center; gap: 8px;
+  cursor: pointer; border-left: 2px solid transparent; font-size: 14px; position: relative;
+}
+.sidebar-item:hover { background: var(--hover-bg); }
+.sidebar-item.active { background: var(--hover-bg); border-left-color: var(--accent); }
+.sidebar-item-icon { width:22px; text-align:center; font-size:15px; flex-shrink:0; }
+.sidebar-item-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sidebar-item .badge {
+  margin-left:auto; font-size:11px; background:#30363d; border-radius:10px; padding:1px 8px; color:var(--text-dim); white-space:nowrap;
+}
+.sidebar-action {
+  padding: 6px 16px 6px 30px; color: var(--text-dim); cursor: pointer; display: flex;
+  align-items: center; gap: 8px; font-size: 13px;
+}
+.sidebar-action:hover { color: #c9d1d9; background: var(--hover-bg); }
+.sidebar-nav {
+  padding: 7px 16px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  color: var(--text-dim); font-size: 13px; border-left: 2px solid transparent;
+}
+.sidebar-nav:hover { background: var(--hover-bg); color: var(--text); }
+.sidebar-nav.active { background: var(--hover-bg); color: var(--text); border-left-color: var(--accent); }
+.sidebar-nav .nav-icon { width: 22px; text-align: center; flex-shrink:0; }
+.sidebar-nav .nav-icon svg { width:16px; height:16px; vertical-align:middle; fill:currentColor; }
+.sidebar-footer { padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-dim); }
+/* ═══ Main ═══ */
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 44px; border-bottom: 1px solid var(--border); display: flex; align-items: center;
+  padding: 0 20px; gap: 12px; flex-shrink: 0;
+}
+.topbar-title { font-weight: 600; font-size: 15px; }
+.topbar-breadcrumb { color: var(--text-dim); font-size: 13px; }
+/* ═══ Tools View ═══ */
+.tools-view { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.category-bar {
+  display: flex; gap: 6px; padding: 16px 24px 0; overflow-x: auto; flex-shrink: 0;
+}
+.category-tab {
+  padding: 6px 16px; border-radius: 20px; background: transparent; color: var(--text-dim);
+  cursor: pointer; white-space: nowrap; font-size: 13px; border: 1px solid transparent; transition: all .15s;
+}
+.category-tab:hover { color: var(--text); background: var(--hover-bg); }
+.category-tab.active { background: #1f6feb33; color: var(--accent); border-color: #1f6feb66; }
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; flex-shrink: 0; flex-wrap: wrap; gap: 8px;
+}
+.search-box {
+  display: flex; align-items: center; background: var(--sidebar-bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 12px; width: 280px; gap: 8px;
+}
+.search-box input { background: none; border: none; color: var(--text); font-size: 13px; outline: none; flex: 1; }
+.search-box input::placeholder { color: var(--text-muted); }
+.btn {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: transparent;
+  color: var(--text); cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { background: var(--hover-bg); }
+.btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+.btn-primary:hover { background: #2ea043; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-accent:hover { opacity: .85; }
+.btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; }
+.btn-sm:hover { background: var(--hover-bg); color: var(--text); }
+.card-grid {
+  flex: 1; overflow-y: auto; padding: 0 24px 24px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; align-content: start;
+}
+.tool-card {
+  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px;
+  padding: 20px; cursor: pointer; transition: all .15s; display: flex; flex-direction: column; position: relative;
+}
+.tool-card:hover {
+  border-color: var(--text-muted); background: #1c2128;
+  transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.tool-card-icon { font-size: 32px; line-height: 1; margin-bottom: 10px; }
+.tool-card-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; display:flex; align-items:center; gap:8px; }
+.tool-card-name code { font-family: 'SF Mono', 'Fira Code', monospace; }
+.tool-card-badge {
+  font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 400;
+}
+.tool-card-badge.verified { background: #23863633; color: var(--green); }
+.tool-card-badge.unverified { background: #d2992233; color: var(--orange); }
+.tool-card-desc { font-size: 12px; color: var(--text-dim); line-height: 1.5; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tool-card-footer {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid #21262d; font-size: 11px; color: var(--text-muted);
+}
+.tool-card-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 11px;
+}
+.tool-card-tag .dot { width:6px; height:6px; border-radius:50%; display:inline-block; }
+.tool-card-tag .dot.green { background: var(--green); }
+.tool-card-tag .dot.gray { background: var(--text-muted); }
+.tool-card-tag.has-skill { color: var(--accent); }
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; color:var(--text-muted); grid-column:1/-1; }
+.empty-state-icon { font-size:48px; margin-bottom:16px; }
+/* ═══ Modals ═══ */
+.modal-overlay {
+  display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center;
+}
+.modal-overlay.show { display:flex; }
+.modal {
+  background:var(--sidebar-bg); border:1px solid var(--border); border-radius:12px;
+  width:620px; max-height:85vh; overflow-y:auto; padding:24px;
+}
+.modal-sm { width:420px; }
+.modal-title { font-size:16px; font-weight:600; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
+.modal-close { background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; padding:4px; }
+.modal-close:hover { color: var(--text); }
+.form-group { margin-bottom:14px; }
+.form-label { display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px; font-weight:500; }
+.form-input, .form-select, .form-textarea {
+  width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:8px 12px; color:var(--text); font-size:14px; outline:none; font-family:inherit;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color:var(--accent); }
+.form-textarea { min-height:80px; resize:vertical; font-family:'SF Mono','Fira Code',monospace; font-size:13px; }
+.form-row { display:flex; gap:12px; }
+.form-row .form-group { flex:1; }
+.form-hint { font-size:12px; color:var(--text-muted); margin-top: 4px; }
+.modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid #21262d; }
+/* ═══ Detail sections ═══ */
+.detail-section { margin-bottom: 18px; }
+.detail-section-title {
+  font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #21262d;
+}
+.detail-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 13px; }
+.detail-label { color: var(--text-dim); min-width: 80px; flex-shrink: 0; font-size: 12px; }
+.detail-value { color: var(--text); word-break: break-all; }
+.detail-value code { background: #21262d; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.param-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.param-table th { text-align: left; color: var(--text-dim); font-weight: 500; font-size: 12px; padding: 4px 8px; border-bottom: 1px solid #21262d; }
+.param-table td { padding: 6px 8px; border-bottom: 1px solid #21262d; vertical-align: top; }
+.param-table td:first-child code { background: #21262d; padding: 1px 5px; border-radius: 3px; }
+.param-type { color: var(--accent); font-size: 12px; }
+.param-required { font-size: 12px; }
+.param-required.yes { color: var(--green); }
+.param-required.no { color: var(--text-muted); }
+.tag-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag-item {
+  background: #1f6feb22; color: var(--accent); padding: 2px 8px; border-radius: 10px; font-size: 12px;
+}
+.skill-preview-box {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px; font-size: 13px; line-height: 1.6; color: var(--text-dim); max-height: 200px; overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap;
+}
+.empty-skill { color: var(--text-muted); font-style: italic; font-size: 13px; }
+/* ═══ Test Result ═══ */
+.test-result { border: 1px solid #21262d; border-radius: 8px; overflow: hidden; }
+.test-result-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #21262d; font-size: 13px; font-weight: 500; }
+.test-result-body { padding: 14px; font-size: 14px; line-height: 1.7; color: var(--text); background: var(--sidebar-bg); max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: inherit; }
+/* ═══ Scrollbar ═══ */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#30363d; border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:#484f58; }
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<div class="sidebar">
+  <div class="sidebar-list">
+    <!-- 讨论 · 频道 -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">
+        <svg viewBox="0 0 16 16" fill="#58a6ff"><path d="M1.5 2h10a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H7.5l-3 2.5v-2.5H1.5a.5.5 0 0 1-.5-.5v-5a.5.5 0 0 1 .5-.5z"/></svg>
+        讨论 · 频道
+      </div>
+    </div>
+    <div class="sidebar-item"><span class="sidebar-item-icon">💬</span><span class="sidebar-item-name">默认频道</span></div>
+    <div class="sidebar-item"><span class="sidebar-item-icon">#</span><span class="sidebar-item-name">技术闲聊</span></div>
+    <div class="sidebar-action">+ 新建频道</div>
+
+    <!-- 场景广场 -->
+    <div class="sidebar-section" style="margin-top:4px;border-bottom:1px solid #21262d;">
+      <div class="sidebar-label">
+        <svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3ZM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3ZM2.5 9.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM9 2.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3ZM10.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3ZM9 10.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3ZM10.5 9.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3Z"/></svg>
+        场景广场
+      </div>
+    </div>
+
+    <!-- 工坊 -->
+    <div class="sidebar-section" style="margin-top:4px;">
+      <div class="sidebar-label">
+        <svg viewBox="0 0 16 16" fill="#58a6ff" width="16" height="16"><path d="M4.5 1.5A2.5 2.5 0 0 0 2 4v2.5c0 .69.56 1.25 1.25 1.25h7.5c.69 0 1.25-.56 1.25-1.25V4a2.5 2.5 0 0 0-2.5-2.5h-5Z"/><path d="M1.5 9.5v3a2.5 2.5 0 0 0 2.5 2.5h4a.5.5 0 0 0 .5-.5v-7H5a.5.5 0 0 0-.5.5v1a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5Z"/><path d="M11 9.5v.5h2.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H11a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z"/></svg>
+        工坊
+      </div>
+    </div>
+    <div class="sidebar-nav" onclick="switchView('scenes')"><span class="nav-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 1.5A2.5 2.5 0 0 0 2 4v2.5c0 .69.56 1.25 1.25 1.25h7.5c.69 0 1.25-.56 1.25-1.25V4a2.5 2.5 0 0 0-2.5-2.5h-5Z"/><path d="M1.5 9.5v3a2.5 2.5 0 0 0 2.5 2.5h4a.5.5 0 0 0 .5-.5v-7H5a.5.5 0 0 0-.5.5v1a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5Z"/><path d="M11 9.5v.5h2.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H11a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z"/></svg></span>创作空间 <span class="badge">6</span></div>
+
+    <!-- ═══ 系统工具 ═══ -->
+    <div class="sidebar-section" style="margin-top:8px;">
+      <div class="sidebar-label">🧰 系统工具</div>
+    </div>
+    <div class="sidebar-nav" onclick="switchView('tools')" style="background:var(--hover-bg);color:var(--text);border-left-color:var(--accent);">
+      <span class="nav-icon">🛠️</span>
+      <span>工具管理</span>
+      <span class="badge">18</span>
+    </div>
+    <div class="sidebar-nav" onclick="switchView('skills')">
+      <span class="nav-icon">📘</span>
+      <span>技能管理</span>
+      <span class="badge">3</span>
+    </div>
+    <div class="sidebar-nav" onclick="switchView('memory')">
+      <span class="nav-icon">🧠</span>
+      <span>记忆管理</span>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <span>坐山客 · 工具管理</span>
+  </div>
+</div>
+
+<!-- ═══ Main Content ═══ -->
+<div class="main-content">
+  <div class="topbar">
+    <div class="topbar-title" id="topbarTitle">🛠️ 工具管理</div>
+    <div class="topbar-breadcrumb" id="topbarBreadcrumb" style="display:none;">
+      <span onclick="showToolsView()">工具管理</span>  >  <span id="breadcrumbToolName"></span>
+    </div>
+  </div>
+
+  <!-- ═══ Tools View ═══ -->
+  <div id="toolsView" class="tools-view">
+    <div class="category-bar" id="categoryBar">
+      <div class="category-tab active" data-cat="all" onclick="filterCategory(this,'all')">🔍 全部</div>
+      <div class="category-tab" data-cat="search" onclick="filterCategory(this,'search')">🌐 搜索</div>
+      <div class="category-tab" data-cat="data" onclick="filterCategory(this,'data')">📊 数据</div>
+      <div class="category-tab" data-cat="system" onclick="filterCategory(this,'system')">⚙️ 系统</div>
+      <div class="category-tab" data-cat="unverified" onclick="filterCategory(this,'unverified')">⚠️ 未验证</div>
+    </div>
+    <div class="toolbar">
+      <div class="search-box">
+        <span>🔍</span>
+        <input type="text" placeholder="搜索工具..." oninput="searchTools(this.value)">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="showRegisterModal()">➕ 注册新工具</button>
+      </div>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </div>
+
+  <!-- ═══ Scene Placeholder Views ═══ -->
+  <div id="scenesView" style="display:none;flex:1;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px;">
+    场景广场（略）
+  </div>
+  <div id="skillsView" style="display:none;flex:1;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px;">
+    📘 技能管理（待设计）
+  </div>
+  <div id="memoryView" style="display:none;flex:1;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px;">
+    🧠 记忆管理（现有抽屉）
+  </div>
+</div>
+
+<!-- ═══ Modal: 工具详情 ═══ -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" id="detailModalContent">
+    <div class="modal-title">
+      <span id="detailTitle">🌤 get_weather</span>
+      <button class="modal-close" onclick="hideDetailModal()">✕</button>
+    </div>
+    <div id="detailBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="alert('打开编辑工具表单')">✏️ 编辑工具</button>
+      <button class="btn btn-sm" onclick="alert('打开预执行配置表单')">⚙️ 预执行</button>
+      <button class="btn btn-sm" onclick="alert('打开SKILL.md编辑器')">📄 编辑手册</button>
+      <button class="btn btn-sm" style="color:var(--red);border-color:var(--red);" onclick="showUnregisterConfirm()">🗑 注销</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: 注册新工具 ═══ -->
+<div class="modal-overlay" id="registerModal">
+  <div class="modal">
+    <div class="modal-title">
+      📦 注册新工具
+      <button class="modal-close" onclick="hideRegisterModal()">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">工具名称 *</label>
+        <input class="form-input" id="regName" placeholder="get_weather" value="get_weather">
+      </div>
+      <div class="form-group">
+        <label class="form-label">分类 *</label>
+        <select class="form-select" id="regCategory">
+          <option value="search">🌐 搜索</option>
+          <option value="data" selected>📊 数据</option>
+          <option value="system">⚙️ 系统</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">描述 *</label>
+      <input class="form-input" id="regDesc" placeholder="工具的简短说明" value="获取城市天气及未来预报">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">文件路径 *</label>
+        <input class="form-input" id="regFile" placeholder="tools/weather.py" value="tools/weather.py">
+      </div>
+      <div class="form-group">
+        <label class="form-label">函数名 *</label>
+        <input class="form-input" id="regFunc" placeholder="get_weather" value="get_weather">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">返回值说明</label>
+      <input class="form-input" id="regReturns" placeholder="天气数据（温度、湿度、风力、描述、预报）">
+    </div>
+
+    <div class="detail-section-title" style="margin-top:16px;">📋 参数</div>
+    <div id="paramList">
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="form-group" style="flex:2;"><input class="form-input" placeholder="参数名" value="city"></div>
+        <div class="form-group" style="flex:1;"><select class="form-select"><option>string</option><option>integer</option><option>number</option><option>boolean</option></select></div>
+        <div class="form-group" style="flex:0 0 60px;"><label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text-dim);padding-top:8px;"><input type="checkbox" checked> 必填</label></div>
+        <button class="btn-sm" style="flex-shrink:0;margin-top:4px;" onclick="this.parentElement.remove()">✕</button>
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="form-group" style="flex:2;"><input class="form-input" placeholder="参数名" value="forecast_days"></div>
+        <div class="form-group" style="flex:1;"><select class="form-select"><option>string</option><option selected>integer</option><option>number</option><option>boolean</option></select></div>
+        <div class="form-group" style="flex:0 0 60px;"><label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text-dim);padding-top:8px;"><input type="checkbox"> 必填</label></div>
+        <button class="btn-sm" style="flex-shrink:0;margin-top:4px;" onclick="this.parentElement.remove()">✕</button>
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <button class="btn-sm" onclick="addParamRow()">+ 添加参数</button>
+    </div>
+
+    <div class="detail-section-title">⚡ 预执行配置（可选）</div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);margin-bottom:6px;">
+          <input type="checkbox" checked id="regPreexecEnabled"> 🟢 启用预执行
+        </label>
+    </div>
+    <div class="form-group">
+      <label class="form-label">触发词（逗号分隔）</label>
+      <input class="form-input" id="regTriggers" placeholder="天气, 温度, 下雨, 刮风" value="天气, 温度, 下雨, 下雪, 刮风, 气温, weather">
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
+        <input type="checkbox" checked id="regRequiresCity"> 📍 需要城市名
+      </label>
+    </div>
+
+    <div class="detail-section-title">📄 使用手册（可选）</div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);margin-bottom:6px;">
+        <input type="checkbox" id="regHasSkill"> 同时创建 SKILL.md 使用文档
+      </label>
+    </div>
+    <div class="form-group">
+      <textarea class="form-textarea" rows="4" placeholder="SKILL.md 内容（Markdown）&#10;# get_weather&#10;获取城市实时天气及未来预报..."># get_weather
+
+获取城市实时天气及未来预报（3-7天）
+
+## 使用示例
+- "北京今天天气怎么样"
+- "上海未来3天天气"
+- "深圳周末会下雨吗"
+
+## 返回值格式
+- 温度、湿度、风力、天气描述、未来预报</textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="hideRegisterModal()">取消</button>
+      <button class="btn btn-primary" onclick="alert('工具注册成功！');hideRegisterModal();">💾 注册</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: 确认注销 ═══ -->
+<div class="modal-overlay" id="unregisterModal">
+  <div class="modal modal-sm">
+    <div class="modal-title">
+      ⚠️ 确认注销工具
+      <button class="modal-close" onclick="hideUnregisterConfirm()">✕</button>
+    </div>
+    <div style="padding:4px 0 16px;">
+      <div style="display:flex;gap:14px;align-items:flex-start;">
+        <span style="font-size:40px;line-height:1;">🗑️</span>
+        <div>
+          <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px;" id="unregToolName">get_weather</div>
+          <div style="font-size:13px;color:var(--text-dim);line-height:1.6;">
+            注销后，该工具将从 registry 中移除，<br>
+            不再出现在工具列表，也无法在对话中调用。
+          </div>
+          <div style="margin-top:10px;background:#f8514915;border:1px solid #f8514933;border-radius:6px;padding:10px;font-size:13px;color:var(--red);">
+            ⚠️ 此操作不可撤销。如需重新使用，必须重新注册。
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hideUnregisterConfirm()">取消</button>
+      <button class="btn" style="background:var(--red);border-color:var(--red);color:#fff;" onclick="doUnregister()" id="unregConfirmBtn">确认注销</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ 工具数据（来自 registry.json 真实数据） ═══
+const tools = [
+  { icon: '🌤', name: 'get_weather', category: 'data', desc: '获取城市实时天气及未来预报（3-7天）', file: 'tools/weather.py', func: 'get_weather', verified: true,
+    params: [{name:'city', type:'string', required:true, desc:'城市名'}, {name:'forecast_days', type:'integer', required:false, desc:'预报天数(1-7)'}],
+    returns: '天气数据（温度、湿度、风力、天气描述、未来预报）',
+    preexecute: { enabled: true, triggers: ['天气','温度','下雨','下雪','刮风','气温','weather'], requires_city: true },
+    has_skill: true },
+  { icon: '🏛', name: 'recommend_attractions', category: 'data', desc: '根据天气分类推荐适合的景点和活动', file: 'tools/recommend.py', func: 'recommend_attractions', verified: true,
+    params: [{name:'city', type:'string', required:true, desc:'城市名'}, {name:'limit', type:'integer', required:false, desc:'返回景点数'}],
+    returns: '推荐景点列表（含名称、适合天气、室内/室外）',
+    preexecute: { enabled: true, triggers: ['推荐景点','去哪玩','好玩的地方','景点推荐','有什么推荐的'], requires_city: true },
+    has_skill: true },
+  { icon: '🎒', name: 'get_equipment_checklist', category: 'data', desc: '根据天气分类获取户外活动装备建议清单', file: 'tools/equipment_checklist.py', func: 'get_checklist', verified: true,
+    params: [{name:'weather_category', type:'string', required:true, desc:'天气分类'}, {name:'scene_type', type:'string', required:false, desc:'场景类型'}],
+    returns: '装备清单列表（含名称、必要程度、备注）',
+    preexecute: { enabled: true, triggers: ['装备','带什么','出行清单','需要带','要带什么'], requires_city: true },
+    has_skill: false },
+  { icon: '🔍', name: 'web_search', category: 'search', desc: '互联网搜索，多提供商自动降级', file: 'tools/web_search.py', func: 'web_search', verified: true,
+    params: [{name:'query', type:'string', required:true, desc:'搜索关键词'}, {name:'max_results', type:'integer', required:false, desc:'返回结果数'}],
+    returns: '搜索结果列表（标题、摘要、链接、来源）',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: true },
+  { icon: '📋', name: 'todo_list', category: 'data', desc: '列出当前任务列表，可选按状态过滤', file: 'tools/todo_manager.py', func: 'todo_list', verified: true,
+    params: [{name:'status', type:'string', required:false, desc:'过滤状态'}],
+    returns: '任务列表（ID、内容、状态、优先级）',
+    preexecute: { enabled: true, triggers: ['任务','待办','我的任务','todo','计划','做什么'], requires_city: false },
+    has_skill: false },
+  { icon: '➕', name: 'todo_add', category: 'data', desc: '添加一个新任务到待办列表', file: 'tools/todo_manager.py', func: 'todo_add', verified: true,
+    params: [{name:'content', type:'string', required:true, desc:'任务内容'}, {name:'priority', type:'string', required:false, desc:'优先级'}],
+    returns: '创建的任务对象',
+    preexecute: { enabled: true, triggers: ['添加任务','新建任务','记一下','提醒我','帮我记'], requires_city: false },
+    has_skill: false },
+  { icon: '📝', name: 'todo_update', category: 'data', desc: '更新任务状态或内容', file: 'tools/todo_manager.py', func: 'todo_update', verified: true,
+    params: [{name:'task_id', type:'string', required:true, desc:'任务ID'}, {name:'status', type:'string', required:false, desc:'新状态'}, {name:'priority', type:'string', required:false, desc:'新优先级'}],
+    returns: '更新后的任务对象',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '🗑', name: 'todo_delete', category: 'data', desc: '删除指定任务', file: 'tools/todo_manager.py', func: 'todo_delete', verified: true,
+    params: [{name:'task_id', type:'string', required:true, desc:'任务ID'}],
+    returns: '删除结果',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '📊', name: 'todo_stats', category: 'data', desc: '统计任务总数和各类状态数量', file: 'tools/todo_manager.py', func: 'todo_stats', verified: true,
+    params: [],
+    returns: '统计信息（总数/待办/进行中/已完成）',
+    preexecute: { enabled: true, triggers: ['进度','完成情况','任务统计','还剩'], requires_city: false },
+    has_skill: false },
+  { icon: '🕰', name: 'session_search', category: 'search', desc: '搜索历史聊天记录中的内容', file: 'tools/session_search.py', func: 'session_search', verified: true,
+    params: [{name:'query', type:'string', required:true, desc:'搜索关键词'}, {name:'limit', type:'integer', required:false, desc:'返回结果数'}],
+    returns: '匹配的消息列表',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '💬', name: 'session_list', category: 'search', desc: '列出最近的聊天会话', file: 'tools/session_search.py', func: 'session_list', verified: true,
+    params: [{name:'limit', type:'integer', required:false, desc:'返回会话数'}],
+    returns: '会话列表',
+    preexecute: { enabled: true, triggers: ['历史记录','之前聊的','最近会话','聊天历史'], requires_city: false },
+    has_skill: false },
+  { icon: '⚙️', name: 'run_code', category: 'system', desc: '多语言代码执行（Python/Shell/JavaScript）', file: 'tools/code_runner.py', func: 'run_code', verified: true,
+    params: [{name:'code', type:'string', required:true, desc:'要执行的代码'}, {name:'language', type:'string', required:false, desc:'语言'}, {name:'timeout', type:'integer', required:false, desc:'超时秒数'}],
+    returns: '执行结果（stdout、stderr、退出码）',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '📍', name: 'geo_geocode', category: 'data', desc: '地址转经纬度坐标（地理编码）', file: 'tools/geo_tools.py', func: 'geo_geocode', verified: true,
+    params: [{name:'query', type:'string', required:true, desc:'地址查询'}, {name:'limit', type:'integer', required:false, desc:'返回结果数'}],
+    returns: '地址列表（含经纬度）',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '🗺', name: 'geo_reverse_geocode', category: 'data', desc: '经纬度转地址名称（逆地理编码）', file: 'tools/geo_tools.py', func: 'geo_reverse_geocode', verified: true,
+    params: [{name:'lat', type:'number', required:true, desc:'纬度'}, {name:'lng', type:'number', required:true, desc:'经度'}],
+    returns: '地址信息',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '🏪', name: 'geo_search_poi', category: 'data', desc: '搜索指定城市的兴趣点', file: 'tools/geo_tools.py', func: 'geo_search_poi', verified: true,
+    params: [{name:'city', type:'string', required:true, desc:'城市名'}, {name:'category', type:'string', required:false, desc:'分类'}, {name:'limit', type:'integer', required:false, desc:'返回结果数'}],
+    returns: 'POI 列表',
+    preexecute: { enabled: true, triggers: ['附近','有什么吃的','去哪吃','商场','酒店'], requires_city: true },
+    has_skill: false },
+  { icon: '🚗', name: 'geo_route', category: 'data', desc: '路线规划（驾车/步行/骑行）', file: 'tools/geo_tools.py', func: 'geo_route', verified: true,
+    params: [{name:'origin', type:'string', required:true, desc:'起点'}, {name:'destination', type:'string', required:true, desc:'终点'}, {name:'mode', type:'string', required:false, desc:'出行方式'}],
+    returns: '路线信息（距离、预计时间）',
+    preexecute: { enabled: true, triggers: ['怎么去','路线','多远','导航','怎么走','距离'], requires_city: false },
+    has_skill: false },
+  { icon: '📄', name: 'extract_text', category: 'data', desc: '从文件提取文字（支持PDF/图片/文本文件）', file: 'tools/extract_document.py', func: 'extract_text', verified: true,
+    params: [{name:'file_path', type:'string', required:true, desc:'文件路径'}],
+    returns: '提取的文字内容',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '📎', name: 'extract_text_from_pdf', category: 'data', desc: '从PDF文件中提取文字', file: 'tools/extract_document.py', func: 'extract_text_from_pdf', verified: true,
+    params: [{name:'file_path', type:'string', required:true, desc:'PDF文件路径'}, {name:'max_pages', type:'integer', required:false, desc:'最大页数'}],
+    returns: 'PDF文字内容',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+  { icon: '🖼', name: 'analyze_image', category: 'data', desc: '使用视觉AI分析本地图片内容', file: 'tools/analyze_image.py', func: 'analyze_image', verified: false,
+    params: [{name:'file_path', type:'string', required:true, desc:'图片文件路径'}, {name:'prompt', type:'string', required:false, desc:'分析提示词'}],
+    returns: '图片内容描述',
+    preexecute: { enabled: false, triggers: [], requires_city: false },
+    has_skill: false },
+];
+
+let currentFilter = 'all';
+let currentSearch = '';
+
+function getToolIcon(name) {
+  const t = tools.find(t => t.name === name);
+  return t ? t.icon : '🛠';
+}
+
+function renderTools() {
+  const grid = document.getElementById('cardGrid');
+  let filtered = [...tools];
+
+  // 分类过滤
+  if (currentFilter === 'unverified') {
+    filtered = filtered.filter(t => !t.verified);
+  } else if (currentFilter !== 'all') {
+    filtered = filtered.filter(t => t.category === currentFilter);
+  }
+
+  // 搜索
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    filtered = filtered.filter(t =>
+      t.name.toLowerCase().includes(q) ||
+      t.desc.toLowerCase().includes(q) ||
+      t.category.includes(q)
+    );
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div style="font-size:15px;margin-bottom:8px;">没有匹配的工具</div><div style="font-size:13px;color:var(--text-dim);">试试其他搜索词或分类</div></div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(t => `
+    <div class="tool-card" onclick="showDetail('${t.name}')">
+      <div class="tool-card-icon">${t.icon}</div>
+      <div class="tool-card-name">
+        <code>${t.name}</code>
+        <span class="tool-card-badge ${t.verified ? 'verified' : 'unverified'}">${t.verified ? '✅' : '⚠️'}</span>
+      </div>
+      <div class="tool-card-desc">${t.desc}</div>
+      <div class="tool-card-footer">
+        <span class="tool-card-tag">
+          <span class="dot ${t.preexecute.enabled ? 'green' : 'gray'}"></span>
+          ${t.preexecute.enabled ? `🔥 ${t.preexecute.triggers.length}触发词` : '⚪ 手动'}
+        </span>
+        <span class="tool-card-tag">${t.category === 'search' ? '🌐' : t.category === 'data' ? '📊' : '⚙️'} ${t.category}</span>
+        ${t.has_skill ? '<span class="tool-card-tag has-skill">📄 有手册</span>' : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterCategory(el, cat) {
+  document.querySelectorAll('.category-tab').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  currentFilter = cat;
+  renderTools();
+}
+
+function searchTools(val) {
+  currentSearch = val;
+  renderTools();
+}
+
+function showDetail(name) {
+  const t = tools.find(x => x.name === name);
+  if (!t) return;
+
+  document.getElementById('detailTitle').innerHTML = `${t.icon} ${t.name}`;
+
+  let html = `
+    <div class="detail-section">
+      <div class="detail-section-title">📝 基本信息</div>
+      <div class="detail-row"><span class="detail-label">描述</span><span class="detail-value">${t.desc}</span></div>
+      <div class="detail-row"><span class="detail-label">文件</span><span class="detail-value"><code>${t.file}</code></span></div>
+      <div class="detail-row"><span class="detail-label">函数</span><span class="detail-value"><code>${t.func}()</code></span></div>
+      <div class="detail-row"><span class="detail-label">分类</span><span class="detail-value">${t.category === 'search' ? '🌐 搜索' : t.category === 'data' ? '📊 数据' : '⚙️ 系统'}  ${t.verified ? '<span style="color:var(--green)">✅ 已验证</span>' : '<span style="color:var(--orange)">⚠️ 未验证</span>'}</span></div>
+    </div>
+  `;
+
+  // 参数表
+  if (t.params.length > 0) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-title">📋 参数</div>
+      <table class="param-table">
+        <tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr>
+        ${t.params.map(p => `
+          <tr>
+            <td><code>${p.name}</code></td>
+            <td><span class="param-type">${p.type}</span></td>
+            <td><span class="param-required ${p.required ? 'yes' : 'no'}">${p.required ? '✅ 必填' : '❌ 可选'}</span></td>
+            <td style="color:var(--text-dim)">${p.desc}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+    `;
+  }
+
+  // 返回值
+  if (t.returns) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-title">📤 返回值</div>
+      <div style="font-size:13px;color:var(--text-dim);">${t.returns}</div>
+    </div>
+    `;
+  }
+
+  // 预执行
+  html += `
+  <div class="detail-section">
+    <div class="detail-section-title">⚡ 预执行配置</div>
+    <div class="detail-row">
+      <span class="detail-label">状态</span>
+      <span class="detail-value">${t.preexecute.enabled ? '<span style="color:var(--green)">🟢 已启用</span>' : '<span style="color:var(--text-muted)">⚪ 已禁用</span>'}</span>
+    </div>
+    ${t.preexecute.enabled ? `
+    <div class="detail-row">
+      <span class="detail-label">触发词</span>
+      <span class="detail-value"><div class="tag-list">${t.preexecute.triggers.map(tr => `<span class="tag-item">${tr}</span>`).join('')}</div></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">需要城市</span>
+      <span class="detail-value">${t.preexecute.requires_city ? '✅ 是' : '❌ 否'}</span>
+    </div>` : ''}
+  </div>
+  `;
+
+  // 使用手册
+  html += `
+  <div class="detail-section">
+    <div class="detail-section-title">📄 使用手册（SKILL.md）</div>
+    ${t.has_skill ? `
+      <div style="margin-bottom:8px;font-size:13px;color:var(--green);">✅ 已创建 &nbsp; <code style="font-size:12px;">tools/${t.name}/SKILL.md</code></div>
+      <div class="skill-preview-box"># ${t.name}\n\n${t.desc}\n\n## 使用示例\n- 查询城市天气\n- 获取预报数据</div>
+    ` : `
+      <div class="empty-skill">❌ 未创建使用手册</div>
+    `}
+  </div>
+
+  <!-- 🧪 测试工具 -->
+  <div class="detail-section">
+    <div class="detail-section-title">🧪 测试工具</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;">
+      <div id="testParams">
+        ${t.params.map(p => `
+          <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+              <code>${p.name}</code>
+              <span style="color:${p.required ? 'var(--green)' : 'var(--text-muted)'};font-size:11px;">${p.required ? '必填' : '可选'}</span>
+              <span style="color:var(--text-muted);font-size:11px;">${p.type}</span>
+            </label>
+            <input class="form-input" id="testParam_${p.name}" placeholder="${p.desc}" ${p.name === 'city' ? 'value="北京"' : p.name === 'query' ? 'value="今天新闻"' : p.name === 'forecast_days' ? 'value="3"' : ''} style="font-size:13px;">
+          </div>
+        `).join('')}
+        ${t.params.length === 0 ? '<div style="color:var(--text-muted);font-size:13px;margin-bottom:8px;">该工具无参数，直接运行即可</div>' : ''}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" onclick="testTool('${t.name}')">▶️ 运行</button>
+        <span id="testStatus_${t.name}" style="font-size:12px;color:var(--text-muted);"></span>
+      </div>
+      <div id="testResult_${t.name}" class="test-result" style="display:none;margin-top:10px;">
+        <div class="test-result-header">
+          <span id="testResultTitle_${t.name}">✅ 执行成功</span>
+          <span id="testResultTime_${t.name}" style="font-size:11px;color:var(--text-muted);"></span>
+        </div>
+        <div id="testResultContent_${t.name}" class="test-result-body">等待运行...</div>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('detailBody').innerHTML = html;
+  document.getElementById('detailModal').classList.add('show');
+  document.title = `${t.icon} ${t.name} — 工具详情`;
+}
+
+function testTool(name) {
+  const t = tools.find(x => x.name === name);
+  if (!t) return;
+
+  const statusEl = document.getElementById(`testStatus_${name}`);
+  const resultEl = document.getElementById(`testResult_${name}`);
+  const contentEl = document.getElementById(`testResultContent_${name}`);
+  const titleEl = document.getElementById(`testResultTitle_${name}`);
+  const timeEl = document.getElementById(`testResultTime_${name}`);
+
+  // 收集参数
+  const params = {};
+  t.params.forEach(p => {
+    const input = document.getElementById(`testParam_${p.name}`);
+    if (input) {
+      const val = input.value.trim();
+      if (val) {
+        params[p.name] = p.type === 'integer' || p.type === 'number' ? Number(val) : val;
+      }
+    }
+  });
+
+  statusEl.textContent = '⏳ 运行中...';
+  resultEl.style.display = 'none';
+
+      // 模拟调用（原型阶段展示调用过程）
+  const startTime = Date.now();
+  setTimeout(() => {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    statusEl.textContent = '';
+    resultEl.style.display = 'block';
+    timeEl.textContent = `${elapsed}s`;
+
+    // 模拟结果（Markdown 格式展示）
+    let md = '';
+    if (name === 'get_weather') {
+      const city = params.city || '北京';
+      const days = params.forecast_days || 3;
+      md = `## 🌤 ${city} 天气
+
+**当前**：18°C，小雨，湿度 65%，东北风 3级
+
+**未来 ${days} 天预报**：
+| 日期 | 温度 | 天气 |
+|------|------|------|
+| 明天 | 22°C | ☀️ 晴 |
+| 后天 | 20°C | ⛅ 多云 |
+| 大后天 | 16°C | 🌧 小雨 |
+
+> 💡 建议：今天出门带伞，明天适合户外活动`;
+    } else if (name === 'web_search') {
+      const q = params.query || '今天新闻';
+      md = `## 🔍 搜索结果：${q}
+
+**共找到 3 条结果**（来源：SearXNG + DuckDuckGo）
+
+---
+
+### 1. 全球科技巨头宣布新一代AI芯片
+> 某科技公司今日发布新一代AI训练芯片，性能提升3倍...
+[查看原文](https://example.com/news/1)
+
+### 2. 今日财经：股市全线飘红
+> 受利好消息影响，三大指数集体上涨...
+[查看原文](https://example.com/news/2)
+
+### 3. 天气预报：未来三天全国大部晴好
+> 中央气象台发布最新预报，未来三天全国大部地区天气晴好...
+[查看原文](https://example.com/news/3)`;
+    } else if (name === 'todo_list') {
+      md = `## 📋 我的任务（2项待办）
+
+| 状态 | 内容 | 优先级 |
+|------|------|--------|
+| 🔄 进行中 | 完成工具管理界面 | 高 |
+| ⏳ 待办 | 提交代码评审 | 中 |
+| ✅ 已完成 | 修复天气工具bug | 高 |
+| ✅ 已完成 | 更新registry.json | 低 |
+
+**进度**：2/4 ✅`;
+    } else if (name === 'geo_route') {
+      const from = params.origin || '北京站';
+      const to = params.destination || '天安门';
+      const mode = params.mode || 'driving';
+      md = `## 🚗 路线规划
+
+**${from} → ${to}**
+**方式**：${mode === 'driving' ? '🚗 驾车' : mode === 'walking' ? '🚶 步行' : '🚲 骑行'}
+
+| 指标 | 数据 |
+|------|------|
+| 距离 | 5.2 km |
+| 预计时间 | 15 分钟 |
+| 路线 | 沿长安街直行 |
+
+> 🅿️ 目的地附近有停车场`;
+    } else {
+      md = `## ✅ 工具执行成功
+
+**工具**：\`${name}\`
+**参数**：
+\`\`\`
+${JSON.stringify(params, null, 2)}
+\`\`\`
+
+> 返回数据已就绪，可在对话中使用`;
+    }
+    contentEl.textContent = md;
+    titleEl.textContent = '✅ 执行成功';
+    titleEl.style.color = 'var(--green)';
+  }, 800);
+}
+
+let _unregTargetName = '';
+
+function showUnregisterConfirm() {
+  // 从详情弹窗标题取当前工具名
+  const titleEl = document.getElementById('detailTitle');
+  const match = titleEl.textContent.match(/\s(.+)/);
+  _unregTargetName = match ? match[1].trim() : '未知工具';
+  document.getElementById('unregToolName').textContent = `「${_unregTargetName}」`;
+  document.getElementById('unregisterModal').classList.add('show');
+}
+
+function hideUnregisterConfirm() {
+  document.getElementById('unregisterModal').classList.remove('show');
+  _unregTargetName = '';
+}
+
+function doUnregister() {
+  const name = _unregTargetName;
+  hideUnregisterConfirm();
+  hideDetailModal();
+  // 模拟注销成功
+  setTimeout(() => {
+    alert(`✅ 工具「${name}」已成功注销`);
+  }, 100);
+}
+
+function hideDetailModal() {
+  document.getElementById('detailModal').classList.remove('show');
+  document.title = '坐山客 — 工具管理 原型';
+}
+
+function showRegisterModal() {
+  document.getElementById('registerModal').classList.add('show');
+}
+
+function hideRegisterModal() {
+  document.getElementById('registerModal').classList.remove('show');
+}
+
+function addParamRow() {
+  const list = document.getElementById('paramList');
+  const row = document.createElement('div');
+  row.className = 'form-row';
+  row.style.marginBottom = '8px';
+  row.innerHTML = `
+    <div class="form-group" style="flex:2;"><input class="form-input" placeholder="参数名"></div>
+    <div class="form-group" style="flex:1;"><select class="form-select"><option>string</option><option>integer</option><option>number</option><option>boolean</option></select></div>
+    <div class="form-group" style="flex:0 0 60px;"><label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text-dim);padding-top:8px;"><input type="checkbox"> 必填</label></div>
+    <button class="btn-sm" style="flex-shrink:0;margin-top:4px;" onclick="this.parentElement.remove()">✕</button>
+  `;
+  list.appendChild(row);
+}
+
+function switchView(view) {
+  // 更新侧边栏高亮
+  document.querySelectorAll('.sidebar-nav').forEach(n => {
+    n.style.background = '';
+    n.style.color = '';
+    n.style.borderLeftColor = 'transparent';
+  });
+
+  // 隐藏所有视图
+  ['toolsView','scenesView','skillsView','memoryView'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display = 'none';
+  });
+
+  if (view === 'tools') {
+    document.getElementById('toolsView').style.display = 'flex';
+    document.querySelector('.sidebar-nav:nth-child(10)').style.background = 'var(--hover-bg)';
+    document.querySelector('.sidebar-nav:nth-child(10)').style.color = 'var(--text)';
+    document.querySelector('.sidebar-nav:nth-child(10)').style.borderLeftColor = 'var(--accent)';
+    document.getElementById('topbarTitle').textContent = '🛠️ 工具管理';
+    renderTools();
+  } else if (view === 'scenes') {
+    document.getElementById('scenesView').style.display = 'flex';
+    document.getElementById('topbarTitle').textContent = '🏪 场景广场';
+  } else if (view === 'skills') {
+    document.getElementById('skillsView').style.display = 'flex';
+    document.querySelector('.sidebar-nav:nth-child(11)').style.background = 'var(--hover-bg)';
+    document.querySelector('.sidebar-nav:nth-child(11)').style.color = 'var(--text)';
+    document.querySelector('.sidebar-nav:nth-child(11)').style.borderLeftColor = 'var(--accent)';
+    document.getElementById('topbarTitle').textContent = '📘 技能管理';
+  } else if (view === 'memory') {
+    document.getElementById('memoryView').style.display = 'flex';
+    document.querySelector('.sidebar-nav:nth-child(12)').style.background = 'var(--hover-bg)';
+    document.querySelector('.sidebar-nav:nth-child(12)').style.color = 'var(--text)';
+    document.querySelector('.sidebar-nav:nth-child(12)').style.borderLeftColor = 'var(--accent)';
+    document.getElementById('topbarTitle').textContent = '🧠 记忆管理';
+  }
+}
+
+// 点击 modal overlay 关闭
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.classList.remove('show');
+    }
+  });
+});
+
+// 初始渲染
+renderTools();
+</script>
+</body>
+</html>
