@@ -356,7 +356,7 @@ export function ChatView() {
     currentScene, currentChannel,
     sendSceneMsg, sendChannelMsg,
     deleteMsg, regenerateMsg, newSceneSession,
-    batchDeleteMsgs, clearSceneMsgs,
+    batchDeleteMsgs, clearSceneMsgs, clearChannelHistory,
     sessions, loadSceneSessions, switchSceneSession,
     isGenerating,
     currentModelName,
@@ -581,6 +581,11 @@ export function ChatView() {
   };
 
   const handleNewSession = async () => {
+    if (isChannel && currentChannel) {
+      if (!confirm('开始新对话？当前聊天记录将清空。')) return;
+      await clearChannelHistory(currentChannel.id);
+      return;
+    }
     if (!currentScene) return;
     if (!confirm('开始新对话？之前的聊天记录将保留但不再显示。')) return;
     setShowSessionPanel(false);
@@ -633,6 +638,18 @@ export function ChatView() {
   };
 
   const handleClearAll = async () => {
+    if (isChannel && currentChannel) {
+      if (clearStep === 0) {
+        setClearStep(1);
+        return;
+      }
+      if (clearStep === 1) {
+        if (!confirm('⚠️ 此操作将永久删除该频道的所有聊天记录，不可恢复。确定继续？')) return;
+        setClearStep(0);
+        await clearChannelHistory(currentChannel.id);
+      }
+      return;
+    }
     if (!currentScene) return;
     if (clearStep === 0) {
       setClearStep(1);
@@ -658,26 +675,30 @@ export function ChatView() {
           <div className="chat-context-label">
             <span>{contextLabel}</span>
             <div className="chat-label-actions">
-              {!isChannel && currentScene && (
-                <>
+              <>
+                {!isChannel && currentScene && (
                   <button className="new-session-btn" onClick={() => { setShowSessionPanel(!showSessionPanel); loadSceneSessions(currentScene.id); }} title="查看历史会话">
                     📋 记录
                   </button>
-                  <button className="new-session-btn" onClick={handleNewSession} title="开始新对话">
-                    🆕 新会话
-                  </button>
-                  <button className="new-session-btn" onClick={selectMode ? exitSelectMode : enterSelectMode} title={selectMode ? '退出选择' : '选择多条消息'}>
-                    {selectMode ? '✅ 完成' : '☑️ 管理'}
-                  </button>
-                  <button
-                    className={`new-session-btn ${clearStep > 0 ? 'danger-btn' : ''}`}
-                    onClick={handleClearAll}
-                    title="清空聊天记录"
-                  >
-                    {clearStep === 0 ? '🗑 清空' : '⚠️ 确认清空?'}
-                  </button>
-                </>
-              )}
+                )}
+                {(currentScene || currentChannel) && (
+                  <>
+                    <button className="new-session-btn" onClick={handleNewSession} title="开始新对话">
+                      🆕 新会话
+                    </button>
+                    <button className="new-session-btn" onClick={selectMode ? exitSelectMode : enterSelectMode} title={selectMode ? '退出选择' : '选择多条消息'}>
+                      {selectMode ? '✅ 完成' : '☑️ 管理'}
+                    </button>
+                    <button
+                      className={`new-session-btn ${clearStep > 0 ? 'danger-btn' : ''}`}
+                      onClick={handleClearAll}
+                      title="清空聊天记录"
+                    >
+                      {clearStep === 0 ? '🗑 清空' : '⚠️ 确认清空?'}
+                    </button>
+                  </>
+                )}
+              </>
             </div>
           </div>
         )}

@@ -203,6 +203,18 @@ def call_llm_with_tools(
             "tool_choice": "auto",
         }
 
+        # Debug: log message count per role
+        role_counts = {}
+        for m in messages:
+            r = m.get("role", "?")
+            role_counts[r] = role_counts.get(r, 0) + 1
+        has_tool_calls = any("tool_calls" in m for m in messages)
+        logger.info(
+            f"[AgentLoop] LLM 请求: roles={role_counts} "
+            f"msgs={len(messages)} tools={len(tools)} "
+            f"has_tool_call_msg={has_tool_calls}"
+        )
+
         resp = requests.post(
             f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
             headers={
@@ -215,8 +227,23 @@ def call_llm_with_tools(
         resp.raise_for_status()
         return resp.json()
 
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if hasattr(e, 'response') else 0
+        detail = ""
+        try:
+            detail = e.response.text[:500]
+        except Exception:
+            pass
+        logger.error(f"[AgentLoop] LLM HTTP {status}: {detail}")
+        return None
+    except requests.exceptions.Timeout:
+        logger.error("[AgentLoop] LLM 请求超时")
+        return None
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"[AgentLoop] LLM 连接失败: {e}")
+        return None
     except Exception as e:
-        logger.error(f"[AgentLoop] LLM 调用失败: {e}")
+        logger.error(f"[AgentLoop] LLM 调用异常: {e}")
         return None
 
 
@@ -304,7 +331,16 @@ def run_agent_loop(
             }
             return
 
-        # 3c. 有 tool_calls → 逐个执行
+        # 3c. 有 tool_calls → 先把 assistant 消息加入（含 tool_calls）
+        #     再逐个执行工具，结果用 tool role 追加
+        #     顺序必须：assistant(tool_calls) → tool → assistant(tool_calls) → tool → ...
+        assistant_msg = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": tool_calls,
+        }
+        messages.append(assistant_msg)
+
         for tc in tool_calls:
             try:
                 func = tc.get("function", {})
@@ -355,7 +391,6 @@ def run_agent_loop(
                     "role": "tool",
                     "tool_call_id": tc.get("id", ""),
                     "content": tool_result_content,
-                    "name": tool_name,
                 })
 
             except json.JSONDecodeError as e:
@@ -370,15 +405,6 @@ def run_agent_loop(
                     "tool": tool_name if 'tool_name' in locals() else "?",
                     "error": f"工具执行异常: {e}",
                 }
-
-        # 将 LLM 的回复加入对话（含 tool_calls 消息）
-        assistant_msg = {
-            "role": "assistant",
-            "content": None if tool_calls else (msg.get("content") or ""),
-        }
-        if tool_calls:
-            assistant_msg["tool_calls"] = tool_calls
-        messages.append(assistant_msg)
 
         yield {"type": "status", "message": f"第 {step + 1} 步完成，继续..."}
 

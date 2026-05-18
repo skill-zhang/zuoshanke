@@ -114,13 +114,13 @@ def _build_cmd(code: str, language: str) -> list[str]:
     lang = language.lower().strip()
     if lang == "python":
         return ["python3", "-c", code]
-    elif lang == "shell":
+    elif lang in ("shell", "bash"):
         return ["bash", "-c", code]
     elif lang in ("javascript", "js", "node"):
         return [_NODE_PATH, "-e", code]
     else:
         raise ValueError(
-            f"不支持的语言: '{language}'。支持的: python, shell, javascript/js/node"
+            f"不支持的语言: '{language}'。支持的: python, shell/bash, javascript/js/node"
         )
 
 
@@ -200,7 +200,7 @@ def run_code(
 
     参数:
         code:     要执行的代码字符串
-        language: 语言标识 — 'python', 'shell', 'javascript' (或 'js', 'node')
+        language: 语言标识 — 'python', 'shell'/'bash', 'javascript' (或 'js', 'node')
         timeout:  超时秒数（默认 30）
 
     返回:

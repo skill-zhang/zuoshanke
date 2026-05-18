@@ -203,7 +203,7 @@
       "function": "run_code",
       "parameters": {
         "code": {"type": "string", "description": "要执行的代码"},
-        "language": {"type": "string", "description": "语言(python/bash/javascript)", "optional": true},
+        "language": {"type": "string", "description": "语言(python/shell/bash/javascript)", "optional": true},
         "timeout": {"type": "integer", "description": "超时秒数", "optional": true}
       },
       "returns": "执行结果（stdout、stderr、退出码）",
