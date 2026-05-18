@@ -12,6 +12,7 @@ import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { MemoryDrawer } from './components/MemoryDrawer';
 import { SkillsDrawer } from './components/SkillsDrawer';
+import { AgentCharacter } from './components/AgentCharacter';
 import { Scene, createScene, listProjects } from './api/client';
 
 export default function App() {
@@ -26,10 +27,16 @@ export default function App() {
 
   const [createName, setCreateName] = useState('');
   const [createCategory, setCreateCategory] = useState('other');
-  const [createNewCategory, setCreateNewCategory] = useState('');  // 新建类别时输入
-  const [createUseNewCategory, setCreateUseNewCategory] = useState(false);  // 是否使用新类别
+  const [createNewCategory, setCreateNewCategory] = useState('');
+  const [createUseNewCategory, setCreateUseNewCategory] = useState(false);
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // 角色动画状态（订阅 store，保证重渲染）
+  const agentStatus = useStore(s => s.agentStatus);
+  const agentMessage = useStore(s => s.agentMessage);
+  const agentHidden = useStore(s => s.agentHidden);
+  const toggleAgentHidden = useStore(s => s.toggleAgentHidden);
 
   useEffect(() => {
     loadProjects();
@@ -127,6 +134,12 @@ export default function App() {
   return (
     <>
       <Topbar extraTitle={getTitle()} />
+      <AgentCharacter
+        status={agentStatus}
+        message={agentMessage}
+        hidden={agentHidden}
+        onToggle={toggleAgentHidden}
+      />
 
       <div className="main">
         <Sidebar />
