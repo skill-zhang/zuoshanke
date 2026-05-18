@@ -1,4 +1,5 @@
 """场景 + Thinking Map CRUD + 场景流式 + 场景广场/工坊/发布/导入导出"""
+import difflib
 import json
 import uuid
 from typing import List, Optional
@@ -356,10 +357,16 @@ def update_node(node_id: str, data: ThinkNodeUpdate, db: Session = Depends(get_d
     node = db.query(ThinkNode).filter(ThinkNode.id == node_id).first()
     if not node:
         raise HTTPException(404, "节点不存在")
-    for field in ("label", "status", "actionable", "discussion", "position_x", "position_y"):
+    for field in ("label", "status", "actionable", "discussion", "position_x", "position_y",
+                  "priority", "queue_order", "execution_result", "created_by"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(node, field, val)
+    # JSON list fields
+    if data.converged_from is not None:
+        node.converged_from = data.converged_from
+    if data.depends_on is not None:
+        node.depends_on = data.depends_on
 
     tmap = db.query(ThinkingMap).filter(ThinkingMap.id == node.map_id).first()
     if tmap:
@@ -380,8 +387,293 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-# ═══ 工具卡片 ═══
+# ═══ Agent Loop: Converge ═══
 
+@router.post("/api/thinking-maps/{map_id}/converge")
+def converge_thinking_map(map_id: str, db: Session = Depends(get_db)):
+    """
+    收敛 Thinking Map：
+    1. 获取所有 status=discussing 的叶子节点
+    2. 用标签相似度聚类（difflib.SequenceMatcher）
+    3. 对每组 2+ 相似节点：创建 refined 节点 + 标记源节点为 discarded
+    4. 单节点可选提升为 refined
+    返回收敛结果：merged_pairs + 更新后的 TM
+    """
+    tmap = db.query(ThinkingMap).filter(ThinkingMap.id == map_id).first()
+    if not tmap:
+        raise HTTPException(404, "Thinking Map 不存在")
+
+    # 获取根节点（作为收敛后的父节点）
+    root = db.query(ThinkNode).filter(
+        ThinkNode.map_id == map_id, ThinkNode.type == "root"
+    ).first()
+    if not root:
+        raise HTTPException(400, "Thinking Map 缺少根节点")
+
+    nodes = db.query(ThinkNode).filter(
+        ThinkNode.map_id == map_id,
+        ThinkNode.status.in_(["discussing", "created"]),
+    ).all()
+
+    if not nodes:
+        return {"map_id": map_id, "merged": [], "discarded": [], "message": "没有需要收敛的节点"}
+
+    # 1. 聚类：共享公共子串检测（对中文短标签友好）
+    # 如果两个标签包含至少一个长度 >=2 的公共子串，则认为相似
+    def _share_substr(a: str, b: str, min_len: int = 2) -> bool:
+        """检查两个字符串是否有长度 >= min_len 的公共子串"""
+        subs = {a[i:i+min_len] for i in range(len(a)-min_len+1)}
+        for i in range(len(b)-min_len+1):
+            if b[i:i+min_len] in subs:
+                return True
+        return False
+
+    clusters = []
+    assigned = set()
+
+    for i, a in enumerate(nodes):
+        if a.id in assigned:
+            continue
+        group = [a]
+        assigned.add(a.id)
+        for j, b in enumerate(nodes):
+            if b.id in assigned or i == j:
+                continue
+            if _share_substr(a.label, b.label, min_len=2):
+                group.append(b)
+                assigned.add(b.id)
+        clusters.append(group)
+
+    merged_pairs = []
+    new_nodes = []
+    for group in clusters:
+        if len(group) >= 2:
+            # 合并：创建 refined 节点
+            best_label = group[0].label  # 取第一个为名
+            merged_labels = [n.label for n in group]
+            new_id = f"node-{uuid.uuid4().hex[:8]}"
+            refined = ThinkNode(
+                id=new_id,
+                map_id=map_id,
+                parent_id=root.id,
+                type="leaf",
+                label=best_label,
+                status="refined",
+                converged_from=merged_labels,
+                created_by="brainstorm",
+            )
+            db.add(refined)
+            new_nodes.append(refined)
+            merged_pairs.append({
+                "target_id": new_id,
+                "target_label": best_label,
+                "source_labels": merged_labels,
+                "source_ids": [n.id for n in group],
+            })
+            # 标记源节点为 discarded
+            for node in group:
+                node.status = "discarded"
+        else:
+            # 单节点 → 升级为 refined（准备进入队列）
+            node = group[0]
+            node.status = "refined"
+
+    tmap.version += 1
+    tmap.updated_at = utcnow()
+    db.commit()
+
+    # 刷新返回
+    db.refresh(tmap)
+    tmap.nodes  # trigger load
+    return {
+        "map_id": map_id,
+        "merged": merged_pairs,
+        "discarded": [],  # 预留：后续可加不可行检测
+        "thinking_map": {
+            "id": tmap.id,
+            "title": tmap.title,
+            "status": tmap.status,
+            "version": tmap.version,
+            "nodes": [n.to_schema_dict() for n in tmap.nodes],
+        },
+    }
+
+
+# ═══ Agent Loop: Priority Queue ═══
+
+def _topological_sort(nodes: list) -> list:
+    """
+    拓扑排序（Kahn 算法）。
+    nodes: 每个元素有 id, depends_on (list of ids)。
+    返回排序后的节点列表；若有环则按入度降序返回（尽力而为）。
+    """
+    adj = {n.id: [] for n in nodes}  # 邻接表
+    in_deg = {n.id: 0 for n in nodes}
+    id_map = {n.id: n for n in nodes}
+
+    for n in nodes:
+        for dep_id in (n.depends_on or []):
+            if dep_id in adj:
+                adj[dep_id].append(n.id)
+                in_deg[n.id] = in_deg.get(n.id, 0) + 1
+
+    queue = [nid for nid, d in in_deg.items() if d == 0]
+    sorted_ids = []
+
+    while queue:
+        # 按依赖数量排序，先处理 blocking 更多的
+        queue.sort(key=lambda nid: len(adj.get(nid, [])), reverse=True)
+        nid = queue.pop(0)
+        sorted_ids.append(nid)
+        for neighbor in adj.get(nid, []):
+            in_deg[neighbor] -= 1
+            if in_deg[neighbor] == 0:
+                queue.append(neighbor)
+
+    # 如果有剩余（环），按入度降序追加
+    remaining = [nid for nid in in_deg if nid not in sorted_ids]
+    remaining.sort(key=lambda nid: in_deg[nid], reverse=True)
+    sorted_ids.extend(remaining)
+
+    return [id_map[nid] for nid in sorted_ids if nid in id_map]
+
+
+@router.post("/api/thinking-maps/{map_id}/prioritize")
+def prioritize_thinking_map(map_id: str, db: Session = Depends(get_db)):
+    """
+    自动排序 Priority Queue：
+    1. 收集所有 status=refined 的节点
+    2. 基于公共子串启发式检测依赖关系（如果 A 的标签包含 B 标签的子串 → A 依赖 B）
+    3. 拓扑排序
+    4. 分配 priority + queue_order
+    5. 孤立的单节点（无依赖无阻塞）排最后
+    """
+    tmap = db.query(ThinkingMap).filter(ThinkingMap.id == map_id).first()
+    if not tmap:
+        raise HTTPException(404, "Thinking Map 不存在")
+
+    # 只处理 refined 节点
+    refined_nodes = db.query(ThinkNode).filter(
+        ThinkNode.map_id == map_id,
+        ThinkNode.status == "refined",
+    ).all()
+
+    if not refined_nodes:
+        return {"map_id": map_id, "queue": [], "message": "没有 refined 节点需要排序"}
+
+    # 1. 启发式依赖检测：如果 A 标签包含 B 标签中长度 >=2 的子串，A 依赖 B
+    def _shares_substr(a: str, b: str) -> bool:
+        subs = {a[i:i+2] for i in range(len(a)-1)}
+        for i in range(len(b)-1):
+            if b[i:i+2] in subs:
+                return True
+        return False
+
+    current_deps = {}
+    for n in refined_nodes:
+        deps = n.depends_on or []
+        # 自动检测：如果当前节点标签包含其他节点标签的子串，自动添加依赖
+        for other in refined_nodes:
+            if other.id == n.id:
+                continue
+            # 如果 other 的标签是 n 标签的子串 → n 依赖 other（other 是前置条件）
+            if other.label in n.label or _shares_substr(other.label, n.label):
+                if other.id not in deps:
+                    deps.append(other.id)
+        n.depends_on = list(set(deps))  # 去重
+        current_deps[n.id] = n.depends_on
+
+    # 2. 拓扑排序
+    sorted_nodes = _topological_sort(refined_nodes)
+
+    # 3. 计算每个节点的阻塞数（有多少节点直接依赖它）
+    dependents_count = {n.id: 0 for n in refined_nodes}
+    for n in sorted_nodes:
+        for dep_id in (n.depends_on or []):
+            if dep_id in dependents_count:
+                dependents_count[dep_id] = dependents_count.get(dep_id, 0) + 1
+
+    # 4. 分配 queue_order + priority
+    queue = []
+    level_map = {}  # nid → depth level
+
+    # BFS 计算依赖深度
+    for n in sorted_nodes:
+        deps = n.depends_on or []
+        if not deps:
+            level_map[n.id] = 0
+        else:
+            existing_levels = [level_map.get(d, 0) for d in deps if d in level_map]
+            level_map[n.id] = max(existing_levels, default=0) + 1
+
+    for idx, n in enumerate(sorted_nodes):
+        n.queue_order = idx + 1
+        blocks = dependents_count.get(n.id, 0)
+
+        # 优先级启发式
+        if blocks >= 2:
+            n.priority = 1  # P1: 2+ 节点依赖它（关键阻塞）
+        elif blocks >= 1:
+            n.priority = 2  # P2: 1 个节点依赖它
+        elif level_map.get(n.id, 0) == 0:
+            n.priority = 1  # P1: 无依赖，可立即开工
+        elif level_map.get(n.id, 0) <= 2:
+            n.priority = 3  # P3: 有依赖但浅
+        else:
+            n.priority = 4  # P4: 深依赖或无阻塞
+
+        queue.append({
+            "id": n.id,
+            "label": n.label,
+            "queue_order": n.queue_order,
+            "priority": n.priority,
+            "depends_on": n.depends_on or [],
+            "blocks_count": blocks,
+            "level": level_map.get(n.id, 0),
+        })
+
+    tmap.version += 1
+    tmap.updated_at = utcnow()
+    db.commit()
+
+    return {
+        "map_id": map_id,
+        "queue": queue,
+        "node_count": len(queue),
+    }
+
+
+@router.get("/api/thinking-maps/{map_id}/queue")
+def get_priority_queue(map_id: str, db: Session = Depends(get_db)):
+    """获取 Priority Queue（按 queue_order 排序）"""
+    tmap = db.query(ThinkingMap).filter(ThinkingMap.id == map_id).first()
+    if not tmap:
+        raise HTTPException(404, "Thinking Map 不存在")
+
+    refined = db.query(ThinkNode).filter(
+        ThinkNode.map_id == map_id,
+        ThinkNode.status == "refined",
+    ).order_by(ThinkNode.queue_order).all()
+
+    queue = []
+    for n in refined:
+        queue.append({
+            "id": n.id,
+            "label": n.label,
+            "queue_order": n.queue_order,
+            "priority": n.priority,
+            "depends_on": n.depends_on or [],
+            "converged_from": n.converged_from or [],
+        })
+
+    return {
+        "map_id": map_id,
+        "queue": queue,
+        "node_count": len(queue),
+    }
+
+
+# ═══ 工具卡片 ═══
 def _build_tool_cards(tool_results: list[dict]) -> list[dict]:
     """将预执行工具结果转为前端可渲染的卡片数据
 

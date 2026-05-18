@@ -81,12 +81,21 @@ class ThinkNode(Base):
     parent_id = Column(String, ForeignKey("think_nodes.id"), nullable=True)
     type = Column(String, nullable=False)  # root | domain | leaf
     label = Column(String, nullable=False)
-    status = Column(String, default="discussing")  # confirmed | discussing | unknown | mixed
+    status = Column(String, default="discussing")  # confirmed | discussing | unknown | mixed | refined | discarded
     actionable = Column(Boolean, default=False)      # 仅 leaf 可为 true
     context_ref = Column(String, nullable=True)       # 关联对话消息 ID
     discussion = Column(JSON, default=list)           # [string] 待讨论子问题
     linked_action_map = Column(String, nullable=True)
     action_status = Column(String, nullable=True)
+
+    # === Agent Loop v1 新字段 ===
+    converged_from = Column(JSON, default=list)       # [string] 被合并的原始节点名列表
+    created_by = Column(String, default="brainstorm") # brainstorm | reflect | manual
+    priority = Column(Integer, nullable=True)         # 1-4 (P1-P4)
+    queue_order = Column(Integer, nullable=True)      # Priority Queue 排序位置
+    depends_on = Column(JSON, default=list)           # [string] 依赖的节点 ID 列表（DAG）
+    execution_result = Column(Text, nullable=True)    # 执行结果摘要（Reflect 注入）
+
     # 布局坐标（前端渲染用）
     position_x = Column(Integer, nullable=True)
     position_y = Column(Integer, nullable=True)
@@ -103,7 +112,16 @@ class ThinkNode(Base):
             "label": self.label,
             "status": self.status,
             "children": child_ids,
+            "converged_from": self.converged_from or [],
+            "created_by": self.created_by or "brainstorm",
+            "depends_on": self.depends_on or [],
         }
+        if self.priority is not None:
+            d["priority"] = self.priority
+        if self.queue_order is not None:
+            d["queue_order"] = self.queue_order
+        if self.execution_result:
+            d["execution_result"] = self.execution_result
         if self.type == "root":
             d.pop("children", None)  # root 用 children 数组
             d["children"] = child_ids

@@ -4,7 +4,7 @@ import {
   listProjects, createProject, deleteProject,
   listScenes, createScene, updateScene, deleteScene,
   listPlazaScenes, listWorkshopScenes, publishScene, exportScene, importScene,
-  getThinkingMap, addNode, updateNode, deleteNode,
+  getThinkingMap, addNode, updateNode, deleteNode, convergeMap, prioritizeMap, getQueue,
   sendMessage, listSceneMessages, sendSceneMessageStream,
   deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
   newSceneSession as apiNewSceneSession,
@@ -48,6 +48,15 @@ interface AppState {
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleNodeActionable: (nodeId: string, actionable: boolean) => Promise<void>;
+
+  // ═══ Agent Loop v1 ═══
+  updateNodeStatus: (nodeId: string, status: string) => Promise<void>;
+  updateNodePriority: (nodeId: string, priority: number | null) => Promise<void>;
+  updateNodeQueueOrder: (nodeId: string, queueOrder: number | null) => Promise<void>;
+  updateNodeDependsOn: (nodeId: string, dependsOn: string[]) => Promise<void>;
+  convergeThinkingMap: () => Promise<any>;
+  prioritizeThinkingMap: () => Promise<any>;
+  getPriorityQueue: () => Promise<any>;
 
   // ═══ Action Map ═══
   actionMaps: ActionMapType[];
@@ -206,6 +215,59 @@ export const useStore = create<AppState>((set, get) => ({
     if (state.currentScene) {
       await state.loadThinkingMap(state.currentScene.id);
     }
+  },
+
+  // ═══ Agent Loop v1 ═══
+  updateNodeStatus: async (nodeId, status) => {
+    await updateNode(nodeId, { status });
+    const state = get();
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+  },
+  updateNodePriority: async (nodeId, priority) => {
+    await updateNode(nodeId, { priority });
+    const state = get();
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+  },
+  updateNodeQueueOrder: async (nodeId, queue_order) => {
+    await updateNode(nodeId, { queue_order });
+    const state = get();
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+  },
+  updateNodeDependsOn: async (nodeId, depends_on) => {
+    await updateNode(nodeId, { depends_on });
+    const state = get();
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+  },
+  convergeThinkingMap: async () => {
+    const state = get();
+    if (!state.thinkingMap) return;
+    const result = await convergeMap(state.thinkingMap.id);
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+    return result;
+  },
+  prioritizeThinkingMap: async () => {
+    const state = get();
+    if (!state.thinkingMap) return;
+    const result = await prioritizeMap(state.thinkingMap.id);
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+    return result;
+  },
+  getPriorityQueue: async () => {
+    const state = get();
+    if (!state.thinkingMap) return null;
+    return getQueue(state.thinkingMap.id);
   },
 
   // ═══ Action Map ═══

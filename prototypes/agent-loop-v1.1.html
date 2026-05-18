@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Loop 原型 · v1.1</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+    background: #0f0f13;
+    color: #e0e0e8;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header .tag {
+    background: rgba(139, 92, 246, 0.2); color: #a78bfa;
+    padding: 2px 10px; border-radius: 10px; font-size: 12px;
+  }
+  .header .tag.old {
+    background: rgba(100,100,120,0.15); color: #777;
+    text-decoration: line-through; cursor: pointer;
+  }
+  .header .sub { color: #888; font-size: 13px; margin-left: auto; }
+
+  /* === Loop Diagram === */
+  .loop-diagram {
+    background: #1a1a24; border-radius: 12px; padding: 28px 20px;
+    margin-bottom: 16px; border: 1px solid #2a2a3a;
+  }
+  .loop-diagram h2 { font-size: 15px; color: #999; margin-bottom: 18px; font-weight: 500; }
+  .loop-flow {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    flex-wrap: wrap;
+  }
+  .loop-step {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    position: relative;
+  }
+  .loop-step .icon {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; transition: all 0.3s;
+    cursor: pointer;
+  }
+  .loop-step .icon:hover { transform: scale(1.1); }
+  .loop-step .icon.diverge { background: rgba(59, 130, 246, 0.2); border: 2px solid #3b82f6; }
+  .loop-step .icon.converge { background: rgba(249, 115, 22, 0.2); border: 2px solid #f97316; }
+  .loop-step .icon.sort { background: rgba(168, 85, 247, 0.2); border: 2px solid #a855f7; }
+  .loop-step .icon.focus { background: rgba(34, 197, 94, 0.2); border: 2px solid #22c55e; }
+  .loop-step .icon.reflect { background: rgba(236, 72, 153, 0.2); border: 2px solid #ec4899; }
+  .loop-step .label { font-size: 12px; color: #aaa; font-weight: 500; }
+  .loop-step .desc { font-size: 10px; color: #666; max-width: 80px; text-align: center; }
+  .loop-arrow {
+    width: 40px; height: 2px; background: #3a3a4a; position: relative;
+    margin: 0 2px; flex-shrink: 0;
+  }
+  .loop-arrow::after {
+    content: '›'; position: absolute; right: -6px; top: -7px;
+    color: #3a3a4a; font-size: 16px; font-weight: bold;
+  }
+  .loop-arrow.highlight { background: #a78bfa; }
+  .loop-arrow.highlight::after { color: #a78bfa; }
+
+  /* === Collapsible Mind Map Section === */
+  .mm-toggle {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; margin-bottom: 8px;
+    background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px;
+    cursor: pointer; user-select: none;
+    font-size: 13px; color: #ccc; transition: all 0.2s;
+  }
+  .mm-toggle:hover { border-color: #3a3a5a; background: #1e1e2a; }
+  .mm-toggle .arrow { transition: transform 0.25s; font-size: 12px; color: #777; }
+  .mm-toggle .arrow.open { transform: rotate(90deg); }
+  .mm-toggle .mm-badge {
+    margin-left: auto; font-size: 11px; color: #777;
+  }
+  .mm-body {
+    overflow: hidden; transition: max-height 0.35s ease;
+    max-height: 0;
+  }
+  .mm-body.open { max-height: 600px; }
+  .mm-content {
+    background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .mm-content .mm-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .mm-content .mm-header h3 { font-size: 14px; font-weight: 600; }
+  .mm-content .mm-legend {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    font-size: 11px; color: #777; margin-bottom: 10px;
+  }
+  .mm-content .mm-legend span { display: flex; align-items: center; gap: 4px; }
+
+  /* Pure SVG Mind Map Tree */
+  .mm-tree { width: 100%; height: 360px; display: block; }
+
+  /* === Main Grid === */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  /* === Card === */
+  .card {
+    background: #1a1a24; border-radius: 12px; padding: 20px;
+    border: 1px solid #2a2a3a;
+  }
+  .card h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h3 .badge {
+    font-size: 11px; padding: 1px 8px; border-radius: 8px;
+    font-weight: 400;
+  }
+  .badge-gray { background: #2a2a3a; color: #999; }
+  .badge-blue { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .badge-orange { background: rgba(249,115,22,0.2); color: #fb923c; }
+  .badge-green { background: rgba(34,197,94,0.2); color: #4ade80; }
+  .badge-purple { background: rgba(168,85,247,0.2); color: #c084fc; }
+  .badge-pink { background: rgba(236,72,153,0.2); color: #f472b6; }
+  .badge-red { background: rgba(239,68,68,0.2); color: #f87171; }
+
+  /* === Thinking Map === */
+  .tm-nodes { display: flex; flex-direction: column; gap: 6px; }
+  .tm-node {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px;
+    background: #22222e; border: 1px solid #2a2a3a;
+    font-size: 13px; cursor: default;
+    transition: all 0.2s;
+  }
+  .tm-node:hover { border-color: #3a3a5a; }
+  .tm-node .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tm-node .dot.orange { background: #f97316; }
+  .tm-node .dot.green { background: #22c55e; }
+  .tm-node .dot.gray { background: #555; }
+  .tm-node .dot.red { background: #ef4444; }
+  .tm-node .dot.pink { background: #ec4899; }
+  .tm-node .dot.blue { background: #3b82f6; }
+  .tm-node .text { flex: 1; }
+  .tm-node .text .s { font-size: 11px; color: #666; }
+  .tm-node .status-tag { font-size: 10px; padding: 1px 6px; border-radius: 6px; }
+  .tm-node .merged-count {
+    font-size: 10px; color: #f97316; background: rgba(249,115,22,0.1);
+    padding: 1px 6px; border-radius: 6px;
+  }
+  .tm-node.strikethrough .text { text-decoration: line-through; color: #666; }
+  .tm-node.converged { border-color: #f97316; background: rgba(249,115,22,0.05); }
+
+  /* === Priority Queue === */
+  .pq-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 8px;
+    background: #22222e; border: 1px solid #2a2a3a;
+    margin-bottom: 6px; cursor: grab; transition: all 0.2s;
+    position: relative;
+  }
+  .pq-item:hover { border-color: #3a3a5a; }
+  .pq-item .prio {
+    width: 22px; height: 22px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+  .pq-item .prio.p1 { background: rgba(239,68,68,0.2); color: #f87171; }
+  .pq-item .prio.p2 { background: rgba(249,115,22,0.2); color: #fb923c; }
+  .pq-item .prio.p3 { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .pq-item .prio.p4 { background: rgba(100,100,120,0.2); color: #888; }
+  .pq-item .pq-text { flex: 1; font-size: 13px; }
+  .pq-item .pq-text .dep {
+    font-size: 10px; color: #666; display: block; margin-top: 2px;
+  }
+  .pq-item .drag-handle { color: #555; cursor: grab; font-size: 16px; }
+  .pq-item.active {
+    border-color: #22c55e; background: rgba(34,197,94,0.05);
+  }
+  .pq-item.active::before {
+    content: ''; position: absolute; left: -1px; top: 4px; bottom: 4px;
+    width: 3px; border-radius: 2px; background: #22c55e;
+  }
+  .pq-item.completed { opacity: 0.5; }
+  .pq-item.completed .pq-text { text-decoration: line-through; }
+  .pq-status {
+    display: flex; gap: 12px; margin-top: 10px;
+    font-size: 11px; color: #777;
+    padding-top: 10px; border-top: 1px solid #2a2a3a;
+  }
+  .pq-status .wip-control {
+    margin-left: auto; display: flex; align-items: center; gap: 6px;
+  }
+  .pq-status .wip-control input {
+    width: 40px; padding: 2px 6px; border-radius: 4px;
+    background: #22222e; border: 1px solid #3a3a3a; color: #e0e0e8;
+    text-align: center; font-size: 12px;
+  }
+
+  /* === Action Map (Focused) === */
+  .am-focus { display: flex; flex-direction: column; gap: 10px; }
+  .am-active-card {
+    background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02));
+    border: 1px solid rgba(34,197,94,0.3); border-radius: 10px;
+    padding: 16px; position: relative;
+  }
+  .am-active-card .am-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: #4ade80; margin-bottom: 8px;
+  }
+  .am-active-card h4 { font-size: 15px; margin-bottom: 6px; }
+  .am-active-card .am-detail {
+    font-size: 12px; color: #999; line-height: 1.5;
+  }
+  .am-active-card .am-progress {
+    margin-top: 10px; height: 4px; border-radius: 2px;
+    background: #2a2a3a; overflow: hidden;
+  }
+  .am-active-card .am-progress-bar {
+    height: 100%; width: 35%; border-radius: 2px;
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+    transition: width 0.5s;
+  }
+  .am-active-card .am-tools {
+    margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .am-active-card .am-tools span {
+    font-size: 10px; padding: 2px 8px; border-radius: 6px;
+    background: #22222e; border: 1px solid #2a2a3a; color: #888;
+  }
+  .am-queue-preview { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .am-queue-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px;
+    background: #22222e; border: 1px dashed #2a2a3a;
+    font-size: 12px; color: #777;
+  }
+  .am-queue-item .q-dot { width: 6px; height: 6px; border-radius: 50%; background: #555; }
+  .am-queue-item .q-text { flex: 1; font-size: 12px; }
+  .am-queue-item:nth-child(1) { border-color: #3a3a5a; color: #bbb; }
+  .am-completed { margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a2a3a; }
+  .am-completed .am-c-label {
+    font-size: 10px; color: #555; margin-bottom: 6px; cursor: pointer;
+  }
+  .am-completed .am-c-label:hover { color: #888; }
+  .am-completed-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #666; padding: 3px 0;
+  }
+
+  /* === Reflect Timeline === */
+  .reflect-item {
+    display: flex; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid #2a2a3a;
+  }
+  .reflect-item:last-child { border-bottom: none; }
+  .reflect-item .r-icon {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .reflect-item .r-icon.success { background: rgba(34,197,94,0.15); }
+  .reflect-item .r-icon.fail { background: rgba(239,68,68,0.15); }
+  .reflect-item .r-icon.new { background: rgba(59,130,246,0.15); }
+  .reflect-item .r-content { flex: 1; }
+  .reflect-item .r-content .r-title { font-size: 13px; margin-bottom: 2px; }
+  .reflect-item .r-content .r-detail { font-size: 11px; color: #777; }
+  .reflect-item .r-content .r-tag {
+    display: inline-block; font-size: 10px; padding: 1px 6px;
+    border-radius: 6px; margin-top: 4px;
+  }
+  .reflect-item .r-content .r-tag.inject {
+    background: rgba(236,72,153,0.1); color: #f472b6;
+  }
+  .reflect-item .r-content .r-tag.blocked {
+    background: rgba(239,68,68,0.1); color: #f87171;
+  }
+
+  /* === Status Bar === */
+  .status-bar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px; background: #1a1a24;
+    border-radius: 10px; border: 1px solid #2a2a3a;
+    font-size: 12px; color: #888;
+  }
+  .status-bar .dot-active {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e; animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* === Responsive === */
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .loop-flow { gap: 8px; }
+    .loop-arrow { width: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<div class="header">
+  <h1>🔄 Agent Loop · 坐山客</h1>
+  <span class="tag">v1.1</span>
+  <a href="agent-loop-v1.0.html" style="text-decoration:none;"><span class="tag old">← v1.0 旧版</span></a>
+  <span class="sub">发散 → 收敛 → 排序 → 聚焦 → 反馈</span>
+</div>
+
+<!-- ===== Loop Diagram ===== -->
+<div class="loop-diagram">
+  <h2>阶段循环</h2>
+  <div class="loop-flow">
+    <div class="loop-step">
+      <div class="icon diverge">🧠</div>
+      <div class="label">发散</div>
+      <div class="desc">头脑风暴<br>拆解子问题</div>
+    </div>
+    <div class="loop-arrow highlight"></div>
+    <div class="loop-step">
+      <div class="icon converge">🔀</div>
+      <div class="label">收敛</div>
+      <div class="desc">聚类去重<br>合并相似项</div>
+    </div>
+    <div class="loop-arrow highlight"></div>
+    <div class="loop-step">
+      <div class="icon sort">📊</div>
+      <div class="label">排序</div>
+      <div class="desc">依赖分析<br>优先级队列</div>
+    </div>
+    <div class="loop-arrow highlight"></div>
+    <div class="loop-step">
+      <div class="icon focus">🎯</div>
+      <div class="label">聚焦执行</div>
+      <div class="desc">WIP 限制<br>一次一件事</div>
+    </div>
+    <div class="loop-arrow highlight"></div>
+    <div class="loop-step">
+      <div class="icon reflect">🔄</div>
+      <div class="label">反馈调整</div>
+      <div class="desc">结果反哺<br>重新循环</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Collapsible Mind Map (发散阶段) ===== -->
+<div class="mm-toggle" onclick="toggleMindmap()">
+  <span class="arrow" id="mmArrow">▶</span>
+  🧠 思维导图 · 天气推荐系统
+  <span class="mm-badge">7 节点 · 3 组合并 · 2 废弃 · 1 反馈新增</span>
+</div>
+<div class="mm-body" id="mmBody">
+  <div class="mm-content">
+    <div class="mm-header">
+      <h3>发散阶段 — Thinking Map 思维导图</h3>
+      <span class="badge badge-blue">头脑风暴</span>
+      <span class="badge badge-orange">收敛标记</span>
+      <span class="badge badge-pink">反馈注入</span>
+    </div>
+    <div class="mm-legend">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span> 活跃节点</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;"></span> 已收敛→队列</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f97316;"></span> 已收敛未分配</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;"></span> 头脑风暴中</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;opacity:0.4;"></span> 已废弃</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ec4899;"></span> 反馈新增</span>
+    </div>
+
+    <!-- Pure SVG Mind Map Tree -->
+    <svg class="mm-tree" viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowBlue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6" fill="#4a4a6a" />
+        </marker>
+        <marker id="arrowGreen" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6" fill="#22c55e" />
+        </marker>
+        <marker id="arrowOrange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6" fill="#f97316" />
+        </marker>
+        <marker id="arrowPink" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6" fill="#ec4899" />
+        </marker>
+        <marker id="arrowGray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6" fill="#555" />
+        </marker>
+      </defs>
+
+      <!-- Background -->
+      <rect width="900" height="360" fill="#16161e" rx="8" />
+
+      <!-- ============ LEVEL 0 — ROOT ============ -->
+      <!-- Root node -->
+      <rect x="390" y="6" width="120" height="32" rx="16" fill="#1e1e2e" stroke="#4a4a6a" stroke-width="1.5" />
+      <text x="450" y="27" text-anchor="middle" fill="#e0e0e8" font-size="13" font-weight="600">天气推荐系统</text>
+
+      <!-- ============ LEVEL 1 — 3 branches ============ -->
+      <!-- Lines from root to L1 -->
+      <!-- Data layer (left) -->
+      <line x1="420" y1="38" x2="180" y2="70" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arrowBlue)" />
+      <!-- Algorithm layer (center) -->
+      <line x1="450" y1="38" x2="450" y2="70" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arrowBlue)" />
+      <!-- Display layer (right) -->
+      <line x1="480" y1="38" x2="720" y2="70" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arrowBlue)" />
+
+      <!-- Data Layer Node -->
+      <rect x="110" y="70" width="140" height="32" rx="8" fill="#1e1e2e" stroke="#3b82f6" stroke-width="1" />
+      <text x="180" y="91" text-anchor="middle" fill="#60a5fa" font-size="12">📦 数据层</text>
+
+      <!-- Algorithm Layer Node -->
+      <rect x="390" y="70" width="120" height="32" rx="8" fill="#1e1e2e" stroke="#555" stroke-width="1" />
+      <text x="450" y="91" text-anchor="middle" fill="#999" font-size="12">⚙️ 算法层</text>
+
+      <!-- Display Layer Node -->
+      <rect x="650" y="70" width="140" height="32" rx="8" fill="#1e1e2e" stroke="#555" stroke-width="1" />
+      <text x="720" y="91" text-anchor="middle" fill="#999" font-size="12">🖥️ 展示层</text>
+
+      <!-- ============ LEVEL 2 — Leaf Nodes (Data Layer) ============ -->
+      <!-- Data L1 → L2 -->
+      <line x1="150" y1="102" x2="120" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowOrange)" />
+      <line x1="210" y1="102" x2="240" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowBlue)" />
+      <line x1="180" y1="102" x2="180" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowPink)" />
+
+      <!-- 调研天气 API (converged→queue - green) -->
+      <rect x="50" y="130" width="140" height="32" rx="8" fill="rgba(34,197,94,0.08)" stroke="#22c55e" stroke-width="1.5" />
+      <text x="120" y="151" text-anchor="middle" fill="#4ade80" font-size="11">✅ 调研天气API</text>
+
+      <!-- 设计数据模型 (brainstorming - blue) -->
+      <rect x="180" y="130" width="120" height="32" rx="8" fill="#1e1e2e" stroke="#3b82f6" stroke-width="1" />
+      <text x="240" y="151" text-anchor="middle" fill="#60a5fa" font-size="11">💭 设计数据模型</text>
+
+      <!-- 缓存层设计 (feedback new - pink) -->
+      <rect x="110" y="170" width="140" height="32" rx="8" fill="rgba(236,72,153,0.08)" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="4,3" />
+      <text x="180" y="191" text-anchor="middle" fill="#f472b6" font-size="11">💡 缓存层设计</text>
+      <!-- "从反馈来" label -->
+      <text x="180" y="212" text-anchor="middle" fill="#ec4899" font-size="9" opacity="0.7">← 反馈注入新增</text>
+
+      <!-- ============ LEVEL 2 — Leaf Nodes (Algorithm) ============ -->
+      <line x1="420" y1="102" x2="390" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowGreen)" />
+      <line x1="480" y1="102" x2="510" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowBlue)" />
+
+      <!-- 设计推荐算法 (converged→queue - green) -->
+      <rect x="340" y="130" width="140" height="32" rx="8" fill="rgba(34,197,94,0.08)" stroke="#22c55e" stroke-width="1.5" />
+      <text x="410" y="151" text-anchor="middle" fill="#4ade80" font-size="11">✅ 设计推荐算法</text>
+
+      <!-- 用户位置检测 (brainstorming - blue) -->
+      <rect x="450" y="130" width="140" height="32" rx="8" fill="#1e1e2e" stroke="#3b82f6" stroke-width="1" />
+      <text x="520" y="151" text-anchor="middle" fill="#60a5fa" font-size="11">💭 用户位置检测</text>
+
+      <!-- ============ LEVEL 2 — Leaf Nodes (Display) ============ -->
+      <line x1="690" y1="102" x2="660" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowGreen)" />
+      <line x1="750" y1="102" x2="780" y2="130" stroke="#4a4a6a" stroke-width="1" marker-end="url(#arrowBlue)" />
+
+      <!-- 搭建Web展示 (converged→queue - green) -->
+      <rect x="600" y="130" width="140" height="32" rx="8" fill="rgba(34,197,94,0.08)" stroke="#22c55e" stroke-width="1.5" />
+      <text x="670" y="151" text-anchor="middle" fill="#4ade80" font-size="11">✅ 搭建Web展示</text>
+
+      <!-- 多城市支持 (brainstorming - blue) -->
+      <rect x="730" y="130" width="120" height="32" rx="8" fill="#1e1e2e" stroke="#3b82f6" stroke-width="1" />
+      <text x="790" y="151" text-anchor="middle" fill="#60a5fa" font-size="11">💭 多城市支持</text>
+
+      <!-- ============ DISCARDED (Dead End) ============ -->
+      <line x1="120" y1="162" x2="90" y2="220" stroke="#555" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrowGray)" />
+      <line x1="120" y1="162" x2="150" y2="220" stroke="#555" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrowGray)" />
+
+      <!-- discarded 1 -->
+      <rect x="30" y="220" width="120" height="28" rx="6" fill="rgba(100,100,100,0.05)" stroke="#555" stroke-width="0.5" opacity="0.5" />
+      <text x="90" y="238" text-anchor="middle" fill="#666" font-size="10" text-decoration="line-through">自建爬虫采集</text>
+
+      <!-- discarded 2 -->
+      <rect x="100" y="255" width="120" height="28" rx="6" fill="rgba(100,100,100,0.05)" stroke="#555" stroke-width="0.5" opacity="0.5" />
+      <text x="160" y="273" text-anchor="middle" fill="#666" font-size="10" text-decoration="line-through">付费API接入</text>
+
+      <!-- ============ CONVERGE NOTES ============ -->
+      <!-- Merge annotation on data layer -->
+      <rect x="15" y="290" width="210" height="55" rx="6" fill="rgba(249,115,22,0.06)" stroke="rgba(249,115,22,0.25)" stroke-width="1" />
+      <text x="120" y="308" text-anchor="middle" fill="#fb923c" font-size="10" font-weight="500">🔀 收敛合并</text>
+      <text x="120" y="324" text-anchor="middle" fill="#fb923c" font-size="9" opacity="0.8">"天气API选择" + "免费天气接口"</text>
+      <text x="120" y="338" text-anchor="middle" fill="#fb923c" font-size="9" opacity="0.8">+ "OpenWeather评估" → 调研天气API</text>
+    </svg>
+  </div>
+</div>
+
+<!-- ===== Main Grid (4 Cards) ===== -->
+<div class="grid">
+
+  <!-- Left Top: Thinking Map (收敛结果) -->
+  <div class="card">
+    <h3>
+      🧠 Thinking Map
+      <span class="badge badge-orange">收敛结果</span>
+    </h3>
+
+    <div class="tm-nodes">
+      <div class="tm-node converged">
+        <span class="dot orange"></span>
+        <span class="text">
+          调研天气 API 服务
+          <span class="s">— 合入: "天气API选择", "免费天气接口", "OpenWeather评估"</span>
+        </span>
+        <span class="merged-count">🔀×3</span>
+        <span class="status-tag" style="background:rgba(249,115,22,0.1);color:#fb923c;">已收敛</span>
+      </div>
+
+      <div class="tm-node" style="border-color:rgba(34,197,94,0.3);">
+        <span class="dot green"></span>
+        <span class="text">设计推荐算法</span>
+        <span class="status-tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">→队列 P2</span>
+      </div>
+
+      <div class="tm-node" style="border-color:rgba(34,197,94,0.3);">
+        <span class="dot green"></span>
+        <span class="text">搭建 Web 展示界面</span>
+        <span class="status-tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">→队列 P2</span>
+      </div>
+
+      <div class="tm-node" style="border-color:rgba(59,130,246,0.3);">
+        <span class="dot blue"></span>
+        <span class="text">设计数据模型</span>
+        <span class="status-tag" style="background:rgba(59,130,246,0.1);color:#60a5fa;">头脑风暴中</span>
+      </div>
+
+      <div class="tm-node" style="border-color:rgba(59,130,246,0.3);">
+        <span class="dot blue"></span>
+        <span class="text">用户位置自动检测</span>
+        <span class="status-tag" style="background:rgba(59,130,246,0.1);color:#60a5fa;">头脑风暴中</span>
+      </div>
+
+      <div class="tm-node strikethrough">
+        <span class="dot red"></span>
+        <span class="text">自建爬虫采集天气数据</span>
+        <span class="status-tag" style="background:rgba(239,68,68,0.1);color:#f87171;">已废弃</span>
+      </div>
+
+      <div class="tm-node" style="border-color:rgba(236,72,153,0.3);">
+        <span class="dot pink"></span>
+        <span class="text">
+          缓存层设计
+          <span class="s">— 反馈新增: 执行API调研后发现需要做缓存降级</span>
+        </span>
+        <span class="status-tag" style="background:rgba(236,72,153,0.1);color:#f472b6;">反馈注入</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Top: Priority Queue -->
+  <div class="card">
+    <h3>
+      📊 Priority Queue
+      <span class="badge badge-purple">DAG + 拓扑排序</span>
+    </h3>
+
+    <div class="pq-item active">
+      <span class="prio p1">P1</span>
+      <span class="pq-text">
+        调研天气 API 服务
+        <span class="dep">依赖: 无 · 🔗 阻塞队列中 2 个任务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p2">P2</span>
+      <span class="pq-text">
+        设计推荐算法
+        <span class="dep">依赖: 调研天气 API 服务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p2">P2</span>
+      <span class="pq-text">
+        搭建 Web 展示界面
+        <span class="dep">依赖: 调研天气 API 服务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p3">P3</span>
+      <span class="pq-text">
+        用户位置自动检测
+        <span class="dep">依赖: 搭建 Web 展示界面</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p3">P3</span>
+      <span class="pq-text">
+        缓存层设计
+        <span class="dep">依赖: 调研天气 API 服务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p4">P4</span>
+      <span class="pq-text">
+        多城市支持
+        <span class="dep">依赖: 设计推荐算法, 搭建 Web 展示界面</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item completed">
+      <span class="prio p1">P1</span>
+      <span class="pq-text">
+        确认目标场景（已完成）
+        <span class="dep">2026-05-18 完成</span>
+      </span>
+    </div>
+
+    <div class="pq-status">
+      <span>✅ 队列中: <strong>6</strong> 项</span>
+      <span>🔴 阻塞: <strong>0</strong> 项</span>
+      <span>✅ 已完成: <strong>1</strong> 项</span>
+      <div class="wip-control">
+        <span>WIP:</span>
+        <input type="number" value="1" min="1" max="3">
+      </div>
+    </div>
+  </div>
+
+  <!-- Left Bottom: Action Map (Focused) -->
+  <div class="card">
+    <h3>
+      🎯 Action Map
+      <span class="badge badge-green">聚焦执行</span>
+      <span class="badge badge-gray" style="margin-left:auto;">WIP 1 / 1</span>
+    </h3>
+
+    <div class="am-focus">
+      <div class="am-active-card">
+        <div class="am-label">▶ 当前执行</div>
+        <h4>调研天气 API 服务</h4>
+        <div class="am-detail">
+          对比 OpenWeather / WeatherAPI / wttr.in 的免费额度、数据精度、更新频率。
+          确认最优方案后输出技术选型报告。
+        </div>
+        <div class="am-progress"><div class="am-progress-bar"></div></div>
+        <div class="am-tools">
+          <span>🌐 web_search</span>
+          <span>📄 read_file</span>
+          <span>📝 write_file</span>
+          <span>💻 terminal</span>
+        </div>
+      </div>
+
+      <div class="am-queue-preview">
+        <div class="am-queue-item">
+          <span class="q-dot" style="background:#fb923c;"></span>
+          <span class="q-text">⬆ 下一步: 设计推荐算法</span>
+        </div>
+        <div class="am-queue-item">
+          <span class="q-dot"></span>
+          <span class="q-text">3. 搭建 Web 展示界面</span>
+        </div>
+        <div class="am-queue-item">
+          <span class="q-dot"></span>
+          <span class="q-text">4. 用户位置自动检测</span>
+        </div>
+      </div>
+
+      <div class="am-completed">
+        <div class="am-c-label">▼ 已完成</div>
+        <div class="am-completed-item">✅ 确认目标场景 — 2026-05-18</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Bottom: Reflect Timeline -->
+  <div class="card">
+    <h3>
+      🔄 Reflect Timeline
+      <span class="badge badge-pink">反馈调整</span>
+    </h3>
+
+    <div class="reflect-item">
+      <div class="r-icon success">✅</div>
+      <div class="r-content">
+        <div class="r-title">天气 API 调研完成</div>
+        <div class="r-detail">选定 wttr.in 为主要来源，OpenWeather 做兜底</div>
+        <span class="r-tag inject">↪ 注入 TM: 新增 "缓存层设计" 子节点</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon fail">🔴</div>
+      <div class="r-content">
+        <div class="r-title">自建爬虫方案不可行</div>
+        <div class="r-detail">目标网站有反爬机制，维护成本高</div>
+        <span class="r-tag blocked">🚫 标记 discarded: "自建爬虫采集天气数据"</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon new">💡</div>
+      <div class="r-content">
+        <div class="r-title">新发现：wttr.in 支持 JSON 格式</div>
+        <div class="r-detail">可简化为纯 HTTP 调用，不需要 SDK</div>
+        <span class="r-tag inject">↪ 注入 TM: 更新节点备注</span>
+      </div>
+    </div>
+
+    <div class="reflect-item" style="border-bottom: none;">
+      <div class="r-icon" style="background:rgba(168,85,247,0.15);">🔄</div>
+      <div class="r-content">
+        <div class="r-title">系统自动: 重新触发收敛 + 排序</div>
+        <div class="r-detail">反馈注入后 TM 更新，自动重新收敛并调整 Priority Queue</div>
+        <span class="r-tag inject">↪ 队列更新: "缓存层设计" 插入 P3</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Status Bar ===== -->
+<div class="status-bar">
+  <span class="dot-active"></span>
+  <span>Agent Loop 运行中</span>
+  <span>|</span>
+  <span>当前阶段: <strong>🎯 聚焦执行</strong></span>
+  <span>|</span>
+  <span>循环次数: 3</span>
+  <span>|</span>
+  <span>总步数: 12</span>
+  <span style="margin-left:auto;color:#555;">v1.1 · 坐山客 AI 工作台</span>
+</div>
+
+<!-- ===== Toggle Script ===== -->
+<script>
+function toggleMindmap() {
+  var body = document.getElementById('mmBody');
+  var arrow = document.getElementById('mmArrow');
+  var isOpen = body.classList.toggle('open');
+  arrow.classList.toggle('open', isOpen);
+}
+</script>
+
+</body>
+</html>

@@ -98,6 +98,12 @@ class ThinkNodeCreate(BaseModel):
     context_ref: Optional[str] = None
     position_x: Optional[int] = None
     position_y: Optional[int] = None
+    # Agent Loop v1
+    converged_from: List[str] = Field(default_factory=list)
+    created_by: str = "brainstorm"  # brainstorm | reflect | manual
+    priority: Optional[int] = None
+    queue_order: Optional[int] = None
+    depends_on: List[str] = Field(default_factory=list)
 
 class ThinkNodeUpdate(BaseModel):
     label: Optional[str] = None
@@ -106,6 +112,13 @@ class ThinkNodeUpdate(BaseModel):
     discussion: Optional[List[str]] = None
     position_x: Optional[int] = None
     position_y: Optional[int] = None
+    # Agent Loop v1
+    converged_from: Optional[List[str]] = None
+    created_by: Optional[str] = None
+    priority: Optional[int] = None
+    queue_order: Optional[int] = None
+    depends_on: Optional[List[str]] = None
+    execution_result: Optional[str] = None
 
 class ThinkNodeOut(BaseModel):
     id: str
@@ -121,6 +134,13 @@ class ThinkNodeOut(BaseModel):
     action_status: Optional[str]
     position_x: Optional[int]
     position_y: Optional[int]
+    # Agent Loop v1
+    converged_from: List = []
+    created_by: str = "brainstorm"
+    priority: Optional[int] = None
+    queue_order: Optional[int] = None
+    depends_on: List = []
+    execution_result: Optional[str] = None
 
     class Config:
         from_attributes = True

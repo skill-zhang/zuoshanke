@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Loop 原型 · v1.0</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.9/dist/browser/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.9/dist/browser/index.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+    background: #0f0f13;
+    color: #e0e0e8;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 28px;
+  }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header .tag {
+    background: rgba(139, 92, 246, 0.2); color: #a78bfa;
+    padding: 2px 10px; border-radius: 10px; font-size: 12px;
+  }
+  .header .sub { color: #888; font-size: 13px; margin-left: auto; }
+
+  /* === Loop Diagram === */
+  .loop-diagram {
+    background: #1a1a24; border-radius: 12px; padding: 28px 20px;
+    margin-bottom: 24px; border: 1px solid #2a2a3a;
+  }
+  .loop-diagram h2 { font-size: 15px; color: #999; margin-bottom: 18px; font-weight: 500; }
+  .loop-flow {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    flex-wrap: wrap;
+  }
+  .loop-step {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    position: relative;
+  }
+  .loop-step .icon {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; transition: all 0.3s;
+    cursor: pointer;
+  }
+  .loop-step .icon:hover { transform: scale(1.1); }
+  .loop-step .icon.diverge { background: rgba(59, 130, 246, 0.2); border: 2px solid #3b82f6; }
+  .loop-step .icon.converge { background: rgba(249, 115, 22, 0.2); border: 2px solid #f97316; }
+  .loop-step .icon.sort { background: rgba(168, 85, 247, 0.2); border: 2px solid #a855f7; }
+  .loop-step .icon.focus { background: rgba(34, 197, 94, 0.2); border: 2px solid #22c55e; }
+  .loop-step .icon.reflect { background: rgba(236, 72, 153, 0.2); border: 2px solid #ec4899; }
+  .loop-step .label { font-size: 12px; color: #aaa; font-weight: 500; }
+  .loop-step .desc { font-size: 10px; color: #666; max-width: 80px; text-align: center; }
+  .loop-arrow {
+    width: 40px; height: 2px; background: #3a3a4a; position: relative;
+    margin: 0 2px; flex-shrink: 0;
+  }
+  .loop-arrow::after {
+    content: '›'; position: absolute; right: -6px; top: -7px;
+    color: #3a3a4a; font-size: 16px; font-weight: bold;
+  }
+  .loop-arrow.highlight { background: #a78bfa; }
+  .loop-arrow.highlight::after { color: #a78bfa; }
+  .loop-arrow-label {
+    font-size: 9px; color: #555; text-align: center; margin-top: -1px;
+    position: relative; top: -14px;
+  }
+
+  /* === Main Grid === */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  /* === Card === */
+  .card {
+    background: #1a1a24; border-radius: 12px; padding: 20px;
+    border: 1px solid #2a2a3a;
+  }
+  .card h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h3 .badge {
+    font-size: 11px; padding: 1px 8px; border-radius: 8px;
+    font-weight: 400;
+  }
+  .badge-gray { background: #2a2a3a; color: #999; }
+  .badge-blue { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .badge-orange { background: rgba(249,115,22,0.2); color: #fb923c; }
+  .badge-green { background: rgba(34,197,94,0.2); color: #4ade80; }
+  .badge-purple { background: rgba(168,85,247,0.2); color: #c084fc; }
+  .badge-pink { background: rgba(236,72,153,0.2); color: #f472b6; }
+  .badge-red { background: rgba(239,68,68,0.2); color: #f87171; }
+
+  /* === Thinking Map (Converge) === */
+  .tm-nodes { display: flex; flex-direction: column; gap: 6px; }
+  .tm-node {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px;
+    background: #22222e; border: 1px solid #2a2a3a;
+    font-size: 13px; cursor: default;
+    transition: all 0.2s;
+  }
+  .tm-node:hover { border-color: #3a3a5a; }
+  .tm-node .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tm-node .dot.blue { background: #3b82f6; }
+  .tm-node .dot.orange { background: #f97316; }
+  .tm-node .dot.green { background: #22c55e; }
+  .tm-node .dot.purple { background: #a855f7; }
+  .tm-node .dot.gray { background: #555; }
+  .tm-node .dot.red { background: #ef4444; }
+  .tm-node .text { flex: 1; }
+  .tm-node .text .s { font-size: 11px; color: #666; }
+  .tm-node .status-tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 6px;
+  }
+  .tm-node .merge-icon {
+    color: #f97316; font-size: 11px; cursor: help;
+  }
+  .tm-node .merged-count {
+    font-size: 10px; color: #f97316; background: rgba(249,115,22,0.1);
+    padding: 1px 6px; border-radius: 6px;
+  }
+  .tm-node.strikethrough .text { text-decoration: line-through; color: #666; }
+  .tm-node.converged { border-color: #f97316; background: rgba(249,115,22,0.05); }
+
+  .tm-legend {
+    display: flex; gap: 14px; margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid #2a2a3a; font-size: 11px; color: #777; flex-wrap: wrap;
+  }
+  .tm-legend span { display: flex; align-items: center; gap: 4px; }
+
+  /* === Priority Queue === */
+  .pq-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 8px;
+    background: #22222e; border: 1px solid #2a2a3a;
+    margin-bottom: 6px; cursor: grab; transition: all 0.2s;
+    position: relative;
+  }
+  .pq-item:hover { border-color: #3a3a5a; }
+  .pq-item .prio {
+    width: 22px; height: 22px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+  .pq-item .prio.p1 { background: rgba(239,68,68,0.2); color: #f87171; }
+  .pq-item .prio.p2 { background: rgba(249,115,22,0.2); color: #fb923c; }
+  .pq-item .prio.p3 { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .pq-item .prio.p4 { background: rgba(100,100,120,0.2); color: #888; }
+  .pq-item .pq-text { flex: 1; font-size: 13px; }
+  .pq-item .pq-text .dep {
+    font-size: 10px; color: #666; display: block; margin-top: 2px;
+  }
+  .pq-item .drag-handle { color: #555; cursor: grab; font-size: 16px; }
+  .pq-item.active {
+    border-color: #22c55e; background: rgba(34,197,94,0.05);
+  }
+  .pq-item.active::before {
+    content: ''; position: absolute; left: -1px; top: 4px; bottom: 4px;
+    width: 3px; border-radius: 2px; background: #22c55e;
+  }
+  .pq-item.completed { opacity: 0.5; }
+  .pq-item.completed .pq-text { text-decoration: line-through; }
+  .pq-status {
+    display: flex; gap: 12px; margin-top: 10px;
+    font-size: 11px; color: #777;
+    padding-top: 10px; border-top: 1px solid #2a2a3a;
+  }
+  .pq-status .wip-control {
+    margin-left: auto; display: flex; align-items: center; gap: 6px;
+  }
+  .pq-status .wip-control input {
+    width: 40px; padding: 2px 6px; border-radius: 4px;
+    background: #22222e; border: 1px solid #3a3a3a; color: #e0e0e8;
+    text-align: center; font-size: 12px;
+  }
+
+  /* === Action Map (Focused) === */
+  .am-focus {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .am-active-card {
+    background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02));
+    border: 1px solid rgba(34,197,94,0.3); border-radius: 10px;
+    padding: 16px; position: relative;
+  }
+  .am-active-card .am-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: #4ade80; margin-bottom: 8px;
+  }
+  .am-active-card h4 { font-size: 15px; margin-bottom: 6px; }
+  .am-active-card .am-detail {
+    font-size: 12px; color: #999; line-height: 1.5;
+  }
+  .am-active-card .am-progress {
+    margin-top: 10px; height: 4px; border-radius: 2px;
+    background: #2a2a3a; overflow: hidden;
+  }
+  .am-active-card .am-progress-bar {
+    height: 100%; width: 35%; border-radius: 2px;
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+    transition: width 0.5s;
+  }
+  .am-active-card .am-tools {
+    margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .am-active-card .am-tools span {
+    font-size: 10px; padding: 2px 8px; border-radius: 6px;
+    background: #22222e; border: 1px solid #2a2a3a; color: #888;
+  }
+
+  .am-queue-preview {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 10px;
+  }
+  .am-queue-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px;
+    background: #22222e; border: 1px dashed #2a2a3a;
+    font-size: 12px; color: #777;
+  }
+  .am-queue-item .q-dot { width: 6px; height: 6px; border-radius: 50%; background: #555; }
+  .am-queue-item .q-text { flex: 1; font-size: 12px; }
+  .am-queue-item:nth-child(1) { border-color: #3a3a5a; color: #bbb; }
+  .am-completed {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a2a3a;
+  }
+  .am-completed .am-c-label {
+    font-size: 10px; color: #555; margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .am-completed .am-c-label:hover { color: #888; }
+  .am-completed-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #666; padding: 3px 0;
+  }
+
+  /* === Reflect Timeline === */
+  .reflect-item {
+    display: flex; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid #2a2a3a;
+  }
+  .reflect-item:last-child { border-bottom: none; }
+  .reflect-item .r-icon {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .reflect-item .r-icon.success { background: rgba(34,197,94,0.15); }
+  .reflect-item .r-icon.fail { background: rgba(239,68,68,0.15); }
+  .reflect-item .r-icon.new { background: rgba(59,130,246,0.15); }
+  .reflect-item .r-content { flex: 1; }
+  .reflect-item .r-content .r-title { font-size: 13px; margin-bottom: 2px; }
+  .reflect-item .r-content .r-detail { font-size: 11px; color: #777; }
+  .reflect-item .r-content .r-tag {
+    display: inline-block; font-size: 10px; padding: 1px 6px;
+    border-radius: 6px; margin-top: 4px;
+  }
+  .reflect-item .r-content .r-tag.inject {
+    background: rgba(236,72,153,0.1); color: #f472b6;
+  }
+  .reflect-item .r-content .r-tag.blocked {
+    background: rgba(239,68,68,0.1); color: #f87171;
+  }
+
+  /* === Bottom Status === */
+  .status-bar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px; background: #1a1a24;
+    border-radius: 10px; border: 1px solid #2a2a3a;
+    font-size: 12px; color: #888;
+  }
+  .status-bar .dot-active {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e; animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* === Markmap Mind Map === */
+  #mindmap-wrap { width: 100%; min-height: 320px; border-radius: 8px; overflow: hidden; background: #16161e; }
+  #mindmap-wrap svg { width: 100%; height: 100%; }
+  .markmap-dark { background: #16161e !important; }
+  .markmap-dark .markmap-foreign { color: #d0d0d8; font-size: 12px; }
+  .markmap-dark .markmap-link { stroke: #3a3a4a !important; }
+  .markmap-dark .markmap-node circle { fill: #2a2a3a !important; stroke: #4a4a5a !important; }
+  .converge-tm-panel { display: flex; flex-direction: column; gap: 6px; }
+
+  /* === Responsive === */
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .loop-flow { gap: 8px; }
+    .loop-arrow { width: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<div class="header">
+  <h1>🔄 Agent Loop · 坐山客</h1>
+  <span class="tag">v1.0 原型</span>
+  <span class="sub">发散 → 收敛 → 排序 → 聚焦 → 反馈</span>
+</div>
+
+<!-- ===== Loop Diagram ===== -->
+<div class="loop-diagram">
+  <h2>阶段循环</h2>
+  <div class="loop-flow">
+    <div class="loop-step">
+      <div class="icon diverge">🧠</div>
+      <div class="label">发散</div>
+      <div class="desc">头脑风暴<br>拆解子问题</div>
+    </div>
+    <div class="loop-arrow highlight"><span class="loop-arrow-label"></span></div>
+    <div class="loop-step">
+      <div class="icon converge">🔀</div>
+      <div class="label">收敛</div>
+      <div class="desc">聚类去重<br>合并相似项</div>
+    </div>
+    <div class="loop-arrow highlight"><span class="loop-arrow-label"></span></div>
+    <div class="loop-step">
+      <div class="icon sort">📊</div>
+      <div class="label">排序</div>
+      <div class="desc">依赖分析<br>优先级队列</div>
+    </div>
+    <div class="loop-arrow highlight"><span class="loop-arrow-label"></span></div>
+    <div class="loop-step">
+      <div class="icon focus">🎯</div>
+      <div class="label">聚焦执行</div>
+      <div class="desc">WIP 限制<br>一次一件事</div>
+    </div>
+    <div class="loop-arrow highlight"><span class="loop-arrow-label"></span></div>
+    <div class="loop-step">
+      <div class="icon reflect">🔄</div>
+      <div class="label">反馈调整</div>
+      <div class="desc">结果反哺<br>重新循环</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Main Grid ===== -->
+<div class="grid">
+
+  <!-- Left Top: Thinking Map with Markmap Mind Map -->
+  <div class="card" style="grid-row: span 2; display: flex; flex-direction: column;">
+    <h3>
+      🧠 Thinking Map
+      <span class="badge badge-blue">发散</span>
+      <span class="badge badge-orange">收敛</span>
+      <span class="badge badge-gray" style="margin-left:auto;">12 → 7 节点</span>
+    </h3>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:#777;">
+      <span>🔵 根节点</span>
+      <span>🟢 已收敛→排入队列</span>
+      <span>🟠 已收敛未分配</span>
+      <span>⭕ 头脑风暴中</span>
+      <span>🔴 已废弃</span>
+      <span>💗 反馈新增</span>
+    </div>
+
+    <!-- Markmap SVG container -->
+    <div id="mindmap-wrap" style="flex:1;min-height:0;"></div>
+
+    <!-- Converged Nodes Detail -->
+    <div style="margin-top:8px; padding-top:8px; border-top:1px solid #2a2a3a;">
+      <div style="font-size:11px;color:#666;margin-bottom:6px;">▼ 收敛详情（3 组合并，2 废弃，1 反馈新增）</div>
+      <div class="converge-tm-panel">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#fb923c;padding:4px 8px;background:rgba(249,115,22,0.05);border-radius:6px;border:1px solid rgba(249,115,22,0.2);">
+          🔀 调研天气 API 服务 ← "天气API选择" + "免费天气接口" + "OpenWeather评估"
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4ade80;padding:4px 8px;background:rgba(34,197,94,0.05);border-radius:6px;border:1px solid rgba(34,197,94,0.2);">
+          ✅ 设计推荐算法 → 排入 Priority Queue (P2)
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f87171;padding:4px 8px;background:rgba(239,68,68,0.05);border-radius:6px;border:1px solid rgba(239,68,68,0.2);">
+          🚫 自建爬虫采集天气数据 ← 不可行（反爬机制）
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f472b6;padding:4px 8px;background:rgba(236,72,153,0.05);border-radius:6px;border:1px solid rgba(236,72,153,0.2);">
+          💡 缓存层设计 ← 反馈新增（执行API调研后建议）
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Top: Priority Queue -->
+  <div class="card">
+    <h3>
+      📊 Priority Queue
+      <span class="badge badge-purple">DAG + 拓扑排序</span>
+    </h3>
+
+    <div class="pq-item active">
+      <span class="prio p1">P1</span>
+      <span class="pq-text">
+        调研天气 API 服务
+        <span class="dep">依赖: 无 · 🔗 阻塞队列中 2 个任务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p2">P2</span>
+      <span class="pq-text">
+        设计推荐算法
+        <span class="dep">依赖: 调研天气 API 服务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p2">P2</span>
+      <span class="pq-text">
+        搭建 Web 展示界面
+        <span class="dep">依赖: 调研天气 API 服务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p3">P3</span>
+      <span class="pq-text">
+        用户位置自动检测
+        <span class="dep">依赖: 搭建 Web 展示界面</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p3">P3</span>
+      <span class="pq-text">
+        缓存层设计
+        <span class="dep">依赖: 调研天气 API 服务</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item">
+      <span class="prio p4">P4</span>
+      <span class="pq-text">
+        多城市支持
+        <span class="dep">依赖: 设计推荐算法, 搭建 Web 展示界面</span>
+      </span>
+      <span class="drag-handle">⠿</span>
+    </div>
+
+    <div class="pq-item completed">
+      <span class="prio p1">P1</span>
+      <span class="pq-text">
+        确认目标场景（已完成）
+        <span class="dep">2026-05-18 完成</span>
+      </span>
+    </div>
+
+    <div class="pq-status">
+      <span>✅ 队列中: <strong>6</strong> 项</span>
+      <span>🔴 阻塞: <strong>0</strong> 项</span>
+      <span>✅ 已完成: <strong>1</strong> 项</span>
+      <div class="wip-control">
+        <span>WIP 限制:</span>
+        <input type="number" value="1" min="1" max="3">
+      </div>
+    </div>
+  </div>
+
+  <!-- Left Bottom: Action Map (Focused) -->
+  <div class="card">
+    <h3>
+      🎯 Action Map
+      <span class="badge badge-green">WIP 1 / 1</span>
+      <span class="badge badge-gray" style="margin-left:auto;">聚焦模式</span>
+    </h3>
+
+    <div class="am-focus">
+      <!-- Active card -->
+      <div class="am-active-card">
+        <div class="am-label">▶ 当前执行</div>
+        <h4>调研天气 API 服务</h4>
+        <div class="am-detail">
+          对比 OpenWeather / WeatherAPI / wttr.in 的免费额度、数据精度、更新频率。
+          确认最优方案后输出技术选型报告。
+        </div>
+        <div class="am-progress">
+          <div class="am-progress-bar"></div>
+        </div>
+        <div class="am-tools">
+          <span>🌐 web_search</span>
+          <span>📄 read_file</span>
+          <span>📝 write_file</span>
+          <span>💻 terminal</span>
+        </div>
+      </div>
+
+      <!-- Queue preview -->
+      <div class="am-queue-preview">
+        <div class="am-queue-item">
+          <span class="q-dot" style="background:#fb923c;"></span>
+          <span class="q-text">⬆ 下一步: 设计推荐算法</span>
+        </div>
+        <div class="am-queue-item">
+          <span class="q-dot"></span>
+          <span class="q-text">3. 搭建 Web 展示界面</span>
+        </div>
+        <div class="am-queue-item">
+          <span class="q-dot"></span>
+          <span class="q-text">4. 用户位置自动检测</span>
+        </div>
+      </div>
+
+      <!-- Completed -->
+      <div class="am-completed">
+        <div class="am-c-label">▼ 已完成（点击展开）</div>
+        <div class="am-completed-item">✅ 确认目标场景 — 2026-05-18</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Bottom: Reflect Timeline -->
+  <div class="card">
+    <h3>
+      🔄 Reflect Timeline
+      <span class="badge badge-pink">反馈调整</span>
+    </h3>
+
+    <div class="reflect-item">
+      <div class="r-icon success">✅</div>
+      <div class="r-content">
+        <div class="r-title">天气 API 调研完成</div>
+        <div class="r-detail">选定 wttr.in 为主要来源（免费、无需 API Key），OpenWeather 做兜底</div>
+        <span class="r-tag inject">↪ 注入 TM: 新增 "缓存层设计" 子节点</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon fail">🔴</div>
+      <div class="r-content">
+        <div class="r-title">自建爬虫方案不可行</div>
+        <div class="r-detail">目标网站有反爬机制，维护成本高</div>
+        <span class="r-tag blocked">🚫 标记 discarded: "自建爬虫采集天气数据"</span>
+      </div>
+    </div>
+
+    <div class="reflect-item">
+      <div class="r-icon new">💡</div>
+      <div class="r-content">
+        <div class="r-title">新发现：wttr.in 支持 JSON 格式</div>
+        <div class="r-detail">可简化为纯 HTTP 调用，不需要 SDK</div>
+        <span class="r-tag inject">↪ 注入 TM: 更新 "调研天气 API" 节点的备注</span>
+      </div>
+    </div>
+
+    <div class="reflect-item" style="border-bottom: none;">
+      <div class="r-icon" style="background:rgba(168,85,247,0.15);">🔄</div>
+      <div class="r-content">
+        <div class="r-title">系统自动: 重新触发收敛 + 排序</div>
+        <div class="r-detail">反馈注入后 TM 更新，自动重新收敛并调整 Priority Queue</div>
+        <span class="r-tag inject">↪ 队列更新: "缓存层设计" 插入 P3 位置</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== Status Bar ===== -->
+<div class="status-bar">
+  <span class="dot-active"></span>
+  <span>Agent Loop 运行中</span>
+  <span>|</span>
+  <span>当前阶段: <strong>🎯 聚焦执行</strong></span>
+  <span>|</span>
+  <span>循环次数: 3</span>
+  <span>|</span>
+  <span>总步数: 12</span>
+  <span style="margin-left:auto;color:#555;">v1.0 · 坐山客 AI 工作台</span>
+</div>
+
+<!-- ===== Markmap Render Script ===== -->
+<script>
+(function() {
+  // Build the markdown for the mind map
+  const markdown = [
+    '# 🌤 天气推荐系统',
+    '## 数据层',
+    '### 调研天气 API 服务 {#converged→queue}',
+    '采用 OpenWeather (兜底)',
+    'wttr.in JSON 接口',
+    '### 缓存层设计 {#feedback-new}',
+    '### 设计数据模型',
+    '## 算法层',
+    '### 设计推荐算法 {#converged→queue}',
+    '用户偏好分析',
+    '相似度匹配',
+    '### 用户位置自动检测',
+    '## 展示层',
+    '### 搭建 Web 展示界面 {#converged→queue}',
+    '响应式布局',
+    '天气卡片组件',
+    '### 多城市支持',
+    '## 已废弃',
+    '### ~~自建爬虫采集天气数据~~ {#discarded}',
+    '### ~~接入墨迹天气付费API~~ {#discarded}',
+  ].join('\n');
+
+  try {
+    var transformer = new markmap.Transformer();
+    var result = transformer.transform(markdown);
+    if (result && result.root) {
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      var wrap = document.getElementById('mindmap-wrap');
+      if (wrap) {
+        wrap.innerHTML = '';
+        wrap.appendChild(svg);
+        wrap.classList.add('markmap-dark');
+        var mm = markmap.Markmap.create(svg, {
+          duration: 0,
+          maxWidth: 280,
+          nodeMinHeight: 18,
+          spacingVertical: 8,
+          spacingHorizontal: 60,
+          paddingX: 14,
+          paddingY: 6,
+          style: 'font-size: 13px;'
+        }, result.root);
+        setTimeout(function() { mm.fit(); }, 100);
+      }
+    }
+  } catch (e) {
+    console.error('Markmap render error:', e);
+    var wrap = document.getElementById('mindmap-wrap');
+    if (wrap) wrap.innerHTML = '<div style="color:#f85149;padding:20px;font-size:13px">思维导图渲染失败: ' + e.message + '</div>';
+  }
+})();
+</script>
+
+</body>
+</html>

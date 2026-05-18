@@ -84,6 +84,13 @@ export interface ThinkNode {
   context_ref: string | null; discussion: string[];
   linked_action_map: string | null; action_status: string | null;
   position_x: number | null; position_y: number | null;
+  // Agent Loop v1
+  converged_from: string[];
+  created_by: string;        // brainstorm | reflect | manual
+  priority: number | null;    // 1-4 (P1-P4)
+  queue_order: number | null;
+  depends_on: string[];
+  execution_result: string | null;
 }
 export interface ThinkingMap {
   id: string; scene_id: string; title: string;
@@ -99,6 +106,12 @@ export const updateNode = (nodeId: string, data: Partial<ThinkNode>) =>
   request<ThinkNode>(`/think-nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteNode = (nodeId: string) =>
   request(`/think-nodes/${nodeId}`, { method: 'DELETE' });
+export const convergeMap = (mapId: string) =>
+  request<any>(`/thinking-maps/${mapId}/converge`, { method: 'POST' });
+export const prioritizeMap = (mapId: string) =>
+  request<any>(`/thinking-maps/${mapId}/prioritize`, { method: 'POST' });
+export const getQueue = (mapId: string) =>
+  request<any>(`/thinking-maps/${mapId}/queue`);
 
 // ═══ 消息 ═══
 export interface Message {

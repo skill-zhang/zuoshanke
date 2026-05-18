@@ -105,6 +105,28 @@ def init_db():
     except Exception as e:
         print(f"⚠️  scenes 字段迁移跳过: {e}")
 
+    # 迁移：ThinkNode v1 — Agent Loop 新字段（零破坏）
+    THINKNODE_V1_COLS = [
+        ("converged_from", "JSON DEFAULT '[]'"),
+        ("created_by", "TEXT DEFAULT 'brainstorm'"),
+        ("priority", "INTEGER"),
+        ("queue_order", "INTEGER"),
+        ("depends_on", "JSON DEFAULT '[]'"),
+        ("execution_result", "TEXT"),
+    ]
+    try:
+        with engine.connect() as conn:
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(think_nodes)")).fetchall()]
+            for col_name, col_type in THINKNODE_V1_COLS:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE think_nodes ADD COLUMN {col_name} {col_type}"))
+            conn.commit()
+            added = [c for c, _ in THINKNODE_V1_COLS if c not in cols]
+            if added:
+                print(f"✅ think_nodes 表新增字段: {', '.join(added)}")
+    except Exception as e:
+        print(f"⚠️  think_nodes v1 迁移跳过: {e}")
+
     # 种子数据：默认闲聊频道
     db = SessionLocal()
     try:
