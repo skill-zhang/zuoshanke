@@ -47,7 +47,7 @@ export default function App() {
     const prev = prevGenRef.current;
     if (!prev && isGenerating) {
       setAgentStatus('working');
-      setAgentMessage('正在处理...');
+      setAgentMessage('拼命处理中💦');
       recordActivity();
     } else if (prev && !isGenerating) {
       setAgentStatus('done');

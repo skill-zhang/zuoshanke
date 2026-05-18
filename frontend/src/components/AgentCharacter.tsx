@@ -41,12 +41,12 @@ const MOUTH: Record<string, string> = {
 const STATE_MAP: Record<AgentStatus, {
   eyes: keyof typeof EYE; mouth: keyof typeof MOUTH;
   defaultMsg: string; color: string; classSuffix: string;
-  showLaughTears?: boolean; showSadTears?: boolean;
+  showLaughTears?: boolean; showSadTears?: boolean; showSweat?: boolean;
 }> = {
   idle:     { eyes:'closed', mouth:'smile',   defaultMsg:'在线待命',   color:'#58a6ff', classSuffix:'idle' },
   greeting: { eyes:'open',   mouth:'bigSmile',defaultMsg:'来了啊！👋', color:'#00d4ff', classSuffix:'greeting' },
   thinking: { eyes:'side',   mouth:'pursed',  defaultMsg:'让我想想',  color:'#d29922', classSuffix:'thinking' },
-  working:  { eyes:'focused',mouth:'neutral', defaultMsg:'处理中',    color:'#bc8cff', classSuffix:'working' },
+  working:  { eyes:'focused',mouth:'neutral', defaultMsg:'拼命处理中💦',color:'#bc8cff', classSuffix:'working', showSweat:true },
   done:     { eyes:'happy',  mouth:'big',     defaultMsg:'搞定！✅',   color:'#3fb950', classSuffix:'done' },
   error:    { eyes:'worried',mouth:'frown',   defaultMsg:'出问题了⚠️',color:'#f85149', classSuffix:'error' },
   notify:   { eyes:'open',   mouth:'smile',   defaultMsg:'有情况！',  color:'#00d4ff', classSuffix:'notify' },
@@ -174,6 +174,15 @@ export function AgentCharacter({ status = 'idle', message, hidden = false }: Age
               <path d="M42 21 Q43 25 44 30" fill="none" stroke="#00d4ff" strokeWidth="0.7" strokeLinecap="round" opacity="0.5"/>
               <path d="M43 30 Q44 34 45 38" fill="none" stroke="#00d4ff" strokeWidth="0.5" strokeLinecap="round" opacity="0.3"/>
               <circle cx="44" cy="32" r="1" fill="#00d4ff" opacity="0.35"/><circle cx="45" cy="38" r="0.8" fill="#00d4ff" opacity="0.25"/>
+            </g>
+            {/* Sweat drops — 拼命工作💦 */}
+            <g opacity={cfg.showSweat ? 1 : 0}>
+              <path d="M22 12 Q20 10 21 8" fill="none" stroke="#00d4ff" strokeWidth="0.8" strokeLinecap="round" opacity="0.5"/>
+              <path d="M50 12 Q52 10 51 8" fill="none" stroke="#00d4ff" strokeWidth="0.8" strokeLinecap="round" opacity="0.5"/>
+              <circle cx="20" cy="8" r="1" fill="#00d4ff" opacity="0.35"/>
+              <circle cx="52" cy="8" r="1" fill="#00d4ff" opacity="0.35"/>
+              <circle cx="23" cy="10" r="0.7" fill="#00d4ff" opacity="0.25"/>
+              <circle cx="49" cy="10" r="0.7" fill="#00d4ff" opacity="0.25"/>
             </g>
             <circle cx="47" cy="16" r="2" fill="none" stroke="#00d4ff" strokeWidth="0.4" opacity="0.3"/>
             <circle cx="47" cy="16" r="0.5" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
