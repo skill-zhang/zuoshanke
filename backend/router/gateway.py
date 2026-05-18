@@ -14,6 +14,9 @@ from schemas import GatewayChatRequest, GatewayChatResponse
 from ai_engine import ai_channel_chat, call_qwen_chat, _build_channel_messages
 from utils import make_id, utcnow
 
+# ── 历史消息时间闸（只加载最近 N 小时内的消息） ──
+HISTORY_TIME_WINDOW_HOURS = 2
+
 router = APIRouter(tags=["网关"])
 
 SESSION_TIMEOUT_MINUTES = 5  # 场景模式下无消息自动超时回到频道
@@ -70,18 +73,24 @@ def _check_scene_timeout(db: Session, session: GatewaySession) -> bool:
 
 
 def _get_channel_history(db: Session, channel_id: str, limit: int = 20) -> list[dict]:
-    """取频道最近历史消息"""
+    """取频道最近历史消息（时间闸 2 小时 + 最多 20 条，正序）"""
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=HISTORY_TIME_WINDOW_HOURS)
     msgs = db.query(Message).filter(
-        Message.channel_id == channel_id
+        Message.channel_id == channel_id,
+        Message.created_at >= cutoff
     ).order_by(Message.created_at.desc()).limit(limit).all()
     msgs.reverse()
     return [{"role": m.role, "content": m.content} for m in msgs]
 
 
 def _get_scene_history(db: Session, scene_id: str, limit: int = 20) -> list[dict]:
-    """取场景最近历史消息"""
+    """取场景最近历史消息（时间闸 2 小时 + 最多 20 条，正序）"""
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=HISTORY_TIME_WINDOW_HOURS)
     msgs = db.query(Message).filter(
-        Message.scene_id == scene_id
+        Message.scene_id == scene_id,
+        Message.created_at >= cutoff
     ).order_by(Message.created_at.desc()).limit(limit).all()
     msgs.reverse()
     return [{"role": m.role, "content": m.content} for m in msgs]

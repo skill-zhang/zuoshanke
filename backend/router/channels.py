@@ -12,6 +12,10 @@ from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
 from agent_core.memory_extractor import MemoryExtractor
 from logger import get_logger as _get_logger
+
+# ── 历史消息时间闸（只加载最近 N 小时内的消息） ──
+HISTORY_TIME_WINDOW_HOURS = 2
+
 _log = _get_logger("router.channels")
 
 router = APIRouter(tags=["频道"])
@@ -222,6 +226,71 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
     return sse_response(generate())
 
 
+# ═══ 上下文压缩 ═══
+
+@router.post("/api/channels/{channel_id}/compress")
+def compress_channel_history(channel_id: str, db: Session = Depends(get_db)):
+    """压缩频道历史消息为摘要，替换原始对话"""
+    channel = _get_channel_or_404(db, channel_id)
+
+    # 1. 获取全部历史（突破时间闸，取所有消息）
+    all_msgs = (
+        db.query(Message)
+        .filter(Message.channel_id == channel_id)
+        .order_by(Message.created_at.asc())
+        .all()
+    )
+    if not all_msgs:
+        return {"ok": True, "summary": "", "deleted": 0}
+
+    # 2. 构建压缩 prompt
+    dialogue_lines = []
+    for m in all_msgs:
+        label = "用户" if m.role == "user" else "AI"
+        dialogue_lines.append(f"{label}: {m.content}")
+    dialogue_text = "\n\n".join(dialogue_lines)
+
+    compress_prompt = (
+        "你是一个对话总结助手。请总结以下对话的核心内容，\n"
+        "保留所有重要的用户偏好、决策、已确定的事实信息和未完成事项。\n"
+        "不要遗漏关键信息，也不要添加新的内容。\n"
+        "根据内容丰富程度自行决定摘要长度——可以是一段话，也可以是多段。\n\n"
+        "--- 对话记录 ---\n"
+        f"{dialogue_text}\n\n"
+        "---\n"
+        "请输出摘要："
+    )
+
+    # 3. 调用 LLM 压缩（用 extraction 路由，轻量模型）
+    from ai_engine import call_qwen_chat
+    summary = call_qwen_chat(
+        [{"role": "user", "content": compress_prompt}],
+        route="extraction",
+    )
+    if not summary or summary.strip() == "":
+        # LLM 调用失败，回退
+        return {"ok": False, "error": "AI 压缩失败", "summary": None, "deleted": 0}
+
+    summary = summary.strip()
+
+    # 4. 删除所有旧消息
+    deleted = db.query(Message).filter(Message.channel_id == channel_id).delete()
+    db.commit()
+
+    # 5. 创建摘要消息（system 角色，在 _get_channel_history 中会被加载）
+    summary_msg = Message(
+        id=make_id("msg"),
+        channel_id=channel_id,
+        role="system",
+        content=f"【历史摘要】{summary}",
+    )
+    db.add(summary_msg)
+    db.commit()
+
+    _log.info(f"[compress] channel={channel_id} deleted={deleted} summary_len={len(summary)}")
+    return {"ok": True, "summary": summary, "deleted": deleted}
+
+
 # ═══ 辅助函数 ═══
 
 def _get_channel_or_404(db: Session, channel_id: str):
@@ -232,10 +301,12 @@ def _get_channel_or_404(db: Session, channel_id: str):
 
 
 def _get_channel_history(db: Session, channel_id: str) -> list:
-    """获取频道最近 20 条历史消息（正序）"""
+    """获取频道最近的历史消息（时间闸 2 小时 + 最多 20 条，正序）"""
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=HISTORY_TIME_WINDOW_HOURS)
     history = (
         db.query(Message)
-        .filter(Message.channel_id == channel_id)
+        .filter(Message.channel_id == channel_id, Message.created_at >= cutoff)
         .order_by(Message.created_at.desc())
         .limit(20)
         .all()

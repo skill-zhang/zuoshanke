@@ -4,7 +4,7 @@ import {
   listProjects, createProject, deleteProject,
   listScenes, createScene, updateScene, deleteScene,
   listPlazaScenes, listWorkshopScenes, publishScene, exportScene, importScene,
-  getThinkingMap, addNode, updateNode, deleteNode, convergeMap, prioritizeMap, getQueue,
+  getThinkingMap, addNode, updateNode, deleteNode, convergeMap, prioritizeMap, getQueue, getFocusQueue,
   sendMessage, listSceneMessages, sendSceneMessageStream,
   deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
   newSceneSession as apiNewSceneSession,
@@ -12,6 +12,7 @@ import {
   SceneSession,
   listChannels, createChannel, updateChannel, deleteChannel, clearChannelMessages,
   sendChannelMessage, listChannelMessages, sendChannelMessageStream,
+  compressChannelHistory,
   listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
   Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent, ToolCard,
   ActionMap as ActionMapType, ActionMapStreamEvent, ToolLog,
@@ -57,6 +58,8 @@ interface AppState {
   convergeThinkingMap: () => Promise<any>;
   prioritizeThinkingMap: () => Promise<any>;
   getPriorityQueue: () => Promise<any>;
+  getFocusQueue: (limit?: number) => Promise<any>;
+  focusQueue: any[];
 
   // ═══ Action Map ═══
   actionMaps: ActionMapType[];
@@ -136,6 +139,9 @@ interface AppState {
   memoryDrawerOpen: boolean;
   openMemoryDrawer: () => void;
   closeMemoryDrawer: () => void;
+
+  // ═══ 上下文压缩 ═══
+  compressChannel: (channelId: string) => Promise<string | null>;
 
   // ═══ 技能系统抽屉 🆕 ═══
   skillsDrawerOpen: boolean;
@@ -246,6 +252,7 @@ export const useStore = create<AppState>((set, get) => ({
       await state.loadThinkingMap(state.currentScene.id);
     }
   },
+  focusQueue: [],
   convergeThinkingMap: async () => {
     const state = get();
     if (!state.thinkingMap) return;
@@ -268,6 +275,13 @@ export const useStore = create<AppState>((set, get) => ({
     const state = get();
     if (!state.thinkingMap) return null;
     return getQueue(state.thinkingMap.id);
+  },
+  getFocusQueue: async (limit = 5) => {
+    const state = get();
+    if (!state.thinkingMap) return null;
+    const result = await getFocusQueue(state.thinkingMap.id, limit);
+    set({ focusQueue: result.items || [] });
+    return result;
   },
 
   // ═══ Action Map ═══
@@ -591,6 +605,25 @@ export const useStore = create<AppState>((set, get) => ({
             : m
         ),
       }));
+
+    }
+  },
+
+  // ═══ 上下文压缩 ═══
+  compressChannel: async (channelId) => {
+    try {
+      const result = await compressChannelHistory(channelId);
+      if (result.ok) {
+        await get().loadChannelMessages(channelId);
+        set({ capacityWarning: null });
+        return result.summary || null;
+      } else {
+        console.error('[store] compress failed:', result.error);
+        return null;
+      }
+    } catch (e) {
+      console.error('[store] compressChannel error:', e);
+      return null;
     }
   },
 

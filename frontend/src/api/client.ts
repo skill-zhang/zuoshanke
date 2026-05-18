@@ -112,6 +112,8 @@ export const prioritizeMap = (mapId: string) =>
   request<any>(`/thinking-maps/${mapId}/prioritize`, { method: 'POST' });
 export const getQueue = (mapId: string) =>
   request<any>(`/thinking-maps/${mapId}/queue`);
+export const getFocusQueue = (mapId: string, limit = 5) =>
+  request<any>(`/thinking-maps/${mapId}/focus-queue?limit=${limit}`);
 
 // ═══ 消息 ═══
 export interface Message {
@@ -523,6 +525,7 @@ export interface RouteConfig {
   temperature: number;
   max_tokens: number;
   repeat_penalty: number;
+  context_length: number;
 }
 
 export interface SystemPrompts {
@@ -575,3 +578,9 @@ export const renameCategory = (oldName: string, newName: string) =>
   request<{ ok: boolean; updated: number }>(`/categories/${encodeURIComponent(oldName)}`, {
     method: 'PUT', body: JSON.stringify({ new_name: newName }),
   });
+
+// ═══ 上下文压缩 ═══
+export const compressChannelHistory = (channelId: string) =>
+  request<{ ok: boolean; summary?: string; deleted?: number; error?: string }>(
+    `/channels/${channelId}/compress`, { method: 'POST' }
+  );

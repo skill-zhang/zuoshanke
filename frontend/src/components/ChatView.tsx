@@ -365,6 +365,7 @@ export function ChatView() {
     currentToolCards,
     currentToolLogs,
     userContext, saveUserContext,
+    compressChannel,
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -374,6 +375,7 @@ export function ChatView() {
   const [ucExpanded, setUcExpanded] = useState(false);
   const [ucText, setUcText] = useState('');
   const [ucSaving, setUcSaving] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const ucSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ucTextareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -524,6 +526,24 @@ export function ChatView() {
       setUcSaving(false);
     }
   }, [currentScene, saveUserContext]);
+
+  // ═══ 上下文压缩 ═══
+  const handleCompress = useCallback(async () => {
+    if (!currentChannel || compressing) return;
+    setCompressing(true);
+    try {
+      const summary = await compressChannel(currentChannel.id);
+      if (summary) {
+        console.log('[compress] 压缩完成:', summary.slice(0, 100));
+      } else {
+        console.warn('[compress] 压缩失败');
+      }
+    } catch (e) {
+      console.error('[compress] error:', e);
+    } finally {
+      setCompressing(false);
+    }
+  }, [currentChannel, compressing, compressChannel]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -774,6 +794,14 @@ export function ChatView() {
           {capacityWarning && (
             <div className="capacity-warning">
               <span>⚠️ {capacityWarning.message}</span>
+              <button
+                className="capacity-warning-btn"
+                onClick={handleCompress}
+                disabled={compressing}
+                title="将历史对话压缩为摘要以释放上下文空间"
+              >
+                {compressing ? '⏳ 压缩中...' : '📝 压缩摘要'}
+              </button>
             </div>
           )}
 
