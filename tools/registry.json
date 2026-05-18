@@ -341,6 +341,85 @@
         "triggers": [],
         "requires_city": false
       }
+    },
+    {
+      "name": "read_file",
+      "description": "读取文件内容，带行号和分页。支持偏移和行数限制",
+      "file": "tools/file_tools.py",
+      "function": "read_file",
+      "parameters": {
+        "path": {"type": "string", "description": "文件路径（支持 ~）"},
+        "offset": {"type": "integer", "description": "起始行号（从 1 开始）", "optional": true},
+        "limit": {"type": "integer", "description": "最多读取行数", "optional": true}
+      },
+      "returns": "文件内容（LINE_NUM|CONTENT 格式）和总行数",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "写入文件（覆盖），自动创建父目录",
+      "file": "tools/file_tools.py",
+      "function": "write_file",
+      "parameters": {
+        "path": {"type": "string", "description": "文件路径（支持 ~）"},
+        "content": {"type": "string", "description": "文件内容"}
+      },
+      "returns": "写入结果（路径、大小）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "patch",
+      "description": "在文件中查找并替换文本，支持模糊匹配。用 difflib 找匹配即使有微小差异",
+      "file": "tools/file_tools.py",
+      "function": "patch",
+      "parameters": {
+        "path": {"type": "string", "description": "文件路径"},
+        "old_string": {"type": "string", "description": "要查找的旧文本"},
+        "new_string": {"type": "string", "description": "替换的新文本", "optional": true},
+        "replace_all": {"type": "boolean", "description": "是否替换所有匹配", "optional": true}
+      },
+      "returns": "替换结果（diff、替换数量）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "search_files",
+      "description": "搜索文件内容（正则）或按文件名查找（glob 模式）",
+      "file": "tools/file_tools.py",
+      "function": "search_files",
+      "parameters": {
+        "pattern": {"type": "string", "description": "搜索模式（content 模式用正则，files 模式用 glob）"},
+        "target": {"type": "string", "description": "搜索目标：content（内容搜索）或 files（文件名查找）", "optional": true},
+        "path": {"type": "string", "description": "搜索目录", "optional": true},
+        "file_glob": {"type": "string", "description": "文件过滤 glob（如 *.py）", "optional": true},
+        "limit": {"type": "integer", "description": "最大结果数", "optional": true},
+        "context": {"type": "integer", "description": "上下文件行数", "optional": true}
+      },
+      "returns": "匹配结果列表（含文件名、行号、上下文）",
+      "category": "search",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
     }
   ]
 }

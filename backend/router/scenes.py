@@ -24,6 +24,10 @@ from agent_core.core import agent_core_light_stream
 from agent_core.tool_executor import detect_and_preexecute
 from agent_core.memory_manager import MemoryManager
 from agent_core.memory_extractor import MemoryExtractor
+from agent_core.token_counter import (
+    estimate_messages_tokens, get_context_length_from_route,
+    context_usage_str, progress_bar,
+)
 from utils import make_id, utcnow
 from router.shared import sse_event, sse_response
 
@@ -981,35 +985,37 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     yield sse_event("tool_status", tool=t, status="error",
                                     success=False, message=str(r.get("result", "执行失败")))
         else:
-            # Step 2: 无工具匹配 → web_search 兜底
-            yield sse_event("tool_status", tool="web_search", status="running",
-                            message="正在搜索互联网...")
-            try:
-                import sys as _sys, os as _os
-                _tp = _os.path.expanduser("~/zuoshanke/tools")
-                if _tp not in _sys.path:
-                    _sys.path.insert(0, _tp)
-                from web_search import web_search as _ws
-                _log.info(f"[web_search] 开始搜索: {data.content[:60]}...")
-                _sres = _ws(data.content, max_results=5)
-                if _sres:
-                    tool_results = [{
-                        "tool": "web_search",
-                        "params": {"query": data.content},
-                        "result": _sres[:5],
-                        "success": True,
-                    }]
-                    yield sse_event("tool_status", tool="web_search", status="done",
-                                    success=True, message=f"找到 {len(_sres)} 条结果")
-                    _log.info(f"[web_search] 成功: {len(_sres)} 条结果")
-                else:
-                    yield sse_event("tool_status", tool="web_search", status="done",
-                                    success=False, message="未找到相关结果")
-                    _log.info("[web_search] 无结果")
-            except Exception as _e:
-                _log.warning(f"[web_search fallback] {_e}")
-                yield sse_event("tool_status", tool="web_search", status="error",
-                                success=False, message=str(_e))
+            # Step 2: 无工具匹配 → 判断是否需要 web_search 兜底
+            # 仅用户消息看起来是在"查信息"时才搜，避免闲聊/追问/确认也被搜
+            if _needs_search_fallback(data.content):
+                yield sse_event("tool_status", tool="web_search", status="running",
+                                message="正在搜索互联网...")
+                try:
+                    import sys as _sys, os as _os
+                    _tp = _os.path.expanduser("~/zuoshanke/tools")
+                    if _tp not in _sys.path:
+                        _sys.path.insert(0, _tp)
+                    from web_search import web_search as _ws
+                    _log.info(f"[web_search] 开始搜索: {data.content[:60]}...")
+                    _sres = _ws(data.content, max_results=5)
+                    if _sres:
+                        tool_results = [{
+                            "tool": "web_search",
+                            "params": {"query": data.content},
+                            "result": _sres[:5],
+                            "success": True,
+                        }]
+                        yield sse_event("tool_status", tool="web_search", status="done",
+                                        success=True, message=f"找到 {len(_sres)} 条结果")
+                        _log.info(f"[web_search] 成功: {len(_sres)} 条结果")
+                    else:
+                        yield sse_event("tool_status", tool="web_search", status="done",
+                                        success=False, message="未找到相关结果")
+                        _log.info("[web_search] 无结果")
+                except Exception as _e:
+                    _log.warning(f"[web_search fallback] {_e}")
+                    yield sse_event("tool_status", tool="web_search", status="error",
+                                    success=False, message=str(_e))
 
         # ── 路由决策 ──
         if tool_results:
@@ -1035,6 +1041,30 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("tool_cards", cards=tool_cards)
 
         yield sse_event("model_info", model=model_name, complexity=complexity)
+
+        # ── Context 用量估算 ──
+        api_msgs = history_messages + [{"role": "user", "content": data.content}]
+        total_tokens = estimate_messages_tokens(api_msgs)
+        max_tokens = get_context_length_from_route({"model": model_name})
+        pct = round(total_tokens / max_tokens * 100, 1) if max_tokens > 0 else 0
+        yield sse_event("context_info",
+            total_tokens=total_tokens,
+            max_tokens=max_tokens,
+            percentage=pct,
+            usage_str=context_usage_str(total_tokens, max_tokens),
+            progress_bar=progress_bar(pct),
+            history_count=len(history_messages),
+        )
+        if pct >= 75:
+            yield sse_event("capacity_warning",
+                total_tokens=total_tokens,
+                max_tokens=max_tokens,
+                percentage=pct,
+                message=(
+                    f"⚠️ 上下文已使用 {context_usage_str(total_tokens, max_tokens)}，"
+                    f"建议压缩摘要或重置会话以避免达到上限。"
+                ),
+            )
 
         # 4. 流式收回复
         full_reply, changes = "", []
@@ -1224,3 +1254,29 @@ def _get_scene_or_404(db: Session, scene_id: str):
     if not scene:
         raise HTTPException(404, "场景不存在")
     return scene
+
+
+# ═══ web_search 兜底触发判断 ═══
+
+def _needs_search_fallback(text: str) -> bool:
+    """判断用户消息是否需要走 web_search 兜底（模型驱动）
+
+    简单预过滤后，用 Qwen 做二分类判断。
+    调用失败时保守返回 False（不搜）。
+    """
+    if not text or not text.strip():
+        return False
+    t = text.strip()
+
+    # 极简预过滤：太短或纯语气词/问候，省一次模型调用
+    if len(t) < 4:
+        return False
+    stopwords = {"嗯","哦","好","行","是","不","嗨","哈","嘿",
+                 "好的","好吧","是的","不是","没错","不对",
+                 "谢谢","感谢","你好","您好","再见","拜拜",
+                 "在吗","嗯嗯","哦哦","哈哈","呵呵"}
+    if t in stopwords:
+        return False
+
+    from ai_engine import should_web_search
+    return should_web_search(t)

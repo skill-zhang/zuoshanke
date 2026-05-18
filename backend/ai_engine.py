@@ -278,6 +278,49 @@ def call_qwen_chat(messages: list[dict], temperature: float | None = None, route
         return None
 
 
+# ── web_search 兜底判断（模型驱动） ──
+
+def should_web_search(text: str) -> bool:
+    """用 Qwen 判断用户消息是否需要搜索互联网
+
+    返回 True = 需要搜，False = 不需要搜（闲聊/追问/元问题等）。
+    极端情况调用失败时保守返回 False（不搜）。
+    """
+    if not text or not text.strip():
+        return False
+    t = text.strip()
+
+    # 极简预过滤：太短或纯语气词，省一次模型调用
+    if len(t) < 4:
+        return False
+    stopwords = {"嗯","哦","好","行","是","不","嗨","哈","嘿",
+                 "好的","好吧","是的","不是","谢谢","你好","再见"}
+    if t in stopwords:
+        return False
+
+    # 调 Qwen 做二分类
+    prompt = (
+        "判断以下用户消息是否需要搜索互联网才能回答。\n"
+        "只需要回复\"是\"或\"否\"，不要其他内容。\n\n"
+        f"消息：{t}\n\n"
+        "回复："
+    )
+    try:
+        result = call_qwen_chat(
+            [{"role": "user", "content": prompt}],
+            temperature=0.1,
+            route="extraction",
+        )
+        if result is None:
+            return False
+        result = result.strip()
+        _ai_log.debug(f"[should_web_search] \"{t[:30]}...\" → {result}")
+        return result.startswith("是")
+    except Exception as e:
+        _ai_log.warning(f"[should_web_search] error: {e}")
+        return False
+
+
 def _stream_qwen(messages: list[dict], temperature: float | None = None, route: str = "scene"):
     """通用流式调用 Qwen，逐 token yield。
 

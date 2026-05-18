@@ -805,21 +805,6 @@ export function ChatView() {
             </div>
           )}
 
-          {/* ═══ Token 用量状态条 ═══ */}
-          {contextUsage && (
-            <div className="token-bar">
-              <span className="token-bar-label">⚡ Token</span>
-              <span className="token-bar-text">{contextUsage.usageStr}</span>
-              <div className="token-bar-track">
-                <div
-                  className={`token-bar-fill ${contextUsage.percentage >= 75 ? 'token-bar-danger' : contextUsage.percentage >= 50 ? 'token-bar-warn' : ''}`}
-                  style={{ width: `${Math.min(contextUsage.percentage, 100)}%` }}
-                />
-              </div>
-              <span className="token-bar-pct">{contextUsage.progressBar}</span>
-            </div>
-          )}
-
           <div className="chat-input-collapse-bar">
             <div className="chat-input-collapse-bar-left" />
             <div className="chat-input-collapse-bar-center" onClick={() => setInputCollapsed(!inputCollapsed)} title={inputCollapsed ? '展开输入区' : '收起输入区'}>
@@ -885,12 +870,28 @@ export function ChatView() {
                 </div>
               </div>
               <div className="chat-input-hint">
-                {displayModel && (
-                  <span>
-                    <strong>当前模型:</strong> <strong><span className="chat-model-name">{displayModel}</span></strong>
+                  {contextUsage && (
+                    <span
+                      className="hint-token"
+                      title={`上下文用量: ${contextUsage.usageStr} · 历史${contextUsage.historyCount}条消息 · ${contextUsage.percentage}%`}
+                    >
+                      ⚡ Token使用量：{contextUsage.usageStr}
+                      <span className="hint-token-track">
+                        <span
+                          className={`hint-token-fill ${contextUsage.percentage >= 75 ? 'fill-danger' : contextUsage.percentage >= 50 ? 'fill-warn' : ''}`}
+                          style={{ width: `${Math.min(contextUsage.percentage, 100)}%` }}
+                        />
+                      </span>
+                    </span>
+                  )}
+                  {displayModel && (
+                    <span>
+                      <strong>当前模型:</strong> <strong><span className="chat-model-name">{displayModel}</span></strong>
+                    </span>
+                  )}
+                  <span className="hint-hotkeys">
+                    {(contextUsage || displayModel) ? ' · ' : ''}Enter 发送 · Shift+Enter 换行
                   </span>
-                )}
-                {displayModel ? ' · ' : ''}Enter 发送 · Shift+Enter 换行
               </div>
             </>
           )}

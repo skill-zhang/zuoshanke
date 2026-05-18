@@ -15,6 +15,15 @@ import { SkillsDrawer } from './components/SkillsDrawer';
 import { AgentCharacter } from './components/AgentCharacter';
 import { Scene, createScene, listProjects } from './api/client';
 
+// ═══ 稳定选择器（避免 useSyncExternalStore getSnapshot 引用变化）═══
+const selectAgentStatus = (s: any) => s.agentStatus;
+const selectAgentMessage = (s: any) => s.agentMessage;
+const selectAgentHidden = (s: any) => s.agentHidden;
+const selectSetAgentStatus = (s: any) => s.setAgentStatus;
+const selectSetAgentMessage = (s: any) => s.setAgentMessage;
+const selectSetAgentHidden = (s: any) => s.setAgentHidden;
+const selectIsGenerating = (s: any) => s.isGenerating;
+
 export default function App() {
   const {
     view, setView, loadProjects, currentProject,
@@ -32,14 +41,14 @@ export default function App() {
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // ═══ 角色动画联动 — AI原生自洽 ═══
-  const agentStatus = useStore(s => s.agentStatus);
-  const agentMessage = useStore(s => s.agentMessage);
-  const agentHidden = useStore(s => s.agentHidden);
-  const setAgentStatus = useStore(s => s.setAgentStatus);
-  const setAgentMessage = useStore(s => s.setAgentMessage);
-  const setAgentHidden = useStore(s => s.setAgentHidden);
-  const isGenerating = useStore(s => s.isGenerating);
+  // ═══ 角色动画联动 — AI原生自洽（稳定选择器防 getSnapshot 警告） ═══
+  const agentStatus = useStore(selectAgentStatus);
+  const agentMessage = useStore(selectAgentMessage);
+  const agentHidden = useStore(selectAgentHidden);
+  const setAgentStatus = useStore(selectSetAgentStatus);
+  const setAgentMessage = useStore(selectSetAgentMessage);
+  const setAgentHidden = useStore(selectSetAgentHidden);
+  const isGenerating = useStore(selectIsGenerating);
 
   // 工作状态自动检测
   const prevGenRef = useRef(isGenerating);
