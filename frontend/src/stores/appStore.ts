@@ -4,7 +4,7 @@ import {
   listProjects, createProject, deleteProject,
   listScenes, createScene, updateScene, deleteScene,
   listPlazaScenes, listWorkshopScenes, publishScene, exportScene, importScene,
-  getThinkingMap, addNode, updateNode, deleteNode, convergeMap, prioritizeMap, getQueue, getFocusQueue,
+  getThinkingMap, addNode, updateNode, deleteNode, convergeMap, prioritizeMap, getQueue, getFocusQueue, reflectNode,
   sendMessage, listSceneMessages, sendSceneMessageStream,
   deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
   newSceneSession as apiNewSceneSession,
@@ -59,6 +59,9 @@ interface AppState {
   prioritizeThinkingMap: () => Promise<any>;
   getPriorityQueue: () => Promise<any>;
   getFocusQueue: (limit?: number) => Promise<any>;
+  reflectNode: (nodeId: string, resultSummary: string, options?: {
+    newDiscoveries?: string[]; isSuccess?: boolean;
+  }) => Promise<any>;
   focusQueue: any[];
 
   // ═══ Action Map ═══
@@ -281,6 +284,20 @@ export const useStore = create<AppState>((set, get) => ({
     if (!state.thinkingMap) return null;
     const result = await getFocusQueue(state.thinkingMap.id, limit);
     set({ focusQueue: result.items || [] });
+    return result;
+  },
+  reflectNode: async (nodeId, resultSummary, options = {}) => {
+    const state = get();
+    if (!state.thinkingMap) return null;
+    const result = await reflectNode(state.thinkingMap.id, {
+      node_id: nodeId,
+      result_summary: resultSummary,
+      new_discoveries: options.newDiscoveries || [],
+      is_success: options.isSuccess !== false,
+    });
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
     return result;
   },
 

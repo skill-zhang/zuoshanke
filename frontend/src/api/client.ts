@@ -114,6 +114,12 @@ export const getQueue = (mapId: string) =>
   request<any>(`/thinking-maps/${mapId}/queue`);
 export const getFocusQueue = (mapId: string, limit = 5) =>
   request<any>(`/thinking-maps/${mapId}/focus-queue?limit=${limit}`);
+export const reflectNode = (mapId: string, data: {
+  node_id: string; result_summary: string;
+  new_discoveries?: string[]; is_success?: boolean;
+}) => request<any>(`/thinking-maps/${mapId}/reflect`, {
+  method: 'POST', body: JSON.stringify(data),
+});
 
 // ═══ 消息 ═══
 export interface Message {

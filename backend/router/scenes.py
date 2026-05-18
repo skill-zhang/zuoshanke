@@ -5,6 +5,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db, SessionLocal
@@ -715,6 +716,123 @@ def get_focus_queue(map_id: str, limit: int = Query(5, ge=1, le=20), db: Session
         "items": items,
         "item_count": len(items),
         "limit": limit,
+    }
+
+
+# ═══ Agent Loop: Reflect（反馈注入）═══
+
+class ReflectRequest(BaseModel):
+    node_id: str
+    result_summary: str
+    new_discoveries: List[str] = Field(default_factory=list)
+    is_success: bool = True
+
+
+@router.post("/api/thinking-maps/{map_id}/reflect")
+def reflect_thinking_map(map_id: str, data: ReflectRequest, db: Session = Depends(get_db)):
+    """
+    反馈注入：Action Map 执行完成后，将结果和发现反哺回 Thinking Map。
+    1. 更新已执行节点的 execution_result + status
+    2. 为每个新发现创建子节点（created_by=reflect）
+    3. 自动重新收敛 + 排序
+    """
+    tmap = db.query(ThinkingMap).filter(ThinkingMap.id == map_id).first()
+    if not tmap:
+        raise HTTPException(404, "Thinking Map 不存在")
+
+    root = db.query(ThinkNode).filter(
+        ThinkNode.map_id == map_id, ThinkNode.type == "root"
+    ).first()
+    if not root:
+        raise HTTPException(400, "缺少根节点")
+
+    # 1. 更新已执行节点
+    node = db.query(ThinkNode).filter(ThinkNode.id == data.node_id).first()
+    if not node:
+        raise HTTPException(404, "节点不存在")
+
+    node.execution_result = data.result_summary
+    node.status = "completed" if data.is_success else "refined"
+    reflect_events = [{
+        "type": "node_completed" if data.is_success else "node_blocked",
+        "node_id": node.id,
+        "label": node.label,
+        "summary": data.result_summary[:100],
+    }]
+
+    # 2. 创建新发现子节点
+    new_node_ids = []
+    for discovery_label in data.new_discoveries:
+        new_id = f"node-{uuid.uuid4().hex[:8]}"
+        new_node = ThinkNode(
+            id=new_id,
+            map_id=map_id,
+            parent_id=root.id,
+            type="leaf",
+            label=discovery_label,
+            status="discussing",
+            created_by="reflect",
+        )
+        db.add(new_node)
+        new_node_ids.append(new_id)
+        reflect_events.append({
+            "type": "new_discovery",
+            "node_id": new_id,
+            "label": discovery_label,
+            "summary": f"在执行「{node.label}」时发现",
+        })
+
+    tmap.version += 1
+    tmap.updated_at = utcnow()
+    db.commit()
+
+    # 3. 自动重新收敛 + 排序（如果有新发现）
+    re_converge = None
+    re_prioritize = None
+    if new_node_ids:
+        # 调用收敛（复用之前的聚类逻辑）
+        discussing = db.query(ThinkNode).filter(
+            ThinkNode.map_id == map_id,
+            ThinkNode.status.in_(["discussing", "created"]),
+        ).all()
+        # 简化：把新节点标记为 refined（暂不聚类）
+        for dn in discussing:
+            dn.status = "refined"
+
+        # 调用排序
+        refined = db.query(ThinkNode).filter(
+            ThinkNode.map_id == map_id,
+            ThinkNode.status == "refined",
+        ).order_by(ThinkNode.queue_order).all()
+        if refined:
+            # 更新 queue_order：追加到末尾
+            max_order = max((n.queue_order or 0) for n in refined)
+            for idx, rn in enumerate(refined):
+                if rn.queue_order is None or rn.queue_order == 0:
+                    max_order += 1
+                    rn.queue_order = max_order
+                    rn.priority = 3  # 新发现默认 P3
+            db.commit()
+
+        re_converge = True
+        re_prioritize = True
+
+    # 刷新返回
+    db.refresh(tmap)
+    tmap.nodes
+    return {
+        "map_id": map_id,
+        "events": reflect_events,
+        "new_node_ids": new_node_ids,
+        "re_converge": re_converge,
+        "re_prioritize": re_prioritize,
+        "thinking_map": {
+            "id": tmap.id,
+            "title": tmap.title,
+            "status": tmap.status,
+            "version": tmap.version,
+            "nodes": [n.to_schema_dict() for n in tmap.nodes],
+        },
     }
 
 
