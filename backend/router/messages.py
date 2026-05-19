@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Message, Scene, Channel
+from models import Message, Scene, Channel, ThinkingMap, ThinkNode, PriorityQueue, ReflectTimeline, SceneAsset
 from schemas import MessageCreate, MessageOut
 from ai_engine import ai_process_message, ai_channel_chat
 from utils import make_id
@@ -57,6 +57,13 @@ def clear_scene_messages(scene_id: str, db: Session = Depends(get_db)):
     if not scene:
         raise HTTPException(404, "场景不存在")
     deleted = db.query(Message).filter(Message.scene_id == scene_id).delete()
+    # 同步清理 TM 节点、PQ、Reflect、产出
+    tm = db.query(ThinkingMap).filter(ThinkingMap.scene_id == scene_id).first()
+    if tm:
+        db.query(ThinkNode).filter(ThinkNode.map_id == tm.id, ThinkNode.type != 'root').delete()
+    db.query(PriorityQueue).filter(PriorityQueue.scene_id == scene_id).delete()
+    db.query(ReflectTimeline).filter(ReflectTimeline.scene_id == scene_id).delete()
+    db.query(SceneAsset).filter(SceneAsset.scene_id == scene_id).delete()
     db.commit()
     return {"ok": True, "deleted": deleted}
 

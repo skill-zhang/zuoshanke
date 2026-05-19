@@ -229,7 +229,15 @@ export const useStore = create<AppState>((set, get) => ({
   currentProject: null,
   setCurrentProject: (p) => set({ currentProject: p, currentScene: null, messages: [], contextUsage: null, capacityWarning: null }),
   currentScene: null,
-  setCurrentScene: (s) => { set({ currentScene: s, messages: [], contextUsage: null, capacityWarning: null }); if (s) get().loadUserContext(s.id); },
+  setCurrentScene: (s) => {
+    const prev = get().currentScene;
+    if (prev && prev.id !== (s?.id)) {
+      // 异步提取上一个场景的记忆（fire-and-forget）
+      fetch(`/api/scenes/${prev.id}/extract-memory`, { method: 'POST' }).catch(() => {});
+    }
+    set({ currentScene: s, messages: [], contextUsage: null, capacityWarning: null });
+    if (s) get().loadUserContext(s.id);
+  },
   userContext: '',
   loadUserContext: async (sceneId) => {
     try {
@@ -541,6 +549,21 @@ export const useStore = create<AppState>((set, get) => ({
           }));
           // 流式完成后刷新 Thinking Map
           get().loadThinkingMap(sceneId);
+        } else if (event.type === 'asset') {
+          set(state => ({
+            messages: [...state.messages, {
+              id: event.asset_id || 'asset-' + Date.now(),
+              scene_id: sceneId,
+              channel_id: null,
+              session_id: null,
+              role: 'ai',
+              content: '',
+              asset: { type: event.type, title: event.title, content: event.content },
+              map_ref: null,
+              model: null,
+              created_at: new Date().toISOString(),
+            }],
+          }));
         } else if (event.type === 'thinking_map:diverged') {
           // 自动发散完成，刷新 Thinking Map
           get().loadThinkingMap(sceneId);

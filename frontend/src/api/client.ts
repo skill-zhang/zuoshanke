@@ -77,6 +77,10 @@ export const exportScene = (sceneId: string) =>
 export const importScene = (projectId: string, sceneData: any) =>
   request<Scene>('/scenes/import', { method: 'POST', body: JSON.stringify({ project_id: projectId, scene: sceneData }) });
 
+// ═══ 场景记忆提取 ═══
+export const extractSceneMemory = (sceneId: string) =>
+  request(`/scenes/${sceneId}/extract-memory`, { method: 'POST' });
+
 // ═══ Thinking Map ═══
 export interface ThinkNode {
   id: string; map_id: string; parent_id: string | null; type: string;
@@ -134,6 +138,7 @@ export interface Message {
   content: string; map_ref: string | null; model: string | null; created_at: string;
   display?: boolean;  // 🆕 Schema v0.7: false=内部记录不渲染
   toolCards?: ToolCard[];
+  asset?: { type: string; title: string; content: string };  // 🆕 场景产出
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
@@ -471,12 +476,36 @@ export interface AgentMemory {
   explicit_boost: number; times_accessed: number; source: string;
   last_accessed_at: string | null; created_at: string | null;
   weight?: number;
+  scope?: string;           // 🆕 记忆作用域
+  context_id?: string | null;  // 🆕 场景/频道ID
 }
-export const listMemories = (params?: { category?: string }) => {
-  const qs = params?.category ? '?category=' + encodeURIComponent(params.category) : '';
-  return request<{ success: boolean; data: AgentMemory[] }>(`/memory${qs}`);
+export interface MemoryGroup {
+  scope: string;
+  context_id: string | null;
+  name: string;
+  icon: string;
+  count: number;
+  preview: string;
+  latest: string | null;
+}
+export const listMemories = (params?: {
+  category?: string; scope?: string; context_id?: string; scope_only?: boolean;
+}) => {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set('category', params.category);
+  if (params?.scope) qs.set('scope', params.scope);
+  if (params?.context_id) qs.set('context_id', params.context_id);
+  if (params?.scope_only) qs.set('scope_only', 'true');
+  const q = qs.toString();
+  return request<{ success: boolean; data: AgentMemory[] }>(`/memory${q ? '?' + q : ''}`);
 };
-export const createMemory = (data: { key: string; content: string; category?: string; tags?: string[]; base_weight?: number }) =>
+export const listMemoryGroups = () =>
+  request<{ success: boolean; data: MemoryGroup[] }>('/memory/groups');
+export const createMemory = (data: {
+  key: string; content: string; category?: string;
+  tags?: string[]; base_weight?: number;
+  scope?: string; context_id?: string;
+}) =>
   request<{ success: boolean; data: { id: string; key: string } }>('/memory', { method: 'POST', body: JSON.stringify(data) });
 export const getMemory = (key: string) =>
   request<{ success: boolean; data: AgentMemory }>('/memory/' + encodeURIComponent(key));

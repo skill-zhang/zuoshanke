@@ -455,3 +455,17 @@ class ZhuAgent(Base):
     core_prompt = Column(Text, default="")       # 核心人格（后续使用）
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ═══ 场景产物 — 自动收敛后生成的行动交付物 ═══
+class SceneAsset(Base):
+    """场景产物 — 自动收敛后 LLM 生成的可交付物（行动手册/清单/指南）"""
+    __tablename__ = "scene_assets"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    type = Column(String(20), nullable=False)       # checklist / guide / table / html_page / pdf
+    title = Column(String(200), nullable=False)
+    content = Column(Text, default="")
+    format = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=utcnow)

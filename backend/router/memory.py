@@ -20,7 +20,89 @@ from database import get_db
 from sqlalchemy.orm import Session
 from agent_core.memory_manager import MemoryManager
 
+
+# ── 记忆来源名解析 ──
+
+_MEMORY_SOURCE_NAMES: dict[str, tuple[str, str]] = {}  # (scope, context_id) → (name, icon)
+
+
+def _resolve_group_name(db: Session, scope: str, context_id: str | None) -> tuple[str, str]:
+    """根据 scope + context_id 解析来源名和图标"""
+    cache_key = f"{scope}:{context_id or ''}"
+    if cache_key in _MEMORY_SOURCE_NAMES:
+        return _MEMORY_SOURCE_NAMES[cache_key]
+
+    if scope == "zhu":
+        name, icon = "本体记忆", "🧠"
+    elif scope == "scene" and context_id:
+        from models import Scene
+        scene = db.query(Scene).filter(Scene.id == context_id).first()
+        if scene and (scene.name or scene.icon):
+            # 去重场景名：同名场景追加图标区分
+            name = scene.name
+            icon = scene.icon or "📦"
+        else:
+            name, icon = "已删除场景", "🗑️"
+    elif scope == "channel" and context_id:
+        from models import Channel
+        ch = db.query(Channel).filter(Channel.id == context_id).first()
+        if ch:
+            name, icon = ch.name or "未命名频道", "💬"
+        else:
+            name, icon = "已删除频道", "🗑️"
+    else:
+        name, icon = "其他", "📦"
+
+    _MEMORY_SOURCE_NAMES[cache_key] = (name, icon)
+    return name, icon
+
+
 router = APIRouter(prefix="/api/memory", tags=["memory"])
+
+
+@router.get("/groups")
+def list_memory_groups(db: Session = Depends(get_db)):
+    """按来源聚合记忆，返回每个组的概览（上层卡片）"""
+    from models import AgentMemory
+    from sqlalchemy import func
+
+    # 按 scope + context_id 分组聚合
+    rows = (
+        db.query(
+            AgentMemory.scope,
+            AgentMemory.context_id,
+            func.count(AgentMemory.id).label("count"),
+            func.max(AgentMemory.created_at).label("latest"),
+        )
+        .group_by(AgentMemory.scope, AgentMemory.context_id)
+        .order_by(func.max(AgentMemory.created_at).desc())
+        .all()
+    )
+
+    groups = []
+    for r in rows:
+        name, icon = _resolve_group_name(db, r.scope, r.context_id)
+        # 取最新一条作为预览
+        preview_entry = (
+            db.query(AgentMemory.content)
+            .filter(
+                AgentMemory.scope == r.scope,
+                AgentMemory.context_id == r.context_id,
+            )
+            .order_by(AgentMemory.created_at.desc())
+            .first()
+        )
+        groups.append({
+            "scope": r.scope,
+            "context_id": r.context_id,
+            "name": name,
+            "icon": icon,
+            "count": r.count,
+            "preview": (preview_entry[0][:60] + "...") if preview_entry and len(preview_entry[0]) > 60 else (preview_entry[0] if preview_entry else ""),
+            "latest": r.latest.isoformat() if r.latest else None,
+        })
+
+    return {"success": True, "data": groups}
 
 
 # ── Schemas ──
@@ -47,12 +129,17 @@ class MemoryUpdate(BaseModel):
 def list_memories(db: Session = Depends(get_db),
                   category: Optional[str] = Query(None),
                   limit: int = Query(50, ge=1, le=200),
-                  offset: int = Query(0, ge=0)):
+                  offset: int = Query(0, ge=0),
+                  scope: Optional[str] = Query(None),         # 🆕
+                  context_id: Optional[str] = Query(None),    # 🆕
+                  scope_only: bool = Query(False)):            # 🆕
     """列出所有记忆（按实时权重降序）"""
     mm = MemoryManager(db)
     return {
         "success": True,
-        "data": mm.list_all(category=category, limit=limit, offset=offset),
+        "data": mm.list_all(category=category, limit=limit, offset=offset,
+                            scope=scope, context_id=context_id,
+                            scope_only=scope_only),
     }
 
 
@@ -163,6 +250,193 @@ def pin_memory(key: str, db: Session = Depends(get_db)):
     if not ok:
         raise HTTPException(status_code=404, detail=f"记忆 '{key}' 不存在")
     return {"success": True, "message": f"记忆 '{key}' 已标记为 P0（永不过期）"}
+
+
+@router.post("/semantic-dedup")
+def semantic_dedup_memories(db: Session = Depends(get_db),
+                             dry_run: bool = Query(False, description="模拟运行，不执行删除")):
+    """语义去重 — LLM 判断哪些记忆内容重复，合并到权重最高的那条
+
+    按 scope+context_id 分组，每组内用 LLM 判断语义相似度。
+    相似组内保留权重最高的，删除其他，合并标签。
+    """
+    from models import AgentMemory
+    from sqlalchemy import func
+
+    mm = MemoryManager(db)
+
+    # 按 scope+context_id 分组
+    rows = (
+        db.query(
+            AgentMemory.scope,
+            AgentMemory.context_id,
+        )
+        .group_by(AgentMemory.scope, AgentMemory.context_id)
+        .all()
+    )
+
+    total_deleted = 0
+    total_kept = 0
+    groups_analyzed = 0
+    merge_log = []
+
+    for row in rows:
+        mems = db.query(AgentMemory).filter(
+            AgentMemory.scope == row.scope,
+            AgentMemory.context_id == row.context_id,
+        ).all()
+
+        if len(mems) < 2:
+            continue
+
+        # 格式化给 LLM
+        items = []
+        for m in mems:
+            w = mm.calc_weight(m)
+            items.append({"id": m.id, "key": m.key, "content": m.content, "tags": m.tags or [], "weight": round(w, 2)})
+
+        # 调 LLM 判断语义分组
+        merged = _semantic_dedup_group(items)
+        if not merged:
+            continue
+
+        groups_analyzed += 1
+        for group in merged:
+            if len(group) < 2:
+                continue
+            # 按权重降序，保留第一个
+            group.sort(key=lambda x: -x["weight"])
+            primary = group[0]
+            dups = group[1:]
+
+            # 合并标签
+            all_tags = set(primary.get("tags", []))
+            for d in dups:
+                all_tags.update(d.get("tags", []))
+            keep_mem = db.query(AgentMemory).filter(AgentMemory.id == primary["id"]).first()
+            if keep_mem:
+                keep_mem.tags = list(all_tags)
+
+            # 删除重复
+            for d in dups:
+                dup_mem = db.query(AgentMemory).filter(AgentMemory.id == d["id"]).first()
+                if dup_mem:
+                    if not dry_run:
+                        db.delete(dup_mem)
+                    total_deleted += 1
+                total_kept += 1
+
+            merge_log.append({
+                "kept": primary["key"],
+                "kept_content": primary["content"][:60],
+                "deleted_count": len(dups),
+                "deleted_keys": [d["key"] for d in dups],
+            })
+
+    if not dry_run:
+        db.commit()
+
+    return {
+        "success": True,
+        "groups_analyzed": groups_analyzed,
+        "kept": total_kept,
+        "deleted": total_deleted,
+        "dry_run": dry_run,
+        "merges": merge_log,
+    }
+
+
+_SEMANTIC_DEDUP_PROMPT = (
+    "你是一个记忆品控助手。以下是同一来源的多条记忆，请找出其中语义重复的内容进行分组。\n\n"
+    "分组规则：\n"
+    "- 如果两条记忆在说同一件事、同一信息，只是表达方式不同 -> 分到同一组\n"
+    "  ✅ 同组: '用户有30万资金' 和 '用户拥有30万启动资金'\n"
+    "  ✅ 同组: '用户叫张清泉' 和 '用户名为张清泉'\n"
+    "  ✅ 同组: '预算22万用于购车' 和 '购车预算22万元'\n"
+    "  ❌ 不同组: '用户有30万资金' 和 '用户有3个停车车位'（不同信息）\n"
+    "- 一条包含多条信息的宽泛记忆，如果其他单条是其子集，也算重复\n"
+    "  ✅ 同组: '用户张清泉，30万资金，3个车位' 和 '用户有30万资金'\n"
+    "- 每条记忆只分到一个组\n\n"
+    "返回格式：按序号分组，每组是一个数组\n"
+    "示例：[[1, 3], [2, 5, 7]] 表示记忆 1 和 3 重复，2、5 和 7 重复\n"
+    "如果没有重复，返回空数组 []。\n"
+    "只返回 JSON 数字数组，不要其他文字。"
+)
+
+
+def _semantic_dedup_group(items: list[dict]) -> list[list[dict]]:
+    """调本地 LLM 做语义去重分组
+
+    LLM 返回按 1-based 序号的分组：[[1, 3], [2, 5, 7]]
+    """
+    if not items or len(items) < 2:
+        return []
+
+    # 格式化输入
+    lines = ["# 记忆列表"]
+    for i, item in enumerate(items):
+        lines.append(f"{i+1}. [{item['key']}] {item['content']}")
+    text = "\n".join(lines)
+
+    try:
+        import requests
+        payload = {
+            "model": "qwen3.5-q4",
+            "messages": [
+                {"role": "system", "content": _SEMANTIC_DEDUP_PROMPT},
+                {"role": "user", "content": text},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 2048,
+        }
+        resp = requests.post("http://localhost:8083/v1/chat/completions", json=payload, timeout=30)
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[semantic-dedup] LLM 调用失败: {e}")
+        return []
+
+    # 解析 JSON 数字数组
+    raw = raw.strip()
+    if raw.startswith("```"):
+        start = raw.find("\n")
+        end = raw.rfind("```")
+        if start != -1 and end != -1:
+            raw = raw[start:end].strip()
+    if not raw.startswith("["):
+        return []
+
+    try:
+        import json
+        groups = json.loads(raw)
+        if not isinstance(groups, list):
+            return []
+
+        result = []
+        used_indices = set()
+        for g in groups:
+            if not isinstance(g, list) or len(g) < 2:
+                continue
+            # 转为 0-based 并查 items
+            idxs = sorted(set(
+                int(x) - 1 for x in g
+                if isinstance(x, (int, float)) and 1 <= int(x) <= len(items)
+            ))
+            if len(idxs) < 2:
+                continue
+            if any(i in used_indices for i in idxs):
+                # 跳过已分配的条目
+                idxs = [i for i in idxs if i not in used_indices]
+                if len(idxs) < 2:
+                    continue
+            for i in idxs:
+                used_indices.add(i)
+            result.append([items[i] for i in idxs])
+
+        return result
+    except Exception:
+        return []
 
 
 class AutoExtractRequest(BaseModel):

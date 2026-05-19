@@ -1,6 +1,7 @@
 """场景 + Thinking Map CRUD + 场景流式 + 场景广场/工坊/发布/导入导出"""
 import difflib
 import json
+import re
 import uuid
 from typing import List, Optional
 
@@ -9,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db, SessionLocal
-from models import Scene, ThinkingMap, ThinkNode, Message
+from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset
 from schemas import (
     SceneCreate, SceneOut, SceneUpdate, ScenePublishRequest,
     SceneExportOut, SceneImportIn,
@@ -19,6 +20,7 @@ from schemas import (
 from ai_engine import (
     extract_and_classify,
     get_settings,
+    call_deepseek_chat,
 )
 
 from agent_core.memory_manager import MemoryManager
@@ -265,6 +267,17 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
 @router.delete("/api/scenes/{scene_id}")
 def delete_scene(scene_id: str, db: Session = Depends(get_db)):
     scene = _get_scene_or_404(db, scene_id)
+    # 级联清理关联数据
+    from models import Message, ThinkingMap, ThinkNode, PriorityQueue, ReflectTimeline, SceneAsset, DialogState
+    db.query(DialogState).filter(DialogState.scene_id == scene_id).delete()
+    db.query(SceneAsset).filter(SceneAsset.scene_id == scene_id).delete()
+    db.query(PriorityQueue).filter(PriorityQueue.scene_id == scene_id).delete()
+    db.query(ReflectTimeline).filter(ReflectTimeline.scene_id == scene_id).delete()
+    tm = db.query(ThinkingMap).filter(ThinkingMap.scene_id == scene_id).first()
+    if tm:
+        db.query(ThinkNode).filter(ThinkNode.map_id == tm.id).delete()
+        db.delete(tm)
+    db.query(Message).filter(Message.scene_id == scene_id).delete()
     db.delete(scene)
     db.commit()
     return {"ok": True}
@@ -1155,6 +1168,45 @@ def _build_tool_cards(tool_results: list[dict]) -> list[dict]:
     return cards
 
 
+# ═══ 场景记忆提取（跨会话持久化） ═══
+
+
+@router.post("/api/scenes/{scene_id}/extract-memory")
+def extract_scene_memory(scene_id: str, db: Session = Depends(get_db)):
+    """从场景的最新对话中提取关键信息，存为场景级记忆
+
+    由前端在用户切走场景 / 页面关闭时触发。
+    不阻塞前端（快速返回），在后台完成 LLM 提取 + 写入。
+    """
+    scene = _get_scene_or_404(db, scene_id)
+
+    # 读取最近的消息
+    msgs = (
+        db.query(Message)
+        .filter(Message.scene_id == scene_id, Message.role.in_(["user", "ai"]))
+        .order_by(Message.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    msgs.reverse()
+    if len(msgs) < 2:
+        return {"ok": True, "extracted": 0, "reason": "对话太短，无需提取"}
+
+    messages_dict = [{"role": m.role, "content": m.content} for m in msgs]
+
+    # 调 LLM 提取
+    from agent_core.memory_extractor import extract_from_conversation, save_extracted_memories
+
+    entries = extract_from_conversation(messages_dict, scene_name=scene.name)
+    if not entries:
+        return {"ok": True, "extracted": 0, "reason": "无值得记忆的内容"}
+
+    saved = save_extracted_memories(db, entries, scene_id, scene_name=scene.name)
+    db.commit()
+
+    return {"ok": True, "extracted": saved, "total_candidates": len(entries)}
+
+
 # ═══ 场景流式 ═══
 
 @router.post("/api/scenes/{scene_id}/stream")
@@ -1307,11 +1359,102 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("error", message=f"AI 响应生成异常: {e}")
             return
 
+        # ── 🆕 自动收敛检测 [CONVERGE: ready, summary="..."] ──
+        CONVERGE_READY_RE = re.compile(r'\[CONVERGE:\s*ready\s*,\s*summary="([^"]*)"\s*\]')
+        converge_match = CONVERGE_READY_RE.search(full_reply)
+        converge_summary = ""
+        if converge_match:
+            converge_summary = converge_match.group(1)
+            full_reply = CONVERGE_READY_RE.sub("", full_reply).strip()
+            _log.info(f"[scene] 检测到自动收敛标记: {converge_summary[:60]}")
+            yield sse_event("tool_status", tool="auto_converge", status="running",
+                            message="正在整理行动方案...")
+
         # ── 工具卡片（从 Agent Loop 结果重建） ──
         tool_cards = _build_tool_cards(agent_tool_results) if agent_tool_results else []
         if tool_cards:
             yield sse_event("tool_cards", cards=tool_cards)
         tool_results = agent_tool_results or None
+
+        # ── 🆕 执行自动收敛 + 产出生成 ──
+        asset_event = None
+        if converge_summary:
+            try:
+                from agent_core.converge_engine import auto_converge_and_prioritize
+
+                tmap = db.query(ThinkingMap).filter(
+                    ThinkingMap.scene_id == scene_id
+                ).first()
+                if tmap:
+                    # 执行收敛
+                    pq_items = auto_converge_and_prioritize(
+                        db, scene_id, tmap, summary=converge_summary
+                    )
+                    yield sse_event("tool_status", tool="auto_converge", status="done",
+                                    message=f"行动方案已整理，{len(pq_items)} 个任务")
+
+                    # 如果收敛产生了任务，生成产出
+                    if pq_items:
+                        # 调 LLM 生成产出内容
+                        _scene_name = scene.name
+                        _pq_text = "\n".join(
+                            f"P{p.get('priority', 2)} {p.get('title', '')}"
+                            for p in pq_items[:12]
+                        )
+                        _output_prompt = (
+                            f"你是一个行动策划师。用户正在处理「{_scene_name}」这件事。\n\n"
+                            f"对话摘要：{converge_summary}\n\n"
+                            f"已经整理好的行动任务：\n{_pq_text}\n\n"
+                            f"请为用户产出一份可直接使用的行动手册。\n\n"
+                            f"输出格式：在回复末尾加上 [OUTPUT] 标签。\n"
+                            f"[OUTPUT: type=\"checklist\", title=\"行动手册标题\"]\n"
+                            f"## 第一步：...\n"
+                            f"1. 具体行动...\n"
+                            f"2. 具体行动...\n"
+                            f"## 第二步：...\n"
+                            f"...\n"
+                            f"[/OUTPUT]\n\n"
+                            f"type 可以是 checklist（可勾选清单）、guide（步骤指南）、table（对比表）。\n"
+                            f"内容用 markdown 写，用户能直接看明白每一步该干什么。"
+                        )
+                        _output_raw = call_deepseek_chat(
+                            [{"role": "user", "content": _output_prompt}],
+                            model="flash", temperature=0.3, max_tokens=4096,
+                            route="medium",
+                        )
+                        if _output_raw:
+                            OUTPUT_RE = re.compile(
+                                r'\[OUTPUT:\s*type="([^"]+)"\s*,\s*title="([^"]+)"\s*\](.*?)\[/OUTPUT\]',
+                                re.DOTALL,
+                            )
+                            _om = OUTPUT_RE.search(_output_raw)
+                            if _om:
+                                _type, _title, _content = _om.group(1), _om.group(2), _om.group(3).strip()
+                                _asset = SceneAsset(
+                                    id=make_id("ast"),
+                                    scene_id=scene_id,
+                                    type=_type,
+                                    title=_title,
+                                    content=_content,
+                                    format="markdown",
+                                )
+                                # 用独立 session 保存
+                                _a_db = SessionLocal()
+                                try:
+                                    _a_db.add(_asset)
+                                    _a_db.commit()
+                                    asset_event = {
+                                        "type": "asset",
+                                        "asset_id": _asset.id,
+                                        "asset_type": _type,
+                                        "title": _title,
+                                        "content": _content,
+                                    }
+                                finally:
+                                    _a_db.close()
+            except Exception as e:
+                _log.error(f"[scene] 自动收敛/产出失败: {e}")
+        # ── 结束自动收敛 + 产出生成 ──
 
         # 5. 保存 AI 消息（独立 DB session）
         ai_msg_id = make_id("msg")
@@ -1328,6 +1471,14 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_reply,
                             created_at=ai_msg.created_at.isoformat(),
                             changes=[], model=model_name)
+
+            # 🆕 发送产出事件
+            if asset_event:
+                yield sse_event("asset",
+                                asset_id=asset_event["asset_id"],
+                                type=asset_event["asset_type"],
+                                title=asset_event["title"],
+                                content=asset_event["content"])
 
             # 🆕 Schema v0.8: 本体观察 — 分身完成
             try:
@@ -1368,7 +1519,6 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     if is_first_msg:
                         print(f"[diverge] auto-diverge for scene {scene_id}")
                         # 用这个请求构建 diverge 请求
-                        from ai_engine import call_deepseek_chat
                         d_ctx = data.content[:500]
                         d_messages = [
                             {"role": "system", "content": (

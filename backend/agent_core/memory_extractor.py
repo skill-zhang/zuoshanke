@@ -1,195 +1,279 @@
-"""记忆提取器（v2）— LLM 驱动的记忆提取建议
+"""memory_extractor — 会话结束后异步提取记忆
 
-v2 核心变化（2026-05-20）：
-  ① 删除快速通道（关键词/正则匹配 → 不再依赖规则）
-  ② LLM 通道改为「建议模式」— 只生成记忆建议，不直接入库
-  ③ 实际写入由 LLM 通过 memory 工具自主完成
+不再依赖 LLM 在活跃对话中自主调 memory 工具存记忆（那是冗余的）。
+改为在会话结束时由后端分析对话历史，提取值得持久化的关键信息。
 
-可配置项（通过 settings → routing → extraction）：
-  - model: 模型名
-  - provider: local | deepseek | openai 等
-  - temperature: 0.1（默认）
-  - max_tokens: 1024
+触发时机（前端信号 + 后端兜底）：
+  1. 用户切走场景 → 前端调 POST /api/scenes/{id}/extract-memory
+  2. 页面关闭/隐藏 → 前端 visibilitychange 触发同一端点
+  3. 后端定时扫描 → 长时空闲场景自动提取（兜底）
 """
 
 import json
+import logging
 import requests
-import re
+from datetime import datetime, timezone
 from typing import Optional
 
-from agent_core.memory_manager import MemoryManager
-from logger import get_logger as _get_logger
-from config.urls import QWEN_API
-
-_log = _get_logger("memory_extractor")
-
-# ── 提取器的 System Prompt ──
-EXTRACTOR_SYSTEM_PROMPT = """你是记忆提取专家，负责从对话中分析哪些信息值得长期记住。
-
-## 提取原则
-只提取以下类型的信息（对未来的对话有价值）：
-- 用户身份：姓名、年龄、职业、所在地、联系方式
-- 用户偏好：喜欢的/不喜欢的风格、颜色、温度、食物、话题
-- 用户习惯：常用工作方式、工具偏好、作息规律
-- 项目约束：交付要求、技术限制、业务规则、架构决策
-- 重要事实：需要长期记住的上下文、人物关系、关键日期
-- 纠正信息：用户纠正过的错误认知
-
-不要提取以下内容（属于一次性对话）：
-- 日常问答（"今天天气怎么样"、"现在几点"）
-- 工具调用结果（API返回的数据、查询结果）
-- 闲聊寒暄（"吃了没"、"你好"）
-- 临时状态（当前正在做的事）
-- AI 的回复内容本身
-
-## 输出格式
-严格返回 JSON 数组，不要任何其他文字：
-[
-  {
-    "action": "suggest",
-    "key": "唯一标识，英文小写，用下划线连接（如 user_name、preference_color）",
-    "content": "记忆内容，清晰完整的陈述句，20字以内",
-    "category": "user",
-    "tags": ["标签1", "标签2"],
-    "topic": "personal_info | preference | habit | work | entertainment | food | travel | tech | shopping | health | education | general",
-    "confidence": 0.0-1.0
-  }
-]
-
-confidence 含义：
-- ≥0.9: 非常确定，建议立即存入
-- 0.7-0.9: 较确定，可作为候选
-- <0.7: 不确定，忽略（不输出该条）
-
-## 约束
-- 单次最多返回 3 条
-- key 要稳定可复用（同类型信息用相同 key）
-- content 要用简洁陈述句，20字以内
-  ✅ "用户喜欢火锅"
-  ✅ "用户习惯早起写代码"
-  ❌ "用户明确表示比较喜欢吃火锅。"
-- 不要编造信息，不确定就 confidence 打低
-- **这是建议，不是直接入库**——最终由 AI 自主决定是否保存
-"""
+logger = logging.getLogger(__name__)
 
 
-class MemoryExtractor:
-    """记忆提取器（v2 建议模式）"""
+# ── 提取 prompt ──
 
-    def __init__(self, db, route_cfg: Optional[dict] = None):
-        self.db = db
-        self.mm = MemoryManager(db)
-        self.route_cfg = route_cfg or self._load_route_cfg()
-        self.endpoint = self.route_cfg.get("_endpoint", QWEN_API)
-        self.model = self.route_cfg.get("model", "qwen3.5-9b")
-        self.temperature = self.route_cfg.get("temperature", 0.1)
-        self.max_tokens = self.route_cfg.get("max_tokens", 1024)
+EXTRACT_SYSTEM_PROMPT = (
+    "从对话中提取值得记住的信息，用 JSON 数组格式返回。\n"
+    "每条信息的格式：{\"type\": 类型, \"content\": 完整句子}\n"
+    "类型取值：user_preference / ai_insight / decision / constraint / key_info / action_item\n"
+    "提取范围包括用户说的和 AI 说的。不用开头加「AI」「用户」等前缀。\n"
+    "记住：记忆是给下次会话看的。一条信息如果下回用户回来时看到会觉得「对，这个有用」，才值得记。\n"
+    "不要记：过渡性对话、即时的操作指令（搜一下、查一下）、客套话、赞同附和。\n"
+    "不要记：单条过短（<15字）或信息量极低的内容。\n"
+    "如果没有值得记的返回 []。最多 10 条。只返回 JSON。"
+)
 
-    def _load_route_cfg(self) -> dict:
-        """从 settings 加载 extraction 路由配置"""
-        cfg = {"temperature": 0.1, "max_tokens": 1024,
-               "model": "qwen3.5-9b", "provider": "local"}
+
+def extract_from_conversation(
+    messages: list[dict],
+    scene_name: str = "",
+    model_cfg: Optional[dict] = None,
+) -> list[dict]:
+    """分析对话历史，提取关键信息
+
+    Args:
+        messages: 消息列表 [{"role": "user"|"ai", "content": "..."}, ...]
+        scene_name: 场景名称（用于 prompt 上下文）
+        model_cfg: 模型路由配置，默认用 "extraction" 路由
+
+    Returns:
+        [{"type": str, "content": str}, ...]
+    """
+    if not messages:
+        return []
+
+    if model_cfg is None:
+        model_cfg = {
+            "model": "qwen3.5-9b",
+            "provider": "local",
+            "temperature": 0.1,
+            "max_tokens": 2048,  # 改大让 AI 输出完整句子
+            "context_length": 32768,
+        }
+
+    # 拼接对话文本
+    dialog_lines = [f"## 【{scene_name}】对话记录"]
+
+    # 跳过前置 AI 消息（开场白/打招呼），从第一条用户消息开始
+    first_user_idx = None
+    for i, m in enumerate(messages):
+        if m.get("role") == "user":
+            first_user_idx = i
+            break
+    if first_user_idx is None:
+        logger.info(f"[extractor] {scene_name}: 无用户消息，跳过提取")
+        return []
+    messages = messages[first_user_idx:]
+
+    for m in messages:
+        role_label = "用户" if m["role"] == "user" else "AI"
+        content = m.get("content", "")[:1000]  # 单条截断，让 AI 长回复也能被提取
+        dialog_lines.append(f"\n{role_label}: {content}")
+    dialog_text = "".join(dialog_lines)
+    # 截断总体输入
+    if len(dialog_text) > 12000:
+        dialog_text = "…(前略)\n" + dialog_text[-12000:]
+
+    # 调 LLM
+    try:
+        result = _call_extraction_llm(dialog_text, model_cfg)
+        if isinstance(result, list):
+            return result
+        logger.warning(f"[extractor] LLM 返回非列表: {result}")
+        return []
+    except Exception as e:
+        logger.error(f"[extractor] 提取失败: {e}")
+        return []
+
+
+def _call_extraction_llm(dialog_text: str, cfg: dict) -> list:
+    """调 LLM 提取记忆"""
+    provider = cfg.get("provider", "local")
+    temperature = cfg.get("temperature", 0.1)
+    max_tokens = cfg.get("max_tokens", 1024)
+
+    if provider == "local":
+        # 本地 Qwen
+        api_url = "http://localhost:8083/v1/chat/completions"
+        payload = {
+            "model": cfg.get("model", "qwen3.5-q4"),
+            "messages": [
+                {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
+                {"role": "user", "content": dialog_text},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        resp = requests.post(api_url, json=payload, timeout=30)
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+    elif provider == "deepseek":
+        import os
+        from config.urls import DEEPSEEK_BASE_URL
+
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        api_url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+        payload = {
+            "model": cfg.get("model", "deepseek-chat"),
+            "messages": [
+                {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
+                {"role": "user", "content": dialog_text},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        resp = requests.post(
+            api_url, json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+    else:
+        logger.warning(f"[extractor] 不支持的 provider: {provider}")
+        return []
+
+    # 解析 JSON
+    return _parse_extraction_result(raw)
+
+
+def _parse_extraction_result(raw: str) -> list:
+    """从 LLM 输出解析 JSON 数组
+
+    兼容三种格式：
+    1. [{"type": "...", "content": "..."}, ...]  (标准格式)
+    2. [{"自定义键": "值"}, ...]                    (Qwen 对象格式)
+    3. ["内容1", "内容2", ...]                    (Qwen 字符串格式)
+    """
+    text = raw.strip()
+
+    # 去掉 ```json ... ``` 代码块
+    if text.startswith("```"):
+        start = text.find("\n")
+        end = text.rfind("```")
+        if start != -1 and end != -1:
+            text = text[start:end].strip()
+
+    # 尝试找 JSON 数组
+    arr_start = text.find("[")
+    arr_end = text.rfind("]")
+    if arr_start != -1 and arr_end != -1:
+        text = text[arr_start : arr_end + 1]
+
+    try:
+        result = json.loads(text)
+        if isinstance(result, list):
+            valid = []
+            for item in result:
+                if isinstance(item, dict) and "content" in item:
+                    # 格式1: 标准格式 {type, content}
+                    valid.append({
+                        "type": item.get("type", "key_info"),
+                        "content": item["content"].strip(),
+                    })
+                elif isinstance(item, dict):
+                    # 格式2: 自定义键名 {用户资金: "30万"} (Qwen 风格)
+                    for k, v in item.items():
+                        if isinstance(v, str) and v.strip():
+                            valid.append({
+                                "type": "key_info",
+                                "content": v.strip(),
+                            })
+                elif isinstance(item, str) and item.strip():
+                    # 格式3: 纯字符串 (Qwen 风格)
+                    valid.append({"type": "key_info", "content": item.strip()})
+            return valid
+    except json.JSONDecodeError:
+        pass
+
+    logger.warning(f"[extractor] JSON 解析失败, raw={text[:200]}")
+    return []
+
+
+# ── 保存记忆 ──
+
+def save_extracted_memories(
+    db,
+    entries: list[dict],
+    scene_id: str,
+    scene_name: str = "",
+) -> int:
+    """将提取的记忆批量写入 DB
+
+    Args:
+        db: DB session
+        entries: [{"type": str, "content": str}, ...]
+        scene_id: 场景 ID
+        scene_name: 场景名称
+
+    Returns:
+        实际写入条数
+    """
+    from agent_core.memory_manager import MemoryManager
+
+    if not entries:
+        return 0
+
+    mm = MemoryManager(db)
+    saved = 0
+
+    for entry in entries:
+        content = entry.get("content", "").strip()
+        entry_type = entry.get("type", "key_info")
+        if not content:
+            continue
+
+        # 自动去重（Jaccard 相似度检查）
+        existing = mm.find_similar_content(
+            content,
+            scope="scene",
+            context_id=scene_id,
+            threshold=0.50,
+        )
+        if existing:
+            # 已存在 → 强化权重（不创建副本）
+            mm.reinforce(existing.key)
+            continue
+
+        # 生成 key
+        import re
+        clean = re.sub(r'[^\w\u4e00-\u9fff]', '_', content[:20]).strip('_').lower()
+        key = f"scene_{clean}" if clean else f"scene_{entry_type}_{saved}"
+
         try:
-            from ai_engine import get_settings
-            cfg.update(get_settings("extraction"))
-        except Exception:
-            pass
-        import os as _os
-        env_endpoint = _os.environ.get("MEMORY_EXTRACTOR_ENDPOINT")
-        if env_endpoint:
-            cfg["_endpoint"] = env_endpoint
-        return cfg
-
-    # ── LLM 通道 — 生成记忆建议（不直接入库） ──
-
-    def _build_extract_messages(self, conversation: list[dict]) -> list[dict]:
-        """构建提取用的 LLM 消息"""
-        recent = conversation[-6:] if len(conversation) > 6 else conversation
-
-        dialogue_lines = []
-        for m in recent:
-            role_label = "用户" if m.get("role") in ("user", "human") else "AI"
-            content = m.get("content", "").strip()
-            if content:
-                if len(content) > 500:
-                    content = content[:500] + "..."
-                dialogue_lines.append(f"{role_label}: {content}")
-
-        dialogue_text = "\n\n".join(dialogue_lines)
-
-        user_prompt = f"""请分析以下对话，提取值得长期记住的信息：
-
---- 对话开始 ---
-{dialogue_text}
---- 对话结束 ---
-
-返回 JSON 数组，只输出包含有效提取项的数组。"""
-        return [
-            {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
-
-    def _call_extraction_llm(self, messages: list[dict]) -> Optional[str]:
-        """调用 LLM 生成记忆建议"""
-        try:
-            resp = requests.post(
-                self.endpoint,
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "max_tokens": self.max_tokens,
-                    "temperature": self.temperature,
-                },
-                timeout=60,
+            mm.add(
+                category="memory",
+                key=key,
+                content=content,
+                tags=[entry_type],
+                base_weight=3,
+                scope="scene",
+                context_id=scene_id,
             )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            saved += 1
         except Exception as e:
-            _log.error(f"[memory_extractor] LLM call failed: {e}")
-            return None
+            logger.warning(f"[extractor] 保存失败 {key}: {e}")
 
-    def _parse_response(self, text: Optional[str]) -> list[dict]:
-        """解析 LLM 返回的 JSON"""
-        if not text:
-            return []
+    logger.info(f"[extractor] {scene_name}: 提取并保存了 {saved}/{len(entries)} 条记忆")
+    return saved
 
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            clean_lines = [l for l in lines if not l.startswith("```")]
-            text = "\n".join(clean_lines)
 
-        try:
-            start = text.find("[")
-            end = text.rfind("]")
-            if start != -1 and end != -1:
-                text = text[start:end + 1]
-            return json.loads(text)
-        except json.JSONDecodeError as e:
-            _log.error(f"[memory_extractor] JSON parse failed: {e}")
-            return []
+# ── 类接口（兼容 scenes.py 已有 import: from agent_core.memory_extractor import MemoryExtractor） ──
+class MemoryExtractor:
+    """静态接口，包装核心函数"""
 
-    # ── 主入口 ──
+    @staticmethod
+    def extract(db, scene_id: str, messages: list[dict]) -> list[dict]:
+        return extract_from_conversation(messages, scene_name=scene_id)
 
-    def extract(self, conversation: list[dict], user_content: str) -> list[dict]:
-        """从对话中提取记忆建议（v2 建议模式，不直接入库）
-
-        Args:
-            conversation: 完整对话历史 [{"role": ..., "content": ...}]
-            user_content: 当前用户消息
-
-        Returns:
-            记忆建议列表 [{"action": "suggest", "key": ..., "content": ...}]
-            调用方可将这些建议展示给 LLM 或日志记录
-        """
-        try:
-            llm_messages = self._build_extract_messages(conversation)
-            llm_text = self._call_extraction_llm(llm_messages)
-            suggestions = self._parse_response(llm_text)
-            if suggestions:
-                _log.info(f"[memory_extractor] v2 suggestions: {suggestions}")
-            return suggestions
-        except Exception as e:
-            _log.error(f"[memory_extractor] llm path error: {e}")
-            return []
+    @staticmethod
+    def save(db, entries: list[dict], scene_id: str) -> int:
+        return save_extracted_memories(db, entries, scene_id)

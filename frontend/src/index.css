@@ -1772,6 +1772,33 @@ body {
 .toast { padding:8px 16px; margin:8px 24px 0; border-radius:6px; font-size:13px; }
 .toast-error { background:#3d1111; border:1px solid #f8514944; color:#f85149; }
 
+/* 来源分组卡片（上层） */
+.memory-group-card {
+  background:#161b22; border:1px solid #30363d; border-radius:10px;
+  padding:20px; cursor:pointer; transition:all .15s;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  text-align:center;
+}
+.memory-group-card:hover {
+  border-color:#8b949e; background:#1c2128;
+  transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
+.memory-group-card-icon { font-size:36px; line-height:1; }
+.memory-group-card-name { font-size:15px; font-weight:600; color:#e6edf3; }
+.memory-group-card-count { font-size:12px; color:#8b949e; }
+.memory-group-card-preview { font-size:11px; color:#6e7681; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* 下层返回行 */
+.mem-back-row {
+  padding:10px 24px 0; display:flex; align-items:center; gap:10px;
+  font-size:13px; flex-shrink:0;
+}
+.mem-back-link {
+  color:#58a6ff; cursor:pointer; user-select:none;
+}
+.mem-back-link:hover { text-decoration:underline; }
+.mem-back-name { color:#8b949e; }
+
 /* 记忆卡片 */
 .memory-card {
   background:#161b22; border:1px solid #30363d; border-radius:10px;
@@ -2066,4 +2093,56 @@ body {
 @keyframes dash-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
+}
+
+/* ═══ 场景资产卡片（自动收敛产出） ═══ */
+.asset-card {
+  background: #1a1a24;
+  border: 1px solid #2a2a3a;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+.asset-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #30363d;
+  background: #161b22;
+}
+.asset-card-icon { font-size: 18px; }
+.asset-card-title { font-size: 15px; font-weight: 600; color: #e6edf3; }
+.asset-card-body {
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #c9d1d9;
+}
+.asset-card-body h1, .asset-card-body h2, .asset-card-body h3 {
+  margin: 10px 0 6px; color: #e6edf3;
+}
+.asset-card-body ul, .asset-card-body ol {
+  padding-left: 20px; margin: 6px 0;
+}
+.asset-card-body li { margin: 4px 0; }
+.asset-card-footer {
+  padding: 8px 16px;
+  border-top: 1px solid #30363d;
+  display: flex;
+  justify-content: flex-end;
+}
+.asset-download-btn {
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: #00d4ff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.asset-download-btn:hover {
+  background: rgba(0,212,255,0.2);
+  border-color: #00d4ff;
 }

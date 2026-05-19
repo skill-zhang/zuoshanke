@@ -20,14 +20,21 @@ from .skill_manager import SkillManager
 
 # ── 场景聊天的 System Prompt（兜底用，优先从 DB settings 读取） ──
 SCENE_SYSTEM_PROMPT = (
-    "你可以调用工具获取实时信息（天气、搜索等），也可以直接回答用户的问题。\n"
+    "你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。\n"
+    "你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。\n"
     "请用中文回复，保持简洁自然。\n"
     "\n"
-    "## 追问原则\n"
-    "当用户描述了一个目标或计划而不是一个即时问题时：\n"
-    "- 先不要急于给出完整方案\n"
-    "- 主动追问关键问题来澄清需求\n"
-    "- 追问要有针对性，帮助缩小问题范围\n"
+    "## 核心行为准则\n"
+    "- 你是有行动能力的 AI Agent，不是教程编写者。用户让你「帮忙搜」「查一下」「分析」时，\n"
+    "  直接用工具去做，不要教用户自己操作。用户需要的是结果，不是操作指南。\n"
+    "- 当你发现需要真实世界的信息、数据或执行能力时，优先调用工具获取，\n"
+    "  而不是告诉用户「你去找一下」或「你下载XX自己看看」。\n"
+    "- 你是在帮用户做事，不是在教用户做事。\n"
+    "\n"
+    "## 对话节奏\n"
+    "- 用户说了需求后，先调用工具尝试获取信息，再回答\n"
+    "- 如果信息充足，直接给出分析/方案，不要反问用户「你想先做哪一步」\n"
+    "- 用户提供补充信息后，更新分析，不要重复追问\n"
 )
 
 
@@ -71,7 +78,38 @@ def _build_skill_block(query: str) -> str:
         # 只取前 500 字，避免 token 浪费
         content = skill.content[:500]
         lines.append(content)
-    return "\n".join(lines)
+    return "\\n".join(lines)
+
+
+def _build_tm_status_block(db, scene_id: str) -> str:
+    """构造思维导图节点状态块，让 LLM 知道当前已有哪些节点"""
+    if not db or not scene_id:
+        return ""
+    try:
+        from models import ThinkingMap, ThinkNode
+        tmap = db.query(ThinkingMap).filter(
+            ThinkingMap.scene_id == scene_id
+        ).first()
+        if not tmap:
+            return ""
+        nodes = db.query(ThinkNode).filter(
+            ThinkNode.map_id == tmap.id,
+            ThinkNode.type != "root",
+            ThinkNode.status != "discarded",
+        ).all()
+        if not nodes:
+            return ""
+        lines = ["## 🧠 已有思维节点（当前思维导图）"]
+        lines.append("以下是本轮对话前已记录的需求维度，供你参考。")
+        lines.append("如果你发现用户提到了新的维度，可以用 diverge 工具添加新节点；")
+        lines.append("如果对话已经足够充分，输出 [CONVERGE: ready] 触发收敛。")
+        lines.append("")
+        for n in nodes:
+            icon = "📌" if n.type == "domain" else "  •"
+            lines.append(f"{icon} {n.label}")
+        return "\\n".join(lines)
+    except Exception:
+        return ""
 
 
 def build_scene_context(
@@ -81,7 +119,7 @@ def build_scene_context(
     tool_results: Optional[list[dict]] = None,
     weather_context: Optional[str] = None,
     user_context: Optional[str] = None,
-    db=None,  # 🆕 数据库会话，用于加载记忆
+    db=None,
     scene_id: Optional[str] = None,  # 🆕 场景ID（记忆隔离）
 ) -> list[dict]:
     """构建场景聊天的 LLM 消息列表
@@ -275,11 +313,14 @@ def build_agent_context(
     # ── 5.5 记忆能力说明 ──
     system_parts.append(
         "## 📝 记忆能力\n"
-        "你有长期记忆系统。对话中发现的重要信息（用户偏好、习惯、个人事实、\n"
-        "项目约束）可以用 memory 工具存下来。已存的记忆会在后续对话中\n"
-        "作为参考呈现给你。\n"
-        "注意：用户强调「很重要」或纠正了你的某个认知时，应当更新记忆。\n"
-        "定期用 read 检查内容，避免过时或重复。存和改之前先看一遍。\n"
+        "你有长期记忆系统，用于跨会话持久化信息。\n"
+        "\n"
+        "规则：\n"
+        "- 当前对话的完整历史已在上下文中，不需要主动存记忆。\n"
+        "- 只有当用户明确说「记住这个」「记一下」「保存这条」时，\n"
+        "  才调用 memory(add) 存下来。\n"
+        "- memory(read) 用于查看之前会话存的记忆，当前对话不需要。\n"
+        "- 用户纠正认知时，用 memory(replace) 更新已有记忆。\n"
         "\n"
         "关于记忆作用域：\n"
         "- 你存的记忆默认属于当前场景，不会出现在其他场景中。\n"
@@ -288,18 +329,28 @@ def build_agent_context(
         "- memory(read) 可以查看本体级记忆和你当前场景的记忆。"
     )
 
+    # ── 5.5a 🆕 思维导图状态 ──
+    _tm_block = _build_tm_status_block(db, scene_id)
+    if _tm_block:
+        system_parts.append(_tm_block)
+
     # ── 5.6 收敛能力说明 + 场景信息 ──
-    scene_parts = ["## 🔀 收敛能力"]
+    scene_parts = ["## 🔀 发散与收敛（思维导图工作流）"]
     scene_parts.append(
-        "当你和用户讨论了足够多轮，已经覆盖了目标的主要方面，"
-        "可以主动询问用户是否要进入收敛整理阶段。"
+        "你和用户的完整对话流程：\n"
+        "1. 探索阶段：用户说需求 → 你调用函数工具搜索/分析 → 用户补充信息\n"
+        "2. 发散阶段：对话中发现新维度时，调用 diverge(scene_id, nodes=[...]) 工具\n"
+        "   向思维导图添加节点（你已能看到当前已有节点列表）\n"
+        "3. 收敛阶段：当你给出了完整的方案/分析后，调用 converge(scene_id, summary=...) 工具\n"
+        "   来自动合并节点、生成优先级队列、产出行动手册\n"
+        "4. 执行阶段：收敛完成后，LLM 按优先级队列执行"
     )
     scene_parts.append(
-        "收敛会合并相似的思维节点、标记废弃项、生成优先级队列，"
-        "让系统知道接下来该做什么。"
-    )
-    scene_parts.append(
-        "用户同意后，直接调用 converge 工具触发收敛。"
+        "### 调用 converge 的时机\n"
+        "- ✅ 你刚刚给出了一套完整的方案/计划后，立即调用\n"
+        "- ✅ 用户提供了所有关键信息（预算、经验、目标等），你已给出分析\n"
+        "- ✅ 用户说「好的」「继续」「进入实战」等认可\n"
+        "- ❌ 信息还不全时，继续用 diverge 发散"
     )
     if scene_id:
         scene_parts.append(

@@ -445,8 +445,26 @@
       }
     },
     {
+      "name": "diverge",
+      "description": "发散——向思维导图添加新节点。在你的对话中发现用户提出了新需求、新维度、新约束时调用，或者你发现之前没覆盖到的新话题时调用。一次调用可添加多个节点，每个节点设一个标题。注意是发散用 diverge 不是 converge。",
+      "file": "tools/diverge_tool.py",
+      "function": "diverge",
+      "parameters": {
+        "scene_id": {"type": "string", "description": "场景 ID（从系统提示中的「当前场景信息」获取）"},
+        "nodes": {"type": "array", "description": "节点列表。每个节点格式：{\"label\": \"节点标题\", \"type\": \"domain|leaf\", \"parent_label\": \"父节点标题（可选）\"}"}
+      },
+      "returns": "创建结果 JSON（含 count、nodes）",
+      "category": "tools",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
       "name": "converge",
-      "description": "收敛整理当前场景的 Thinking Map——合并相似节点、标记废弃、生成优先级队列。在讨论充分、信息足够、用户同意收敛时调用。",
+      "description": "收敛整理当前场景的 Thinking Map——合并相似节点、标记废弃、生成优先级队列。当你给出了完整的方案/分析、对话从探索进入行动阶段时，直接调用此工具（不要输出文本标记，直接用 function calling 调）。收敛完成后会生成优先级队列和行动手册。",
       "file": "tools/converge_tool.py",
       "function": "converge",
       "parameters": {

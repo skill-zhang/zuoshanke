@@ -267,6 +267,36 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
         {msg.id.startsWith('temp-ai-') && toolLogs && toolLogs.length > 0 && (
           <ToolLogBar logs={toolLogs} />
         )}
+        {/* 🆕 场景资产卡片 */}
+        {msg.asset && (
+          <div className="asset-card">
+            <div className="asset-card-header">
+              <span className="asset-card-icon">
+                {msg.asset.type === 'checklist' ? '📋' : msg.asset.type === 'guide' ? '📖' : msg.asset.type === 'table' ? '📊' : '📄'}
+              </span>
+              <span className="asset-card-title">{msg.asset.title}</span>
+            </div>
+            <div className="asset-card-body">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {msg.asset.content}
+              </ReactMarkdown>
+            </div>
+            <div className="asset-card-footer">
+              <button className="asset-download-btn" onClick={() => {
+                const blob = new Blob([msg.asset!.content], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${msg.asset!.title}.md`;
+                a.click(); URL.revokeObjectURL(url);
+              }}>
+                📥 下载 Markdown
+              </button>
+            </div>
+          </div>
+        )}
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}

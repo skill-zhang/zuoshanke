@@ -149,6 +149,24 @@ export default function App() {
     return () => { clearTimeout(startDelay); if (entertainRef.current) clearInterval(entertainRef.current); };
   }, [isIdle]);
 
+  // ═══ 页面关闭时提取最后一个场景的记忆 ═══
+  const prevSceneRef = useRef(currentScene);
+  useEffect(() => {
+    prevSceneRef.current = currentScene;
+  }, [currentScene]);
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        const scene = prevSceneRef.current;
+        if (scene) {
+          fetch(`/api/scenes/${scene.id}/extract-memory`, { method: 'POST' }).catch(() => {});
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   useEffect(() => {
     loadProjects();
   }, []);
