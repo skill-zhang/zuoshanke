@@ -537,6 +537,50 @@ class MemoryManager:
         tokens = re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', text)
         return [t for t in tokens if len(t) >= 1]
 
+    def find_similar_content(self, content: str,
+                              scope: Optional[str] = None,
+                              context_id: Optional[str] = None,
+                              threshold: float = 0.50) -> Optional[AgentMemory]:
+        """查找内容相似的已有记忆 — Jaccard 相似度 + 作用域感知
+
+        Args:
+            content: 要查找的内容
+            scope: 限定作用域（None=不限制）
+            context_id: 场景/频道ID
+            threshold: Jaccard 相似度阈值（0.0~1.0），默认 0.50
+
+        Returns:
+            最相似的记忆（若无则 None）
+        """
+        import re
+        content_tokens = set(re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', content))
+        if not content_tokens:
+            return None
+
+        query = self.db.query(AgentMemory)
+        if scope:
+            query = query.filter(AgentMemory.scope == scope)
+            if context_id:
+                query = query.filter(AgentMemory.context_id == context_id)
+        all_mems = query.all()
+
+        best_match = None
+        best_score = 0.0
+        for mem in all_mems:
+            mem_tokens = set(re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', mem.content))
+            if not mem_tokens:
+                continue
+            intersection = content_tokens & mem_tokens
+            union = content_tokens | mem_tokens
+            score = len(intersection) / len(union)
+            if score > best_score:
+                best_score = score
+                best_match = mem
+
+        if best_score >= threshold:
+            return best_match
+        return None
+
     def _to_dict(self, m: AgentMemory) -> dict:
         return {
             "id": m.id,

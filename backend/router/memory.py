@@ -70,15 +70,26 @@ def get_top_memories(query: str = Query("", max_length=500),
 
 @router.post("")
 def create_memory(body: MemoryCreate, db: Session = Depends(get_db)):
-    """创建新记忆"""
+    """创建新记忆（带内容去重）"""
     mm = MemoryManager(db)
-    # 检查是否已存在
+    # 检查 key 是否已存在
     existing = mm.get(body.key)
     if existing:
         raise HTTPException(
             status_code=409,
             detail=f"记忆 '{body.key}' 已存在，使用 PUT 更新"
         )
+    # 🆕 内容查重 — 防止相似记忆重复创建
+    similar = mm.find_similar_content(body.content, threshold=0.50)
+    if similar:
+        # 相似已存在 → 强化权重，不创建新条目
+        mm.reinforce(similar.key)
+        return {
+            "success": True,
+            "action": "reinforced",
+            "message": f"相似记忆已存在（{similar.key}），已强化权重",
+            "data": {"id": similar.id, "key": similar.key},
+        }
     mem = mm.add(
         category=body.category,
         key=body.key,
@@ -170,3 +181,70 @@ def auto_extract(body: AutoExtractRequest, db: Session = Depends(get_db)):
     mm = MemoryManager(db)
     results = mm.auto_extract_from_conversation(body.messages)
     return {"success": True, "data": results}
+
+
+@router.post("/dedup")
+def dedup_memories(threshold: float = Query(0.50, ge=0.3, le=1.0),
+                   db: Session = Depends(get_db)):
+    """扫描并合并重复记忆 — 基于 Jaccard 相似度
+
+    每组相似记忆中保留权重最高的，删除其他，合并标签。
+    """
+    from models import AgentMemory
+    mm = MemoryManager(db)
+    mems = db.query(AgentMemory).all()
+    if not mems:
+        return {"success": True, "message": "无记忆", "deleted": 0, "kept": 0}
+
+    import re
+    def token_set(content: str) -> set:
+        return set(re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', content or ""))
+
+    scored = [(mm.calc_weight(m), m) for m in mems]
+    scored.sort(key=lambda x: -x[0])  # 高权重在前
+
+    deleted = 0
+    kept = 0
+    used = set()  # 已处理的 ID
+
+    for w, m in scored:
+        if m.id in used:
+            continue
+        m_tokens = token_set(m.content)
+        if not m_tokens:
+            used.add(m.id)
+            continue
+        used.add(m.id)
+        group = [m]
+
+        # 找相似记忆
+        for w2, m2 in scored:
+            if m2.id in used:
+                continue
+            m2_tokens = token_set(m2.content)
+            if not m2_tokens:
+                continue
+            intersection = m_tokens & m2_tokens
+            union = m_tokens | m2_tokens
+            score = len(intersection) / len(union)
+            if score >= threshold:
+                group.append(m2)
+                used.add(m2.id)
+
+        # 保留第一个（权重最高），删除其他
+        primary = group[0]
+        kept += 1
+        for dup in group[1:]:
+            # 合并标签
+            if dup.tags and primary.tags:
+                primary.tags = list(set(primary.tags + dup.tags))
+            db.delete(dup)
+            deleted += 1
+
+    db.commit()
+    return {
+        "success": True,
+        "message": f"合并完成：保留 {kept} 条，删除 {deleted} 条重复",
+        "kept": kept,
+        "deleted": deleted,
+    }

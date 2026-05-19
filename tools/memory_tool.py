@@ -133,8 +133,8 @@ def _handle_add(mm: MemoryManager, target: str, content: str, key: str = None,
 
     content = content.strip()
 
-    # 检查内容是否已存在（模糊匹配 — 取前 20 字做 signature）
-    existing = _find_existing_by_content(mm, content)
+    # 检查内容是否已存在（Jaccard 相似度 + 作用域感知）
+    existing = _find_existing_by_content(mm, content, scope=scope, context_id=context_id)
     if existing:
         # 已存在 → 强化权重，不创建新条目
         mm.reinforce(existing.key)
@@ -331,23 +331,35 @@ def _handle_remove(mm: MemoryManager, target: str, old_text: str) -> str:
 # ── 辅助函数 ──
 
 
-def _find_existing_by_content(mm: MemoryManager, content: str):
-    """检查内容相似度 — 前 20 字作为 signature 匹配"""
-    if len(content) < 10:
-        # 短内容精确匹配
-        all_mems = mm.db.query(mm.db.query(AgentMemory).filter(
-            AgentMemory.content == content
-        ).first())
-        return None
+def _content_similarity(a: str, b: str) -> float:
+    """计算两条记忆内容的 Jaccard 相似度
 
-    signature = content[:20]
-    from models import AgentMemory
-    existing = mm.db.query(AgentMemory).filter(
-        AgentMemory.content.like(f"{signature}%")
-    ).first()
-    if existing:
-        return existing
-    return None
+    分词策略（与 MemoryManager._tokenize 一致）：
+      中文单字、英文单词、数字各自作为 token
+    """
+    import re
+    if not a or not b:
+        return 0.0
+    tokens_a = set(re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', a))
+    tokens_b = set(re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', b))
+    if not tokens_a or not tokens_b:
+        return 0.0
+    intersection = tokens_a & tokens_b
+    union = tokens_a | tokens_b
+    return len(intersection) / len(union)
+
+
+def _find_existing_by_content(mm: MemoryManager, content: str,
+                              scope: str = "zhu", context_id: str = None):
+    """检查内容相似度 — 调用 MemoryManager.find_similar_content
+
+    短内容（<20字）阈值提高至 0.65，长内容 0.50
+    """
+    threshold = 0.50 if len(content) >= 20 else 0.65
+    return mm.find_similar_content(
+        content, scope=scope, context_id=context_id,
+        threshold=threshold,
+    )
 
 
 def _find_by_text_match(mm: MemoryManager, target: str, text: str, limit: int = 5):
