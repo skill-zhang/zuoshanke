@@ -108,6 +108,11 @@ export const deleteNode = (nodeId: string) =>
   request(`/think-nodes/${nodeId}`, { method: 'DELETE' });
 export const convergeMap = (mapId: string) =>
   request<any>(`/thinking-maps/${mapId}/converge`, { method: 'POST' });
+export const divergeMap = (mapId: string, params?: { context?: string; force?: boolean }) =>
+  request<any>(`/thinking-maps/${mapId}/diverge`, {
+    method: 'POST',
+    body: JSON.stringify(params || {}),
+  });
 export const prioritizeMap = (mapId: string) =>
   request<any>(`/thinking-maps/${mapId}/prioritize`, { method: 'POST' });
 export const getQueue = (mapId: string) =>

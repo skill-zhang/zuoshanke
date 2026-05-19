@@ -3,7 +3,7 @@ name: github-code-review
 description: 代码审查 — git diff 本地审查 + GitHub PR 代码审查工作流
 version: 1.0
 category: development
-triggers: [代码审查, Code Review, 审查代码, PR审查, git diff, 审查清单, 代码走查, 审一下, review代码, 审查, 审阅]
+triggers: ["代码审查", "Code Review", "审查代码", "PR审查", "git diff", "审查清单", "代码走查", "审一下", "review代码", "审查", "审阅"]
 ---
 
 # 代码审查

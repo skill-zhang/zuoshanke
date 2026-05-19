@@ -4,7 +4,8 @@ import { CustomMindMap, type ThinkNodeData, type MergeRecord } from './CustomMin
 
 export function ThinkingMapDrawer() {
   const { drawerOpen, closeDrawer, thinkingMap, toggleNodeActionable,
-    convergeThinkingMap, prioritizeThinkingMap, getPriorityQueue } = useStore();
+    convergeThinkingMap, prioritizeThinkingMap, getPriorityQueue,
+    divergeThinkingMap } = useStore();
   const [showNodeSettings, setShowNodeSettings] = useState(false);
   const [converging, setConverging] = useState(false);
   const [convergeResult, setConvergeResult] = useState<any>(null);
@@ -12,6 +13,8 @@ export function ThinkingMapDrawer() {
   const [showQueue, setShowQueue] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [queueLoading, setQueueLoading] = useState(false);
+  const [diverging, setDiverging] = useState(false);
+  const [divergeDone, setDivergeDone] = useState(false);
 
   if (!drawerOpen) return null;
 
@@ -65,6 +68,19 @@ export function ThinkingMapDrawer() {
   };
 
   const selectedNode = selectedNodeId ? nodes.find((n: any) => n.id === selectedNodeId) : null;
+
+  const handleDiverge = async () => {
+    if (!mapId) return;
+    setDiverging(true);
+    try {
+      const r = await divergeThinkingMap();
+      if (r?.new_nodes?.length) {
+        setDivergeDone(true);
+      }
+    } finally {
+      setDiverging(false);
+    }
+  };
 
   const handleConverge = async () => {
     if (!mapId) return;
@@ -143,7 +159,46 @@ export function ThinkingMapDrawer() {
               flex: 1, minHeight: 0, display: 'flex', alignItems: 'center',
               justifyContent: 'center', color: '#8b949e', fontSize: 14,
             }}>
-              暂无思维导图数据
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ marginBottom: 12, fontSize: 36 }}>🧠</div>
+                <div style={{ marginBottom: 8 }}>暂无思维导图数据</div>
+                <button
+                  disabled={diverging}
+                  style={{
+                    padding: '8px 20px', borderRadius: 8, border: '1px solid #3b82f6',
+                    background: diverging ? '#1a1a24' : 'rgba(59,130,246,0.12)',
+                    color: diverging ? '#555' : '#60a5fa',
+                    cursor: diverging ? 'default' : 'pointer',
+                    fontSize: 13, fontWeight: 500,
+                  }}
+                  onClick={handleDiverge}
+                >
+                  {diverging ? '⏳ 发散中...' : '🧠 开始发散'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── 发散按钮（有节点时） ── */}
+          {nodes.length > 0 && (
+            <div style={{
+              display: 'flex', gap: 8, padding: '8px 12px',
+              borderTop: '1px solid #21262d',
+            }}>
+              <button
+                disabled={diverging}
+                style={{
+                  padding: '6px 14px', borderRadius: 6,
+                  border: '1px solid #3b82f6',
+                  background: diverging ? '#1a1a24' : 'rgba(59,130,246,0.12)',
+                  color: diverging ? '#555' : '#60a5fa',
+                  cursor: diverging ? 'default' : 'pointer',
+                  fontSize: 12, fontWeight: 500, flex: 1,
+                }}
+                onClick={handleDiverge}
+              >
+                {diverging ? '⏳ 发散中...' : '🧠 再次发散'}
+              </button>
             </div>
           )}
 

@@ -290,6 +290,15 @@ export const useStore = create<AppState>((set, get) => ({
     }
     return result;
   },
+  divergeThinkingMap: async (opts?: { context?: string; force?: boolean }) => {
+    const state = get();
+    if (!state.thinkingMap) return;
+    const result = await divergeMap(state.thinkingMap.id, opts);
+    if (state.currentScene) {
+      await state.loadThinkingMap(state.currentScene.id);
+    }
+    return result;
+  },
   prioritizeThinkingMap: async () => {
     const state = get();
     if (!state.thinkingMap) return;
@@ -480,6 +489,9 @@ export const useStore = create<AppState>((set, get) => ({
             ),
           }));
           // 流式完成后刷新 Thinking Map
+          get().loadThinkingMap(sceneId);
+        } else if (event.type === 'thinking_map:diverged') {
+          // 自动发散完成，刷新 Thinking Map
           get().loadThinkingMap(sceneId);
         } else if (event.type === 'error') {
           set(state => ({

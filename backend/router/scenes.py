@@ -391,6 +391,246 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+
+# ═══ Agent Loop: Diverge (发散阶段) ═══
+
+class DivergeRequest(BaseModel):
+    context: str = Field("", description="额外上下文提示")
+    force: bool = Field(False, description="强制重新发散")
+
+
+@router.post("/api/thinking-maps/{map_id}/diverge")
+def diverge_thinking_map(map_id: str, data: DivergeRequest = None, db: Session = Depends(get_db)):
+    """
+    发散 Thinking Map：LLM 头脑风暴拆解任务，生成节点树
+    """
+    from ai_engine import call_deepseek_chat
+    import json
+
+    if data is None:
+        data = DivergeRequest()
+
+    tmap = db.query(ThinkingMap).filter(ThinkingMap.id == map_id).first()
+    if not tmap:
+        raise HTTPException(404, "Thinking Map不存在")
+
+    scene = db.query(Scene).filter(Scene.id == tmap.scene_id).first()
+    scene_name = scene.name if scene else "未命名场景"
+    scene_desc = scene.description or ""
+
+    existing_nodes = db.query(ThinkNode).filter(ThinkNode.map_id == map_id).all()
+    root = next((n for n in existing_nodes if n.type == "root"), None)
+    if not root:
+        raise HTTPException(400, "Thinking Map缺少根节点")
+
+    if data.force:
+        for n in existing_nodes:
+            if n.id != root.id and n.status == "discussing":
+                db.delete(n)
+        db.commit()
+        existing_nodes = [root]
+
+    is_first = len(existing_nodes) <= 1 and not any(n.type != "root" for n in existing_nodes)
+
+    existing_summary = ""
+    for n in existing_nodes:
+        if n.type == "root":
+            continue
+        p = next((x for x in existing_nodes if x.id == n.parent_id), None)
+        pl = p.label if p else "根节点"
+        existing_summary += "- [" + n.status + "] " + pl + " -> " + n.label + "\n"
+
+    # ---- Build prompts ----
+    if is_first:
+        prompt_lines = [
+            "你是坐山客 AI 工作台的任务拆解专家。你需要将以下任务做结构化分解，输出清晰的思维导图节点树。",
+            "",
+            "## 任务",
+            "名称: " + scene_name,
+            "描述: " + (scene_desc or "(无详细描述)"),
+        ]
+        if data.context:
+            prompt_lines.append("额外上下文: " + data.context)
+        prompt_lines += [
+            "",
+            "## 输出格式",
+            '请以 JSON 格式输出，严格按以下结构:',
+            '{',
+            '  "categories": [',
+            '    {',
+            '      "label": "类别名称",',
+            '      "nodes": [',
+            '        {"label": "子任务名称"},',
+            '        {"label": "子任务名称"}',
+            '      ]',
+            '    }',
+            '  ]',
+            '}',
+            "",
+            "## 拆解要求",
+            "1. 根据任务名称和描述，识别 3-5 个关键领域/模块（categories）",
+            "2. 每个类别下分解 2-4 个具体可执行的子任务",
+            "3. 使用简洁的中文标签（6-12 字最佳）",
+            "4. 标签应该具体可执行，而非抽象概念",
+            "5. 类别和子任务要有逻辑层次关系",
+            "6. 输出只有 JSON，不要额外解释",
+        ]
+        system_prompt = "\n".join(prompt_lines)
+    else:
+        prompt_lines = [
+            "你是坐山客 AI 工作台的任务拆解专家。请分析以下任务的思维导图当前状态，补充新的分支节点。",
+            "",
+            "## 任务",
+            "名称: " + scene_name,
+            "描述: " + (scene_desc or "(无详细描述)"),
+        ]
+        if data.context:
+            prompt_lines.append("额外上下文: " + data.context)
+        prompt_lines += [
+            "",
+            "## 现有节点",
+            existing_summary or "(暂无细化节点)",
+            "",
+            "## 输出格式",
+            '请以 JSON 格式输出，严格按以下结构:',
+            '{',
+            '  "categories": [',
+            '    {',
+            '      "parent_label": "要挂载的父节点名称（从现有节点中选择）",',
+            '      "nodes": [',
+            '        {"label": "新增子任务名称"},',
+            '        {"label": "新增子任务名称"}',
+            '      ]',
+            '    }',
+            '  ]',
+            '}',
+            "",
+            "## 要求",
+            "1. 分析现有节点，找出尚未覆盖的方向或遗漏的子任务",
+            "2. 输出的 parent_label 必须从现有节点中选择（使用完全一致的名称）",
+            "3. 每个父节点下补充 1-3 个新子任务",
+            "4. 标签使用简洁中文（6-12 字），具体可执行",
+            "5. 输出只有 JSON，不要额外解释",
+        ]
+        system_prompt = "\n".join(prompt_lines)
+
+    # ---- Call LLM ----
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": "请对 " + scene_name + " 进行任务拆解。"},
+    ]
+
+    raw = call_deepseek_chat(messages, model="flash", temperature=0.5, max_tokens=4096, route="medium")
+    if not raw:
+        raise HTTPException(502, "LLM发散调用失败")
+
+    # ---- Parse JSON ----
+    def _extract_json(text):
+        text = text.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                return json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                pass
+        return None
+
+    parsed = _extract_json(raw)
+    if not parsed:
+        logger.error("[Diverge] LLM返回无法解析: " + raw[:300])
+        raise HTTPException(502, "LLM发散结果解析失败，请重试")
+
+    categories = parsed.get("categories", [])
+    if not categories:
+        categories = parsed.get("nodes", [])
+
+    if not categories:
+        return {
+            "map_id": map_id,
+            "new_nodes": [],
+            "thinking_map": {"id": tmap.id, "title": tmap.title,
+                "status": tmap.status, "version": tmap.version,
+                "nodes": [n.to_schema_dict() for n in existing_nodes]},
+            "message": "LLM未生成任何节点",
+        }
+
+    # ---- Create nodes ----
+    name_to_id = {n.label: n.id for n in existing_nodes}
+    new_nodes = []
+
+    for cat in categories:
+        parent_label = cat.get("parent_label", cat.get("label", ""))
+        children = cat.get("nodes", [])
+
+        if is_first and "label" in cat:
+            parent_label = cat["label"]
+            if parent_label not in name_to_id:
+                l1_id = make_id("n")
+                l1_node = ThinkNode(
+                    id=l1_id, map_id=map_id, parent_id=root.id,
+                    type="domain", label=parent_label,
+                    status="discussing", created_by="brainstorm",
+                )
+                db.add(l1_node)
+                new_nodes.append(l1_node)
+                name_to_id[parent_label] = l1_id
+
+        parent_id = name_to_id.get(parent_label, root.id)
+
+        for child in children:
+            child_label = child.get("label", "")
+            if not child_label:
+                continue
+            is_dup = any(
+                n.parent_id == parent_id and n.label == child_label
+                for n in existing_nodes + new_nodes
+            )
+            if is_dup:
+                continue
+            child_id = make_id("n")
+            child_node = ThinkNode(
+                id=child_id, map_id=map_id, parent_id=parent_id,
+                type="leaf", label=child_label,
+                status="discussing", created_by="brainstorm",
+            )
+            db.add(child_node)
+            new_nodes.append(child_node)
+
+    if not new_nodes:
+        return {
+            "map_id": map_id,
+            "new_nodes": [],
+            "thinking_map": {"id": tmap.id, "title": tmap.title,
+                "status": tmap.status, "version": tmap.version,
+                "nodes": [n.to_schema_dict() for n in existing_nodes]},
+            "message": "所有节点已存在，无需新增",
+        }
+
+    tmap.version += 1
+    tmap.updated_at = utcnow()
+    db.commit()
+
+    db.refresh(tmap)
+    all_nodes = db.query(ThinkNode).filter(ThinkNode.map_id == map_id).all()
+    return {
+        "map_id": map_id,
+        "new_nodes": [n.to_schema_dict() for n in new_nodes],
+        "is_first_diverge": is_first,
+        "thinking_map": {"id": tmap.id, "title": tmap.title,
+            "status": tmap.status, "version": tmap.version,
+            "nodes": [n.to_schema_dict() for n in all_nodes]},
+    }
+
+
 # ═══ Agent Loop: Converge ═══
 
 @router.post("/api/thinking-maps/{map_id}/converge")
@@ -973,6 +1213,13 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             "当你需要实时数据或用户明确要求查信息时，先调用工具获取数据，再基于数据回复。\n"
             "如果用户问的是常识性问题或你已知道的知识，直接回复即可，不需要调工具。\n"
             "请用中文回复，保持简洁自然。\n"
+            "\n"
+            "## 追问原则\n"
+            "当用户描述了一个目标或计划（如「我想做二手车买卖」）而不是一个即时问题时：\n"
+            "- 先不要急于给出完整方案\n"
+            "- 主动追问 2-3 个关键问题来澄清需求（预算、时间、范围等）\n"
+            "- 追问要有针对性，帮助缩小问题范围\n"
+            "- 在追问末尾说明「我会逐步帮你拆分这个任务」\n"
         )
         if user_ctx:
             scene_agent_prompt += f"\n=== 用户设定的背景 ===\n{user_ctx}\n==================="
@@ -1090,7 +1337,95 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             except Exception as e:
                 print(f"[memory] extract error: {e}")
 
-            # ── 7. 缺工具提案（仅当使用了 web_search 兜底时） ──
+            # ── 7.5 自动发散（首次消息时自动触发 Thinking Map 拆解） ──
+            try:
+                tmap = db.query(ThinkingMap).filter(
+                    ThinkingMap.scene_id == scene_id
+                ).first()
+                if tmap:
+                    existing = db.query(ThinkNode).filter(
+                        ThinkNode.map_id == tmap.id
+                    ).all()
+                    is_first_msg = len(existing) <= 1 and not any(
+                        n.type != "root" for n in existing
+                    )
+                    if is_first_msg:
+                        print(f"[diverge] auto-diverge for scene {scene_id}")
+                        # 用这个请求构建 diverge 请求
+                        from ai_engine import call_deepseek_chat
+                        d_ctx = data.content[:500]
+                        d_messages = [
+                            {"role": "system", "content": (
+                                "你是坐山客 AI 工作台的任务拆解专家。"
+                                "将用户的目标拆解为思维导图节点树。"
+                                "输出 JSON，结构: {\"categories\": [{\"label\": \"类别\", \"nodes\": [{\"label\": \"子任务\"}]}]}"
+                            )},
+                            {"role": "user", "content": f"目标：{d_ctx}"},
+                        ]
+                        d_raw = call_deepseek_chat(d_messages, model="flash",
+                                                   temperature=0.5, max_tokens=3072,
+                                                   route="medium")
+                        if d_raw:
+                            import json as _json
+                            text = d_raw.strip()
+                            if "```json" in text:
+                                text = text.split("```json")[1].split("```")[0].strip()
+                            elif "```" in text:
+                                text = text.split("```")[1].split("```")[0].strip()
+                            parsed = _json.loads(text) if text.startswith("{") else None
+                            if not parsed:
+                                start = text.find("{")
+                                end = text.rfind("}")
+                                if start >= 0 and end > start:
+                                    parsed = _json.loads(text[start:end+1])
+                            if parsed:
+                                categories = parsed.get("categories", []) or parsed.get("nodes", [])
+                                name_to_id = {n.label: n.id for n in existing}
+                                root = next((n for n in existing if n.type == "root"), None)
+                                new_count = 0
+                                for cat in categories:
+                                    p_label = cat.get("parent_label", cat.get("label", ""))
+                                    children = cat.get("nodes", [])
+                                    if root and "label" in cat and p_label not in name_to_id:
+                                        nid = make_id("n")
+                                        node = ThinkNode(
+                                            id=nid, map_id=tmap.id, parent_id=root.id,
+                                            type="domain", label=p_label,
+                                            status="discussing", created_by="brainstorm",
+                                        )
+                                        db.add(node)
+                                        name_to_id[p_label] = nid
+                                        new_count += 1
+                                    pid = name_to_id.get(p_label, root.id if root else None)
+                                    if not pid:
+                                        continue
+                                    for child in children:
+                                        cl = child.get("label", "")
+                                        if not cl:
+                                            continue
+                                        dup = any(
+                                            x.parent_id == pid and x.label == cl
+                                            for x in existing
+                                        )
+                                        if not dup:
+                                            db.add(ThinkNode(
+                                                id=make_id("n"), map_id=tmap.id,
+                                                parent_id=pid, type="leaf",
+                                                label=cl, status="discussing",
+                                                created_by="brainstorm",
+                                            ))
+                                            new_count += 1
+                                if new_count:
+                                    tmap.version += 1
+                                    tmap.updated_at = utcnow()
+                                    db.commit()
+                                    print(f"[diverge] auto-diverge created {new_count} nodes")
+                                    yield sse_event("thinking_map:diverged",
+                                                    node_count=new_count)
+            except Exception as e:
+                print(f"[diverge] auto-diverge error: {e}")
+
+            # ── 8. 缺工具提案（仅当使用了 web_search 兜底时） ──
             try:
                 _was_web_search = any(
                     r.get("tool") == "web_search" for r in (tool_results or [])
