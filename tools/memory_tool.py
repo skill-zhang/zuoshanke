@@ -113,7 +113,7 @@ def memory_tool(
         elif action == "reinforce":
             return _handle_reinforce(mm, target, old_text, key)
         elif action == "read":
-            return _handle_read(mm, target)
+            return _handle_read(mm, target, scope=scope, context_id=context_id)
         elif action == "replace":
             return _handle_replace(mm, target, old_text, content, key)
         elif action == "remove":
@@ -206,10 +206,16 @@ def _handle_reinforce(mm: MemoryManager, target: str, old_text: str = None, key:
     return json.dumps({"success": False, "error": "reinforce 需要 key 或 old_text"}, ensure_ascii=False)
 
 
-def _handle_read(mm: MemoryManager, target: str) -> str:
-    """读取记忆列表"""
+def _handle_read(mm: MemoryManager, target: str,
+                 scope: str = "zhu", context_id: str = None) -> str:
+    """读取记忆列表（支持作用域过滤）"""
     try:
-        entries = mm.list_all(category=target if target != "all" else None, limit=100)
+        entries = mm.list_all(
+            category=target if target != "all" else None,
+            limit=100,
+            scope=scope if scope else None,
+            context_id=context_id,
+        )
         if not entries:
             return json.dumps({
                 "success": True,

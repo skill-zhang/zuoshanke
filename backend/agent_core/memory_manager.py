@@ -187,11 +187,29 @@ class MemoryManager:
         return True
 
     def list_all(self, category: Optional[str] = None,
-                 limit: int = 50, offset: int = 0) -> list[dict]:
-        """列出所有记忆（降序按权重排序）"""
+                 limit: int = 50, offset: int = 0,
+                 scope: Optional[str] = None,
+                 context_id: Optional[str] = None) -> list[dict]:
+        """列出所有记忆（降序按权重排序）
+
+        Args:
+            category: user | agent 筛选
+            limit: 最大返回条数
+            offset: 分页偏移
+            scope: 🆕 作**域过滤（zhu | scene | channel），None=不限制
+            context_id: 🆕 场景/频道ID（scope=scene/channel 时有效）
+        """
         q = self.db.query(AgentMemory)
         if category:
             q = q.filter(AgentMemory.category == category)
+        # 🆕 作用域过滤
+        if scope == "zhu":
+            q = q.filter(AgentMemory.scope == "zhu")
+        elif scope in ("scene", "channel") and context_id:
+            q = q.filter(
+                (AgentMemory.scope == "zhu") |
+                ((AgentMemory.scope == scope) & (AgentMemory.context_id == context_id))
+            )
         mems = q.order_by(AgentMemory.created_at.desc()).all()
         # 计算实时权重并排序
         scored = [(self.calc_weight(m), m) for m in mems]
