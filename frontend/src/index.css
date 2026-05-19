@@ -1952,27 +1952,27 @@ body {
 .badge-purple { background: rgba(168,85,247,0.15); color: #c084fc; }
 .badge-pink { background: rgba(236,72,153,0.15); color: #f472b6; }
 
-/* TM 收敛结果列表 */
-.tm-nodes { display: flex; flex-direction: column; gap: 5px; }
-.tm-node {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-radius: 6px;
-  background: #22222e; border: 1px solid #2a2a3a;
-  font-size: 13px; transition: all 0.2s;
+/* TM 收敛结果 — 按父级分组的叶子列表 */
+.tm-nodes { display: flex; flex-direction: column; gap: 2px; }
+.tm-group { border-radius: 8px; margin-bottom: 3px; }
+.tm-group-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 9px; border-radius: 6px;
+  font-size: 13px; transition: background 0.15s;
 }
-.tm-node .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.tm-node .dot.orange { background: #f97316; }
-.tm-node .dot.green { background: #22c55e; }
-.tm-node .dot.gray { background: #555; }
-.tm-node .dot.red { background: #ef4444; }
-.tm-node .dot.pink { background: #ec4899; }
-.tm-node .dot.blue { background: #3b82f6; }
-.tm-node .text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tm-node .text .s { font-size: 11px; color: #666; margin-left: 4px; }
-.tm-node .status-tag { font-size: 10px; padding: 2px 7px; border-radius: 5px; flex-shrink: 0; }
-.tm-node .merged-count { font-size: 10px; color: #f97316; background: rgba(249,115,22,0.1); padding: 2px 7px; border-radius: 5px; flex-shrink: 0; }
-.tm-node.strikethrough .text { text-decoration: line-through; color: #666; }
-.tm-node.converged { border-color: #f97316; background: rgba(249,115,22,0.04); }
+.tm-group-header:hover { filter: brightness(1.15); }
+.tm-group-header .collapse-arrow { font-size: 10px; color: #777; flex-shrink: 0; }
+.tm-group-header .group-label { font-size: 13px; }
+.tm-group-leaves { padding: 2px 8px 6px 22px; }
+.tm-leaf-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; padding: 3px 8px; border-radius: 6px;
+  color: #bbb; white-space: nowrap; transition: all 0.15s;
+}
+.tm-leaf-chip:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+}
 
 /* Priority Queue */
 .pq-item {

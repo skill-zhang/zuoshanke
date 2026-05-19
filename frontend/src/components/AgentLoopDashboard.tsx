@@ -119,63 +119,179 @@ function CollapsibleMindMap() {
   );
 }
 
-// ═══ TM 收敛结果卡片 ═══
+// ═══ 场景标题映射 ═══
+// 根据场景名关键词推断面板标题，不涉及 LLM，纯 UI 层
+const SCENE_TITLE_MAP: [string[], string][] = [
+  [['二手车', '买房', '购房', '购物', '装修', '招聘', '租房'], '注意事项'],
+  [['软件', '需求', '项目', '规划', '开发', '功能', '迭代', '重构', 'feature'], '需求列表'],
+  [['旅游', '出行', '旅行', '自驾', '路线', '攻略'], '行程清单'],
+  [['学习', '研究', '调研', '论文', '阅读', '报告'], '学习要点'],
+];
+
+function guessPanelTitle(sceneName: string): string {
+  for (const [keywords, title] of SCENE_TITLE_MAP) {
+    for (const kw of keywords) {
+      if (sceneName.includes(kw)) return title;
+    }
+  }
+  return '任务清单';
+}
+
+// ═══ TM 收敛结果卡片 — 按父级分组的叶子列表 ═══
 function TMResultsCard() {
   const thinkingMap = useStore(s => s.thinkingMap);
+  const currentScene = useStore(s => s.currentScene);
   const nodes: any[] = thinkingMap?.nodes || [];
+  const sceneName = currentScene?.name || '';
+  const panelTitle = guessPanelTitle(sceneName);
 
-  const convergedNodes = nodes.filter((n: any) => n.status === 'confirmed' && n.converged_from?.length > 0);
-  const queuedNodes = nodes.filter((n: any) => n.status === 'confirmed' && !n.converged_from?.length);
-  const brainstormNodes = nodes.filter((n: any) => n.status !== 'confirmed' && n.status !== 'discarded' && n.type !== 'root');
-  const discardedNodes = nodes.filter((n: any) => n.status === 'discarded');
-  const feedbackNodes = nodes.filter((n: any) => n.created_by === 'reflect');
+  // 找出所有叶子节点（不被任何其他节点引用的节点）
+  const leafIds = new Set(
+    nodes.filter((n: any) => {
+      if (n.type === 'root') return false;
+      return !nodes.some(c => c.parent_id === n.id);
+    }).map((n: any) => n.id)
+  );
+
+  // 按 parent_id 分组的叶子
+  const groupMap = new Map<string, { parentId: string; parentLabel: string; leaves: any[]; status: string }>();
+
+
+  nodes.filter((n: any) => leafIds.has(n.id)).forEach((leaf: any) => {
+    const pid = leaf.parent_id || 'ungrouped';
+    const parentNode = pid !== 'ungrouped' ? nodes.find((n: any) => n.id === pid) : null;
+    if (!groupMap.has(pid)) {
+      groupMap.set(pid, {
+        parentId: pid,
+        parentLabel: parentNode?.label || (pid === 'ungrouped' ? '其他' : pid),
+        leaves: [],
+        status: parentNode?.status || 'active',
+      });
+    }
+    groupMap.get(pid)!.leaves.push(leaf);
+  });
+
+  // 按 parent 在树中的顺序排序（大致维持原始顺序）
+  const groups = [...groupMap.values()].sort((a, b) => {
+    const aIdx = nodes.findIndex((n: any) => n.id === a.parentId);
+    const bIdx = nodes.findIndex((n: any) => n.id === b.parentId);
+    return aIdx - bIdx;
+  });
+
+  // 废弃/反馈注入的单独显示（不分组）
+  const discardedLeafIds = new Set(
+    nodes.filter((n: any) => leafIds.has(n.id) && n.status === 'discarded').map((n: any) => n.id)
+  );
+  const feedbackLeafIds = new Set(
+    nodes.filter((n: any) => leafIds.has(n.id) && n.created_by === 'reflect').map((n: any) => n.id)
+  );
 
   return (
     <div className="card">
-      <h3>🧠 Thinking Map <span className="badge badge-orange">收敛结果</span></h3>
+      <h3>📋 {panelTitle} <span className="badge badge-orange">叶子汇总</span></h3>
       <div className="tm-nodes">
-        {convergedNodes.map((n: any) => (
-          <div key={n.id} className="tm-node converged">
-            <span className="dot orange"></span>
-            <span className="text">{n.label} <span className="s">— 合入: {(n.converged_from || []).join(', ')}</span></span>
-            {n.converged_from?.length > 0 && <span className="merged-count">🔀×{n.converged_from.length}</span>}
-            <span className="status-tag" style={{ background: 'rgba(249,115,22,0.1)', color: '#fb923c' }}>已收敛</span>
-          </div>
-        ))}
-        {queuedNodes.filter((n: any) => n.priority).map((n: any) => (
-          <div key={n.id} className="tm-node" style={{ borderColor: 'rgba(34,197,94,0.3)' }}>
-            <span className="dot green"></span>
-            <span className="text">{n.label}</span>
-            <span className="status-tag" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>→队列 P{n.priority}</span>
-          </div>
-        ))}
-        {brainstormNodes.map((n: any) => (
-          <div key={n.id} className="tm-node" style={{ borderColor: 'rgba(59,130,246,0.3)' }}>
-            <span className="dot blue"></span>
-            <span className="text">{n.label}</span>
-            <span className="status-tag" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa' }}>头脑风暴中</span>
-          </div>
-        ))}
-        {feedbackNodes.map((n: any) => (
-          <div key={n.id} className="tm-node" style={{ borderColor: 'rgba(236,72,153,0.3)' }}>
-            <span className="dot pink"></span>
-            <span className="text">{n.label}</span>
-            <span className="status-tag" style={{ background: 'rgba(236,72,153,0.1)', color: '#f472b6' }}>反馈注入</span>
-          </div>
-        ))}
-        {discardedNodes.map((n: any) => (
-          <div key={n.id} className="tm-node strikethrough">
-            <span className="dot red"></span>
-            <span className="text">{n.label}</span>
-            <span className="status-tag" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>已废弃</span>
-          </div>
-        ))}
-        {nodes.filter((n: any) => n.type !== 'root').length === 0 && (
+        {groups.length === 0 ? (
           <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
             发送消息后自动生成
           </div>
+        ) : (
+          groups.map((group) => {
+            if (group.leaves.length === 0) return null;
+            return <GroupSection key={group.parentId} group={group} allNodes={nodes} />;
+          })
         )}
+        {/* 挂单的废弃/反馈叶子 — 只在未归组时显示 */}
+        {(() => {
+          const orphans = nodes.filter((n: any) =>
+            leafIds.has(n.id) && (n.status === 'discarded' || n.created_by === 'reflect')
+            && !groups.some(g => g.leaves.some(l => l.id === n.id))
+          );
+          if (orphans.length === 0) return null;
+          return <GroupSection key="orphan" group={{
+            parentId: 'orphan',
+            parentLabel: '其他',
+            leaves: orphans,
+            status: 'active',
+          }} allNodes={nodes} />;
+        })()}
       </div>
+    </div>
+  );
+}
+
+function getGroupDominantStatus(leaves: any[]): string {
+  // 按优先级决定组的整体色调
+  const counts: Record<string, number> = {};
+  for (const l of leaves) {
+    const key = l.created_by === 'reflect' ? 'reflect' : l.status === 'discarded' ? 'discarded' : l.status === 'confirmed' && l.converged_from?.length ? 'converged' : l.priority ? 'queued' : 'brainstorm';
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'brainstorm';
+}
+
+const GROUP_STYLES: Record<string, { border: string; bg: string; accent: string }> = {
+  converged: { border: 'rgba(249,115,22,0.3)', bg: 'rgba(249,115,22,0.06)', accent: '#fb923c' },
+  queued:    { border: 'rgba(34,197,94,0.3)', bg: 'rgba(34,197,94,0.06)', accent: '#4ade80' },
+  brainstorm:{ border: 'rgba(59,130,246,0.3)', bg: 'rgba(59,130,246,0.06)', accent: '#60a5fa' },
+  reflect:   { border: 'rgba(236,72,153,0.3)', bg: 'rgba(236,72,153,0.06)', accent: '#f472b6' },
+  discarded: { border: 'rgba(239,68,68,0.3)', bg: 'rgba(239,68,68,0.04)', accent: '#f87171' },
+};
+
+const LEAF_STATUS = {
+  reflect:    { bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.25)', color: '#f472b6', badge: '💡 反馈', badgeBg: 'rgba(236,72,153,0.12)' },
+  converged:  { bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.25)', color: '#fb923c', badge: '🔀 合并', badgeBg: 'rgba(249,115,22,0.12)' },
+  queued:     { bg: 'rgba(34,197,94,0.08)',  border: 'rgba(34,197,94,0.25)',  color: '#4ade80', badge: '→队列', badgeBg: 'rgba(34,197,94,0.12)' },
+  brainstorm: { bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.25)', color: '#60a5fa', badge: '头脑风暴', badgeBg: 'rgba(59,130,246,0.12)' },
+  discarded:  { bg: 'rgba(239,68,68,0.04)',  border: 'rgba(239,68,68,0.15)',  color: '#888',   badge: '已废弃', badgeBg: 'rgba(239,68,68,0.08)' },
+};
+
+function getLeafStatus(leaf: any): string {
+  if (leaf.created_by === 'reflect') return 'reflect';
+  if (leaf.status === 'discarded') return 'discarded';
+  if (leaf.status === 'confirmed' && leaf.converged_from?.length > 0) return 'converged';
+  if (leaf.priority) return 'queued';
+  return 'brainstorm';
+}
+
+function GroupSection({ group, allNodes }: { group: { parentId: string; parentLabel: string; leaves: any[]; status: string }; allNodes: any[] }) {
+  const [expanded, setExpanded] = useState(true);
+  const dominant = getGroupDominantStatus(group.leaves);
+  const gs = GROUP_STYLES[dominant] || GROUP_STYLES.brainstorm;
+
+  return (
+    <div className="tm-group" style={{ border: `1px solid ${gs.border}`, background: gs.bg }}>
+      <div className="tm-group-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setExpanded(v => !v)}>
+        <span className="collapse-arrow">{expanded ? '▼' : '▶'}</span>
+        <strong className="group-label">{group.parentLabel}</strong>
+        <span className="badge" style={{
+          background: gs.bg, color: gs.accent, fontSize: 11,
+          padding: '1px 7px', borderRadius: 8, border: `1px solid ${gs.border}`,
+        }}>{group.leaves.length}</span>
+      </div>
+      {expanded && (
+        <div className="tm-group-leaves">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px', padding: '4px 0' }}>
+            {group.leaves.map((leaf: any) => {
+              const ls = LEAF_STATUS[getLeafStatus(leaf)] || LEAF_STATUS.brainstorm;
+              return (
+                <span key={leaf.id} className="tm-leaf-chip" style={{
+                  background: ls.bg, border: `1px solid ${ls.border}`,
+                  textDecoration: leaf.status === 'discarded' ? 'line-through' : 'none',
+                  opacity: leaf.status === 'discarded' ? 0.5 : 1,
+                }}>
+                  {leaf.label}
+                  <span className="leaf-badge" style={{
+                    fontSize: 9, padding: '0 5px', borderRadius: 3,
+                    background: ls.badgeBg, color: ls.color, marginLeft: 3,
+                    whiteSpace: 'nowrap',
+                  }}>{ls.badge}{leaf.priority ? ` P${leaf.priority}` : ''}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
