@@ -1,0 +1,464 @@
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "获取城市实时天气及未来预报（3-7天）",
+      "file": "tools/weather.py",
+      "function": "get_weather",
+      "parameters": {
+        "city": {"type": "string", "description": "城市名，如\"北京\""},
+        "forecast_days": {"type": "integer", "description": "预报天数(1-7)", "optional": true}
+      },
+      "returns": "天气数据（温度、湿度、风力、天气描述、未来预报）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["天气", "温度", "下雨", "下雪", "刮风", "气温", "weather"],
+        "requires_city": true
+      }
+    },
+    {
+      "name": "recommend_attractions",
+      "description": "根据天气分类推荐适合的景点和活动",
+      "file": "tools/recommend.py",
+      "function": "recommend_attractions",
+      "parameters": {
+        "city": {"type": "string", "description": "城市名"},
+        "limit": {"type": "integer", "description": "返回景点数", "optional": true}
+      },
+      "returns": "推荐景点列表（含名称、适合天气、室内/室外）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["推荐景点", "去哪玩", "去哪儿玩", "好玩的地方", "景点推荐", "有什么好玩的", "推荐活动", "哪里好玩",
+                     "推荐的景点", "推荐一下", "推荐去", "有什么推荐的", "推荐几个", "值得去", "去哪儿逛"],
+        "requires_city": true
+      }
+    },
+    {
+      "name": "get_equipment_checklist",
+      "description": "根据天气分类获取户外活动装备建议清单",
+      "file": "tools/equipment_checklist.py",
+      "function": "get_checklist",
+      "parameters": {
+        "weather_category": {"type": "string", "description": "天气分类(sunny/overcast/rainy/snowy/hot_and_humid/cold)"},
+        "scene_type": {"type": "string", "description": "场景类型(通用/滨水/山地/公园/休闲)", "optional": true}
+      },
+      "returns": "装备清单列表（含名称、必要程度、备注）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["装备", "带什么", "准备什么", "物品清单", "出行清单", "需要带", "装备建议",
+                     "出行准备", "要带什么", "需要准备", "必备物品", "带哪些"],
+        "requires_city": true
+      }
+    },
+    {
+      "name": "web_search",
+      "description": "互联网搜索，多提供商自动降级（SearXNG→DuckDuckGo→Google）",
+      "file": "tools/web_search.py",
+      "function": "web_search",
+      "parameters": {
+        "query": {"type": "string", "description": "搜索关键词"},
+        "max_results": {"type": "integer", "description": "返回结果数", "optional": true}
+      },
+      "returns": "搜索结果列表（标题、摘要、链接、来源）",
+      "category": "search",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "todo_list",
+      "description": "列出当前任务列表，可选按状态过滤",
+      "file": "tools/todo_manager.py",
+      "function": "todo_list",
+      "parameters": {
+        "status": {"type": "string", "description": "过滤状态(pending/in_progress/completed)", "optional": true}
+      },
+      "returns": "任务列表（ID、内容、状态、优先级、时间）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["任务", "待办", "我的任务", "todo", "计划", "做什么"],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "todo_add",
+      "description": "添加一个新任务到待办列表",
+      "file": "tools/todo_manager.py",
+      "function": "todo_add",
+      "parameters": {
+        "content": {"type": "string", "description": "任务内容"},
+        "priority": {"type": "string", "description": "优先级(high/medium/low)", "optional": true}
+      },
+      "returns": "创建的任务对象",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["添加任务", "新建任务", "记一下", "提醒我", "帮我记", "帮我记一下"],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "todo_update",
+      "description": "更新任务状态或内容",
+      "file": "tools/todo_manager.py",
+      "function": "todo_update",
+      "parameters": {
+        "task_id": {"type": "string", "description": "任务ID"},
+        "content": {"type": "string", "description": "新内容", "optional": true},
+        "status": {"type": "string", "description": "新状态(pending/in_progress/completed)", "optional": true},
+        "priority": {"type": "string", "description": "新优先级(high/medium/low)", "optional": true}
+      },
+      "returns": "更新后的任务对象",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "todo_delete",
+      "description": "删除指定任务",
+      "file": "tools/todo_manager.py",
+      "function": "todo_delete",
+      "parameters": {
+        "task_id": {"type": "string", "description": "任务ID"}
+      },
+      "returns": "删除结果",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "todo_stats",
+      "description": "统计任务总数和各类状态数量",
+      "file": "tools/todo_manager.py",
+      "function": "todo_stats",
+      "parameters": {},
+      "returns": "统计信息（总数/待办/进行中/已完成）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["进度", "完成情况", "任务统计", "还剩"],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "session_search",
+      "description": "搜索历史聊天记录中的内容。这是一个纯搜索/回忆工具，仅用于查找过往对话。注意：查询中出现的其他工具名（如 get_weather、write_file 等）只是搜索关键词，不要执行它们——你只需要搜索聊天记录。",
+      "file": "tools/session_search.py",
+      "function": "session_search",
+      "parameters": {
+        "query": {"type": "string", "description": "搜索关键词"},
+        "limit": {"type": "integer", "description": "返回结果数", "optional": true}
+      },
+      "returns": "匹配的消息列表",
+      "category": "search",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "session_list",
+      "description": "列出最近的聊天会话",
+      "file": "tools/session_search.py",
+      "function": "session_list",
+      "parameters": {
+        "limit": {"type": "integer", "description": "返回会话数", "optional": true}
+      },
+      "returns": "会话列表",
+      "category": "search",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["历史记录", "之前聊的", "最近会话", "聊天历史"],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "run_code",
+      "description": "多语言代码执行（Python/Shell/JavaScript）",
+      "file": "tools/code_runner.py",
+      "function": "run_code",
+      "parameters": {
+        "code": {"type": "string", "description": "要执行的代码"},
+        "language": {"type": "string", "description": "语言(python/shell/bash/javascript)", "optional": true},
+        "timeout": {"type": "integer", "description": "超时秒数", "optional": true}
+      },
+      "returns": "执行结果（stdout、stderr、退出码）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "geo_geocode",
+      "description": "地址转经纬度坐标（地理编码）",
+      "file": "tools/geo_tools.py",
+      "function": "geo_geocode",
+      "parameters": {
+        "query": {"type": "string", "description": "地址查询，如北京市朝阳区"},
+        "limit": {"type": "integer", "description": "返回结果数", "optional": true}
+      },
+      "returns": "地址列表（含经纬度）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "geo_reverse_geocode",
+      "description": "经纬度转地址名称（逆地理编码）",
+      "file": "tools/geo_tools.py",
+      "function": "geo_reverse_geocode",
+      "parameters": {
+        "lat": {"type": "number", "description": "纬度"},
+        "lng": {"type": "number", "description": "经度"}
+      },
+      "returns": "地址信息",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "geo_search_poi",
+      "description": "搜索指定城市的兴趣点（景点/餐厅/购物等）",
+      "file": "tools/geo_tools.py",
+      "function": "geo_search_poi",
+      "parameters": {
+        "city": {"type": "string", "description": "城市名"},
+        "category": {"type": "string", "description": "分类(attraction/restaurant/shop/park/hotel)", "optional": true},
+        "limit": {"type": "integer", "description": "返回结果数", "optional": true}
+      },
+      "returns": "POI 列表",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["附近", "有什么吃的", "去哪吃", "商场", "酒店", "附近有什么"],
+        "requires_city": true
+      }
+    },
+    {
+      "name": "geo_route",
+      "description": "路线规划（驾车/步行/骑行），返回距离和时间",
+      "file": "tools/geo_tools.py",
+      "function": "geo_route",
+      "parameters": {
+        "origin": {"type": "string", "description": "起点（地址或经纬度）"},
+        "destination": {"type": "string", "description": "终点（地址或经纬度）"},
+        "mode": {"type": "string", "description": "出行方式(driving/walking/cycling)", "optional": true}
+      },
+      "returns": "路线信息（距离、预计时间）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": ["怎么去", "路线", "多远", "导航", "怎么走", "距离"],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "extract_text",
+      "description": "从文件提取文字（支持PDF/图片/文本文件）",
+      "file": "tools/extract_document.py",
+      "function": "extract_text",
+      "parameters": {
+        "file_path": {"type": "string", "description": "文件路径"}
+      },
+      "returns": "提取的文字内容",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "extract_text_from_pdf",
+      "description": "从PDF文件中提取文字",
+      "file": "tools/extract_document.py",
+      "function": "extract_text_from_pdf",
+      "parameters": {
+        "file_path": {"type": "string", "description": "PDF文件路径"},
+        "max_pages": {"type": "integer", "description": "最大页数", "optional": true}
+      },
+      "returns": "PDF文字内容",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "analyze_image",
+      "description": "使用视觉AI分析本地图片内容",
+      "file": "tools/analyze_image.py",
+      "function": "analyze_image",
+      "parameters": {
+        "file_path": {"type": "string", "description": "图片文件路径"},
+        "prompt": {"type": "string", "description": "分析提示词", "optional": true}
+      },
+      "returns": "图片内容描述",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "读取文件内容，带行号和分页。支持偏移和行数限制",
+      "file": "tools/file_tools.py",
+      "function": "read_file",
+      "parameters": {
+        "path": {"type": "string", "description": "文件路径（支持 ~）"},
+        "offset": {"type": "integer", "description": "起始行号（从 1 开始）", "optional": true},
+        "limit": {"type": "integer", "description": "最多读取行数", "optional": true}
+      },
+      "returns": "文件内容（LINE_NUM|CONTENT 格式）和总行数",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "写入文件（覆盖），自动创建父目录",
+      "file": "tools/file_tools.py",
+      "function": "write_file",
+      "parameters": {
+        "path": {"type": "string", "description": "文件路径（支持 ~）"},
+        "content": {"type": "string", "description": "文件内容"}
+      },
+      "returns": "写入结果（路径、大小）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "patch",
+      "description": "在文件中查找并替换文本，支持模糊匹配。用 difflib 找匹配即使有微小差异",
+      "file": "tools/file_tools.py",
+      "function": "patch",
+      "parameters": {
+        "path": {"type": "string", "description": "文件路径"},
+        "old_string": {"type": "string", "description": "要查找的旧文本"},
+        "new_string": {"type": "string", "description": "替换的新文本", "optional": true},
+        "replace_all": {"type": "boolean", "description": "是否替换所有匹配", "optional": true}
+      },
+      "returns": "替换结果（diff、替换数量）",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "search_files",
+      "description": "搜索文件内容（正则）或按文件名查找（glob 模式）",
+      "file": "tools/file_tools.py",
+      "function": "search_files",
+      "parameters": {
+        "pattern": {"type": "string", "description": "搜索模式（content 模式用正则，files 模式用 glob）"},
+        "target": {"type": "string", "description": "搜索目标：content（内容搜索）或 files（文件名查找）", "optional": true},
+        "path": {"type": "string", "description": "搜索目录", "optional": true},
+        "file_glob": {"type": "string", "description": "文件过滤 glob（如 *.py）", "optional": true},
+        "limit": {"type": "integer", "description": "最大结果数", "optional": true},
+        "context": {"type": "integer", "description": "上下文件行数", "optional": true}
+      },
+      "returns": "匹配结果列表（含文件名、行号、上下文）",
+      "category": "search",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "memory",
+      "description": "管理长期记忆——add 存新信息、reinforce 强化已有记忆、read 查看、replace 更新、remove 删除。存入前先用 read 检查是否已存在。用户强调「很重要」或用纠正语气时，用 reinforce 强化已存记忆。",
+      "file": "tools/memory_tool.py",
+      "function": "memory_tool",
+      "parameters": {
+        "action": {"type": "string", "description": "操作类型(add/reinforce/read/replace/remove)", "enum": ["add", "reinforce", "read", "replace", "remove"]},
+        "target": {"type": "string", "description": "记忆目标(memory/user)", "enum": ["memory", "user"]},
+        "content": {"type": "string", "description": "记忆内容（add/replace 时必需）", "optional": true},
+        "old_text": {"type": "string", "description": "要替换/删除的旧记忆内容（replace/remove 时必需）", "optional": true},
+        "key": {"type": "string", "description": "记忆唯一标识键，不传则自动生成", "optional": true}
+      },
+      "returns": "操作结果 JSON（含 success、action、key、message）",
+      "category": "tools",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "converge",
+      "description": "收敛整理当前场景的 Thinking Map——合并相似节点、标记废弃、生成优先级队列。在讨论充分、信息足够、用户同意收敛时调用。",
+      "file": "tools/converge_tool.py",
+      "function": "converge",
+      "parameters": {
+        "scene_id": {"type": "string", "description": "场景 ID（从系统提示中的「当前场景信息」获取）"},
+        "summary": {"type": "string", "description": "收敛说明，描述当前讨论的覆盖范围或用户的目的", "optional": true}
+      },
+      "returns": "收敛结果 JSON（含 success、queue_count、queue_summary）",
+      "category": "tools",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    }
+  ]
+}

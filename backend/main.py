@@ -41,6 +41,17 @@ if __name__ == "__main__":
     init_db()
     log.info("✅ 数据库已初始化")
 
+    # 🆕 Schema v0.8: 初始化坐山客本体（如无则创建）
+    try:
+        from database import SessionLocal
+        from agent_core.zhu_agent import ZhuAgentManager
+        db = SessionLocal()
+        ZhuAgentManager(db).get_or_create()
+        db.close()
+        log.info("✅ 坐山客本体已就绪")
+    except Exception as e:
+        log.warning(f"本体初始化跳过: {e}")
+
     # 预热 FTS5 全文索引（后台线程，不阻塞启动）
     try:
         import sys

@@ -254,8 +254,6 @@ export default function App() {
     <>
       <Topbar extraTitle={getTitle()} />
       <AgentCharacter
-        status={agentStatus}
-        message={agentMessage}
         hidden={agentHidden}
       />
 

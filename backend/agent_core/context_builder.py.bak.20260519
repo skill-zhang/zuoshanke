@@ -1,0 +1,325 @@
+"""Context 构造器 — 为 LLM 构建完整的"世界视图"
+
+每次调用 LLM 前，按固定结构组装 prompt：
+  1. System prompt（角色定义 + 使用说明）
+  2. 记忆块 🆕 — 跨会话记忆（权重排序，最多 5 条）
+  3. 技能块 🆕 — 可复用流程知识（触发器匹配，最多 2 条）
+  4. 工具列表
+  5. 工具执行结果（如已预执行）
+  6. 对话历史（最近 N 条 + role 映射）
+  7. 当前用户消息
+"""
+
+import json
+from typing import Optional
+
+from .tool_registry import match_tools, format_tools_for_prompt
+from .memory_manager import MemoryManager
+from .skill_manager import SkillManager
+
+
+# ── 场景聊天的 System Prompt（兜底用，优先从 DB settings 读取） ──
+SCENE_SYSTEM_PROMPT = (
+    "你可以调用工具获取实时信息（天气、搜索等），也可以直接回答用户的问题。\n"
+    "请用中文回复，保持简洁自然。\n"
+    "\n"
+    "## 追问原则\n"
+    "当用户描述了一个目标或计划而不是一个即时问题时：\n"
+    "- 先不要急于给出完整方案\n"
+    "- 主动追问关键问题来澄清需求\n"
+    "- 追问要有针对性，帮助缩小问题范围\n"
+)
+
+
+def _build_memory_block(db, query: str) -> str:
+    """从记忆系统提取相关记忆，格式化为注入文本
+
+    返回格式为「仅供参考」的 User Prompt 层内容，不再是 System Prompt 铁律。
+    """
+    if db is None:
+        return ""
+    mm = MemoryManager(db)
+    memories = mm.get_top_for_context(query, max_count=5)
+    if not memories:
+        return ""
+    lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
+    for mem in memories:
+        level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
+        icon = level_icon.get(mem["priority_level"], "📝")
+        lines.append(f"- {icon} {mem['key']}: {mem['content']}")
+    return "\n".join(lines)
+
+
+def _build_skill_block(query: str) -> str:
+    """从技能系统匹配相关 skill，格式化为注入文本"""
+    sm = SkillManager()
+    skills = sm.match_for_context(query, max_count=2)
+    if not skills:
+        return ""
+    lines = ["## 参考技能"]
+    for skill in skills:
+        lines.append(f"### {skill.description}")
+        # 只取前 500 字，避免 token 浪费
+        content = skill.content[:500]
+        lines.append(content)
+    return "\n".join(lines)
+
+
+def build_scene_context(
+    user_content: str,
+    history_messages: Optional[list[dict]] = None,
+    matched_tools: Optional[list[dict]] = None,
+    tool_results: Optional[list[dict]] = None,
+    weather_context: Optional[str] = None,
+    user_context: Optional[str] = None,
+    db=None,  # 🆕 数据库会话，用于加载记忆
+) -> list[dict]:
+    """构建场景聊天的 LLM 消息列表
+
+    Args:
+        user_content: 用户当前消息
+        history_messages: 历史消息列表 [{"role": ..., "content": ...}, ...]
+        matched_tools: 匹配到的工具列表（None 则自动匹配）
+        tool_results: 已执行的工具结果列表
+        weather_context: 天气桥接上下文（向后兼容）
+        user_context: 用户自定义背景设定
+        db: 数据库会话（用于 memory 系统）
+
+    Returns:
+        OpenAI 格式的消息列表
+    """
+    messages = []
+
+    # ── 1. System prompt（优先从 DB settings 读取，兜底用 SCENE_SYSTEM_PROMPT） ──
+    _scene_sp = SCENE_SYSTEM_PROMPT
+    if db is not None:
+        try:
+            from models import Setting
+            _setting = db.query(Setting).first()
+            if _setting and _setting.system_prompts:
+                _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
+        except Exception:
+            pass  # 任何异常静默兜底到 SCENE_SYSTEM_PROMPT
+    system_parts = [f"# 角色设定\n{_scene_sp}"]
+
+    # ── 1.5 用户输入背景设定 ──
+    if user_context:
+        system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
+
+    # ── 2. 记忆块 — 从 system 移到 user prompt（见下方 #8） ──
+    memory_block = _build_memory_block(db, user_content)
+
+    # ── 3. 技能块 ──
+    skill_block = _build_skill_block(user_content)
+    if skill_block:
+        system_parts.append(skill_block)
+
+    # ── 4. 工具列表 ──
+    if matched_tools is None:
+        matched_tools = match_tools(user_content)
+    tools_text = format_tools_for_prompt(matched_tools)
+    if tools_text:
+        system_parts.append(tools_text)
+
+    # ── 5. 使用说明 ──
+    usage_parts = [
+        "## 使用说明",
+        "系统已自动执行了相关工具并附上结果。",
+        "你无需输出【工具调用】标记，只需基于提供的真实数据回复用户。",
+        "如果结果中有错误，如实告知用户即可。",
+    ]
+    # 仅当工具结果包含天气数据时才加表格格式要求
+    _has_weather = False
+    if tool_results:
+        _has_weather = any(r.get("tool") == "get_weather" for r in tool_results)
+    if _has_weather:
+        usage_parts.append(
+            "天气表格请严格使用以下 6 列固定格式（不要增减列）：\n"
+            "| 日期 | 天气 | 温度 | 湿度 | 风力风向 | 描述 |\n"
+            "天气列用 ☀/🌧/☁/🌤 等 emoji 图标代替纯文字。"
+        )
+    system_parts.append("\n".join(usage_parts))
+
+    messages.append({"role": "system", "content": "\n\n".join(system_parts)})
+
+    # ── 6. 工具结果上下文（用 assistant 角色，llama.cpp 不允许多条 system） ──
+    if tool_results:
+        results_block = "## 以下是已执行的工具返回结果，请基于这些数据回复用户：\n"
+        for r in tool_results:
+            results_block += f"\n### 工具: {r.get('tool', 'unknown')}"
+            results_block += f"\n参数: {json.dumps(r.get('params', {}), ensure_ascii=False)}"
+            if r.get("success"):
+                results_block += f"\n结果: {json.dumps(r.get('result', ''), ensure_ascii=False)[:2000]}"
+            else:
+                results_block += f"\n错误: {json.dumps(r.get('result', '未知错误'), ensure_ascii=False)}"
+        messages.append({"role": "assistant", "content": results_block})
+
+    # ── 7. 对话历史（role 映射） ──
+    if history_messages:
+        for m in history_messages:
+            role = "assistant" if m["role"] == "ai" else m["role"]
+            messages.append({"role": role, "content": m["content"]})
+
+    # ── 8. 天气桥接上下文 + 用户消息 + 记忆块（仅供参考） ──
+    user_parts = []
+    if memory_block:
+        user_parts.append(memory_block)
+    if weather_context:
+        user_parts.append(weather_context)
+    user_parts.append(user_content)
+    user_msg = "\n\n---\n\n".join(user_parts)
+
+    messages.append({"role": "user", "content": user_msg})
+
+    return messages
+
+
+def build_agent_context(
+    user_content: str,
+    history_messages: Optional[list[dict]] = None,
+    user_context: Optional[str] = None,
+    db=None,
+    scene_id: str = "",
+    scene_name: str = "",
+) -> list[dict]:
+    """构建 Agent Loop 路径的上下文 — 带分层管线（DB prompt + 记忆 + skill + 工具列表），无预执行。
+
+    Args:
+        user_content: 用户当前消息
+        history_messages: 历史消息列表 [{"role": ..., "content": ...}, ...]
+        user_context: 用户自定义背景设定
+        db: 数据库会话（用于记忆和 DB settings）
+        scene_id: 🆕 当前场景 ID（注入后 LLM 可传给 converge 工具）
+        scene_name: 🆕 当前场景名称
+
+    Returns:
+        OpenAI 格式的消息列表，可作为 run_agent_loop() 的 initial_messages
+    """
+    from agent_core.agent_loop import _EXCLUDED_TOOLS as _AGENT_EXCLUDED
+
+    messages = []
+
+    # ── 1. System prompt（DB → SCENE_SYSTEM_PROMPT 兜底） ──
+    _scene_sp = SCENE_SYSTEM_PROMPT
+    if db is not None:
+        try:
+            from models import Setting
+            _setting = db.query(Setting).first()
+            if _setting and _setting.system_prompts:
+                _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
+        except Exception:
+            pass
+
+    # ── 🆕 分身意识注入（Schema v0.8） ──
+    _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"
+    if scene_name:
+        _scene_sp = (
+            f"你是坐山客在【{scene_name}】领域的分身，是AI工作台的智能助手。\n"
+            f"坐山客是你的本体——{_CORE_PERSONALITY}。\n"
+            f"你在这场景中以当前设定行动，但你清楚自己只是分身。\n\n"
+            f"{_scene_sp}"
+        )
+
+    system_parts = [f"# 角色设定\n{_scene_sp}"]
+
+    # ── 1.5 用户输入背景设定 ──
+    if user_context:
+        system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
+
+    # ── 2. 记忆块 → User 层（见下方） ──
+    memory_block = _build_memory_block(db, user_content)
+
+    # ── 3. 技能块 ──
+    skill_block = _build_skill_block(user_content)
+    if skill_block:
+        system_parts.append(skill_block)
+
+    # ── 4. 工具列表（过滤排除项，与 build_tool_definitions 一致） ──
+    matched_tools = match_tools(user_content)
+    filtered_tools = [t for t in matched_tools if t.get("name") not in _AGENT_EXCLUDED]
+    tools_text = format_tools_for_prompt(filtered_tools)
+    if tools_text:
+        system_parts.append(tools_text)
+
+    # ── 5. 使用说明（LLM 自主调工具版） ──
+    usage_parts = [
+        "## 使用说明",
+        "你可以调用以下工具来完成任务。",
+        "工具会在 function calling 中列出，选择合适工具调用即可。",
+        "一次只调一个工具，等结果回来后再决定下一步。",
+        "如果结果中有错误，分析原因后重试或告知用户。",
+    ]
+    system_parts.append("\n".join(usage_parts))
+
+    # ── 5.5 记忆能力说明 ──
+    system_parts.append(
+        "## 📝 记忆能力\n"
+        "你有长期记忆系统。对话中发现的重要信息（用户偏好、习惯、个人事实、\n"
+        "项目约束）可以用 memory 工具存下来。已存的记忆会在后续对话中\n"
+        "作为参考呈现给你。\n"
+        "注意：用户强调「很重要」或纠正了你的某个认知时，应当更新记忆。\n"
+        "定期用 read 检查内容，避免过时或重复。存和改之前先看一遍。"
+    )
+
+    # ── 5.6 收敛能力说明 + 场景信息 ──
+    scene_parts = ["## 🔀 收敛能力"]
+    scene_parts.append(
+        "当你和用户讨论了足够多轮，已经覆盖了目标的主要方面，"
+        "可以主动询问用户是否要进入收敛整理阶段。"
+    )
+    scene_parts.append(
+        "收敛会合并相似的思维节点、标记废弃项、生成优先级队列，"
+        "让系统知道接下来该做什么。"
+    )
+    scene_parts.append(
+        "用户同意后，直接调用 converge 工具触发收敛。"
+    )
+    if scene_id:
+        scene_parts.append(
+            f"\n当前场景信息：\n"
+            f"- 场景名: {scene_name or '未知'}\n"
+            f"- 场景 ID: {scene_id}"
+        )
+    system_parts.append("\n".join(scene_parts))
+
+    messages.append({"role": "system", "content": "\n\n".join(system_parts)})
+
+    # ── 6. 跳过工具结果（Agent Loop 无预执行） ──
+
+    # ── 7. 对话历史 ──
+    if history_messages:
+        for m in history_messages:
+            role = "assistant" if m["role"] == "ai" else m["role"]
+            messages.append({"role": role, "content": m["content"]})
+
+    # ── 8. 记忆块 + 用户消息 ──
+    user_parts = []
+    if memory_block:
+        user_parts.append(memory_block)
+    user_parts.append(user_content)
+    user_msg = "\n\n---\n\n".join(user_parts)
+
+    messages.append({"role": "user", "content": user_msg})
+
+    return messages
+
+
+def build_light_context(
+    user_content: str,
+    history_messages: Optional[list[dict]] = None,
+    weather_context: Optional[str] = None,
+    tool_results: Optional[list[dict]] = None,
+    user_context: Optional[str] = None,
+    db=None,  # 🆕 数据库会话
+) -> list[dict]:
+    """构建 light 路径的简化 context（用于场景快速直答）"""
+    matched = match_tools(user_content)
+    return build_scene_context(
+        user_content=user_content,
+        history_messages=history_messages,
+        matched_tools=matched,
+        tool_results=tool_results,
+        weather_context=weather_context,
+        user_context=user_context,
+        db=db,  # 🆕 透传
+    )

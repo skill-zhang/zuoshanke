@@ -1214,11 +1214,18 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             history_messages=history_messages,
             user_context=scene.user_context,
             db=db,
+            scene_id=scene_id,
+            scene_name=scene.name,
         )
 
         # 🆕 Dialog Engine: 初始化/恢复阶段状态
         from agent_core.dialog_engine import DialogEngine
         dialog_engine = DialogEngine(db, scene_id)
+
+        # 🆕 Schema v0.8: 本体观察 — 分身启动
+        from agent_core.zhu_agent import ZhuAgentManager
+        _zhu = ZhuAgentManager(db)
+        _zhu.observe_fenshen_event("fenshen:started", scene.name)
 
         agent_stream = run_agent_loop(
             initial_messages=agent_messages,
@@ -1321,6 +1328,12 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_reply,
                             created_at=ai_msg.created_at.isoformat(),
                             changes=[], model=model_name)
+
+            # 🆕 Schema v0.8: 本体观察 — 分身完成
+            try:
+                _zhu.observe_fenshen_event("fenshen:done", scene.name)
+            except Exception:
+                pass
 
             # ── 6. 自动提取记忆（双通道） ──
             try:
@@ -1426,19 +1439,8 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                     yield sse_event("thinking_map:diverged",
                                                     node_count=new_count)
 
-                                    # Schema v0.7: 发散后自动收敛+排序
-                                    if new_count > 0:
-                                        try:
-                                            from agent_core.converge_engine import auto_converge_and_prioritize
-                                            pq_items = auto_converge_and_prioritize(db, scene_id, tmap)
-                                            if pq_items:
-                                                yield sse_event("dashboard:converge",
-                                                                merge_count=len([x for x in pq_items if x.get("status") != "pending"]),
-                                                                queue_count=len(pq_items))
-                                                yield sse_event("dashboard:queue_update",
-                                                                items=pq_items)
-                                        except Exception as ce:
-                                            print(f"[converge] auto-converge error: {ce}")
+                                    # Schema v0.7+改动: 只发散不收敛——收敛交给 LLM 自主调 converge 工具
+                                    # 用户讨论充分后，LLM 提议 → 用户确认 → converge 工具触发
             except Exception as e:
                 print(f"[diverge] auto-diverge error: {e}")
 

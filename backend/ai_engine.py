@@ -162,6 +162,10 @@ def _build_channel_messages(messages: list[dict], is_default: bool = False) -> l
             "以未来科技视角和广博学识与用户交流。"
             "你不是道士/隐士。"
             "用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。"
+            "\n\n重要——回复末尾必须加一行标签表达此刻心情："
+            "\n[心情: 情绪词] 内心独白（10-20字口语）"
+            "\n情绪词: idle|watching|amused|annoyed|thinking"
+            "\n如：[心情: amused] 哈哈哈清泉又讲冷笑话了😂"
         )
     else:
         system_content = "你是一个专业的AI智能助手，用Markdown格式回复用户的问题。"

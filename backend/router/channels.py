@@ -137,6 +137,11 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
     history_dicts = _get_channel_history(db, channel_id)
 
     def generate():
+        # 🆕 Schema v0.8: 本体观察 — 频道对话启动
+        from agent_core.zhu_agent import ZhuAgentManager
+        _zhu_ch = ZhuAgentManager(db)
+        _zhu_ch.observe_fenshen_event("fenshen:started", channel.name or "闲聊")
+
         # 1. 用户消息
         yield sse_event("user_msg", id=user_msg.id, role="user",
                         content=user_msg.content, created_at=user_msg.created_at.isoformat())
@@ -194,14 +199,48 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
         ai_msg_id = make_id("msg")
         new_db = SessionLocal()
         try:
+            # 🆕 Schema v0.8: 本体观察 — 频道回复完成（基础反应，先执行）
+            try:
+                _zhu_ch.observe_fenshen_event("fenshen:done", channel.name or "闲聊")
+            except Exception:
+                pass
+
+            # 🆕 Schema v0.8+: 从 LLM 回复中解析心情表达（覆盖基础反应）
+            def _parse_mood_from_reply(reply: str, ch_name: str):
+                """从回复末尾解析 [心情: 情绪词] 内心独白，提取 LLM 自然表达的心情"""
+                import re
+                m = re.search(r'\[心情:\s*(\w+)\]\s*(.+?)\s*$', reply, re.DOTALL)
+                if not m:
+                    return
+                mood_word = m.group(1).strip().lower()
+                comment = m.group(2).strip()
+                try:
+                    from database import SessionLocal as SL
+                    from agent_core.zhu_agent import ZhuAgentManager
+                    zhu_db = SL()
+                    try:
+                        zhu_mgr = ZhuAgentManager(zhu_db)
+                        zhu_mgr.update_mood(mood_word, f"【{ch_name}】{comment}")
+                    finally:
+                        zhu_db.close()
+                except Exception:
+                    pass
+
+            # 解析心境 → 覆盖 avatar 状态（用含心情标签的原始文本）
+            _parse_mood_from_reply(full_content, channel.name or "闲聊")
+
+            # 剥离心情标签，得到干净回复
+            import re as _re
+            clean_content = _re.sub(r'\s*\[心情:\s*\w+\]\s*.+?\s*$', '', full_content, flags=_re.DOTALL).strip()
+
             ai_msg = Message(
                 id=ai_msg_id, channel_id=channel_id,
-                role="ai", content=full_content, model=model_name,
+                role="ai", content=clean_content, model=model_name,
             )
             new_db.add(ai_msg)
             new_db.commit()
             new_db.refresh(ai_msg)
-            yield sse_event("done", id=ai_msg.id, role="ai", content=full_content,
+            yield sse_event("done", id=ai_msg.id, role="ai", content=clean_content,
                             created_at=ai_msg.created_at.isoformat(),
                             model=model_name)
 

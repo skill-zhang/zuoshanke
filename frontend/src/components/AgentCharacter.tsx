@@ -1,11 +1,12 @@
 /**
- * AgentCharacter — 坐山客 AI 角色动画组件
+ * AgentCharacter — 坐山客 AI 角色动画组件（Schema v0.8）
  *
  * position:fixed 浮在页面顶部，叠在 Topbar 上层。
- * 11 种表情状态 + 对话气泡弹出动画。
+ * 不再依赖 Zustand store 的状态驱动，改为轮询后端本体状态 API。
+ * 表情反映坐山客本体的真实心情（mood），不是场景的分身状态。
  */
 import { useEffect, useState, useRef } from 'react';
-import { useStore, AgentStatus } from '../stores/appStore';
+import type { AgentStatus } from '../stores/appStore';
 
 interface AgentCharacterProps {
   status?: AgentStatus;
@@ -56,41 +57,73 @@ const STATE_MAP: Record<AgentStatus, {
   sad:      { eyes:'sadTears',mouth:'cry',     defaultMsg:'呜...😢',  color:'#58a6ff', classSuffix:'idle', showSadTears:true },
 };
 
-export function AgentCharacter({ status = 'idle', message, hidden = false }: AgentCharacterProps) {
-  const cfg = STATE_MAP[status] || STATE_MAP.idle;
-  const msg = message ?? cfg.defaultMsg;
+// 🆕 Schema v0.8: 后端 mood → 前端 AgentStatus 映射
+const MOOD_TO_STATUS: Record<string, AgentStatus> = {
+  idle:     'idle',
+  watching: 'notify',
+  thinking: 'thinking',
+  amused:   'laugh',
+  annoyed:  'angry',
+  speaking: 'greeting',
+  resting:  'resting',
+};
+
+/** 轮询后端本体状态 */
+async function fetchZhuMood(): Promise<{ mood: string; observation: string } | null> {
+  try {
+    const res = await fetch('/api/zhu-agent/status');
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function AgentCharacter({ status: propStatus, message: propMessage, hidden = false }: AgentCharacterProps) {
+  // 🆕 本体状态（轮询自后端）
+  const [zhuMood, setZhuMood] = useState<string>('idle');
+  const [zhuObservation, setZhuObservation] = useState<string>('');
+
+  // 🆕 轮询本体状态
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      const data = await fetchZhuMood();
+      if (!active) return;
+      if (data) {
+        setZhuMood(data.mood);
+        setZhuObservation(data.observation || '');
+      }
+    };
+    poll(); // 立即拉一次
+    const interval = setInterval(poll, 3000); // 每 3s 轮询
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+
+  // 🆕 本体 mood → AgentStatus（若后端不可达，兜底 idle）
+  const effectiveStatus: AgentStatus = MOOD_TO_STATUS[zhuMood] || 'idle';
+  const cfg = STATE_MAP[effectiveStatus] || STATE_MAP.idle;
+  const msg = zhuObservation || cfg.defaultMsg;
   const eye = EYE[cfg.eyes] || EYE.closed;
   const mouthPath = MOUTH[cfg.mouth] || MOUTH.smile;
   const animClass = `char-${cfg.classSuffix}`;
 
   // Bubble show animation: delay mount to trigger CSS transition
   const [bubbleShow, setBubbleShow] = useState(false);
-  const prevStatusRef = useRef(status);
+  const prevObsRef = useRef(zhuObservation);
   useEffect(() => {
     setBubbleShow(false);
-    const t = setTimeout(() => setBubbleShow(true), 50);
-    prevStatusRef.current = status;
-    return () => clearTimeout(t);
-  }, [status]);
-
-  // 点击角色 → 轮播所有表情（开发测试用）
-  const allStatuses: AgentStatus[] = ['idle', 'greeting', 'thinking', 'working', 'done', 'error', 'notify', 'resting', 'angry', 'laugh', 'sad'];
-  const cycleStatus = () => {
-    const idx = allStatuses.indexOf(status);
-    const next = allStatuses[(idx + 1) % allStatuses.length];
-    const store = useStore.getState();
-    store.setAgentStatus(next);
-    store.setAgentMessage(STATE_MAP[next]?.defaultMsg || '');
-  };
+    const show = setTimeout(() => setBubbleShow(true), 50);
+    // 根据文本长度决定停留时间：短文案4s，长歌词8s
+    const duration = Math.min(Math.max(zhuObservation.length * 100, 4000), 8000);
+    const hide = setTimeout(() => setBubbleShow(false), duration);
+    prevObsRef.current = zhuObservation;
+    return () => { clearTimeout(show); clearTimeout(hide); };
+  }, [zhuObservation, zhuMood]);
 
   return (
     <div className="agent-char-area">
-      <div className={`agent-char-container${hidden ? ' agent-char-hidden' : ''} ${animClass}`} onClick={cycleStatus}>
-        {/* Bubble with show/hide animation */}
-        <div className={`agent-char-bubble${bubbleShow ? ' show' : ''}`}>
-          <span className="agent-char-dot" style={{ background: cfg.color }} />
-          <span className="agent-char-text">{msg}</span>
-        </div>
+      <div className={`agent-char-container${hidden ? ' agent-char-hidden' : ''} ${animClass}`}>
         <div className="agent-char-canvas">
           <svg viewBox="10 0 52 50" width="56" height="56" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -126,7 +159,6 @@ export function AgentCharacter({ status = 'idle', message, hidden = false }: Age
               <filter id="softGlow"><feGaussianBlur stdDeviation="0.5"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
             </defs>
             <circle cx="36" cy="28" r="28" fill="url(#bgGlow)"/>
-            {/* Upper body */}
             <path d="M14 42 L10 44 L12 50 L16 54 L56 54 L60 50 L62 44 L58 42" fill="url(#jacketGrad)" stroke="#1e2a3a" strokeWidth="0.8"/>
             <path d="M26 34 Q22 32 24 28 L48 28 Q50 32 46 34 Z" fill="#1a2332" stroke="#1e2a3a" strokeWidth="0.6"/>
             <path d="M28 34 L26 28" fill="none" stroke="#00d4ff" strokeWidth="0.5" opacity="0.3"/>
@@ -137,11 +169,9 @@ export function AgentCharacter({ status = 'idle', message, hidden = false }: Age
             <circle cx="12" cy="46" r="1" fill="#00d4ff" opacity="0.4" filter="url(#softGlow)"/>
             <circle cx="60" cy="46" r="1" fill="#00d4ff" opacity="0.4" filter="url(#softGlow)"/>
             <rect x="32" y="28" width="8" height="6" rx="2" fill="url(#skinTone)" stroke="#2d3748" strokeWidth="0.4"/>
-            {/* Face */}
             <ellipse cx="36" cy="20" rx="10" ry="10.5" fill="url(#skinTone)" stroke="#2d3748" strokeWidth="0.6"/>
             <path d="M26 20 Q26 28 30 30 Q36 31 42 30 Q46 28 46 20" fill="none" stroke="#2d3748" strokeWidth="0.4" opacity="0.4"/>
             <path d="M33 29 Q36 30.5 39 29" fill="none" stroke="#3d4a5c" strokeWidth="0.3" opacity="0.25"/>
-            {/* Hair */}
             <path d="M25 16 Q25 6 30 4 Q33 2 36 3 Q39 2 42 4 Q47 6 47 16 Q43 10 36 9 Q29 10 25 16 Z" fill="url(#hairGrad)"/>
             <path d="M26 14 Q24 10 27 8 Q29 7 31 8 Q29 10 28 13 Z" fill="url(#hairGrad)"/>
             <path d="M31 4 Q31 2 32 1 L33 4 Z" fill="url(#hairGrad)"/>
@@ -149,18 +179,14 @@ export function AgentCharacter({ status = 'idle', message, hidden = false }: Age
             <path d="M40 4 Q41 2 42 2 L42 4 Z" fill="url(#hairGrad)"/>
             <path d="M29 13 Q30 9 33 8" fill="none" stroke="url(#hairStreak)" strokeWidth="1.5" strokeLinecap="round" filter="url(#softGlow)"/>
             <path d="M37 10 Q39 7 42 7" fill="none" stroke="url(#hairStreak)" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" filter="url(#softGlow)"/>
-            {/* Visor */}
             <path d="M24 16 Q28 14 36 14 Q44 14 48 16 L48 20 Q44 22 36 22 Q28 22 24 20 Z" fill="url(#visorGrad)" stroke="#00d4ff" strokeWidth="0.7" opacity="0.7" className="visor-glow"/>
             <path d="M26 17 Q30 16 34 16 L35 17 L33 18 Q29 18 26 17 Z" fill="#00d4ff" opacity="0.1"/>
             <circle cx="36" cy="18" r="1.3" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
             <circle cx="26" cy="18" r="0.7" fill="#00d4ff" opacity="0.3" filter="url(#neonGlow)"/>
             <circle cx="46" cy="18" r="0.7" fill="#00d4ff" opacity="0.3" filter="url(#neonGlow)"/>
             <path d="M25 16 Q31 14.5 36 14.5 Q41 14.5 47 16" fill="none" stroke="#00d4ff" strokeWidth="0.35" opacity="0.45"/>
-            {/* Eyes */}
             <g><path d={eye.L} fill="none" stroke="#00d4ff" strokeWidth="1" strokeLinecap="round"/><path d={eye.R} fill="none" stroke="#00d4ff" strokeWidth="1" strokeLinecap="round"/></g>
-            {/* Mouth */}
             <path d={mouthPath} fill="none" stroke="#3d4a5c" strokeWidth="0.7" strokeLinecap="round"/>
-            {/* Tears */}
             <g opacity={cfg.showLaughTears ? 1 : 0}>
               <path d="M27 18 Q23 15 21 13" fill="none" stroke="#00d4ff" strokeWidth="0.8" strokeLinecap="round" opacity="0.6"/>
               <path d="M45 18 Q49 15 51 13" fill="none" stroke="#00d4ff" strokeWidth="0.8" strokeLinecap="round" opacity="0.6"/>
@@ -175,7 +201,6 @@ export function AgentCharacter({ status = 'idle', message, hidden = false }: Age
               <path d="M43 30 Q44 34 45 38" fill="none" stroke="#00d4ff" strokeWidth="0.5" strokeLinecap="round" opacity="0.3"/>
               <circle cx="44" cy="32" r="1" fill="#00d4ff" opacity="0.35"/><circle cx="45" cy="38" r="0.8" fill="#00d4ff" opacity="0.25"/>
             </g>
-            {/* Sweat drops — 拼命工作💦 */}
             <g opacity={cfg.showSweat ? 1 : 0}>
               <path d="M22 12 Q20 10 21 8" fill="none" stroke="#00d4ff" strokeWidth="0.8" strokeLinecap="round" opacity="0.5"/>
               <path d="M50 12 Q52 10 51 8" fill="none" stroke="#00d4ff" strokeWidth="0.8" strokeLinecap="round" opacity="0.5"/>
@@ -188,8 +213,13 @@ export function AgentCharacter({ status = 'idle', message, hidden = false }: Age
             <circle cx="47" cy="16" r="0.5" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
           </svg>
         </div>
-        {/* 调试：hover 显示当前表情名称 */}
-        <div className="agent-char-label">{status}</div>
+        {/* Bubble */}
+        <div className={`agent-char-bubble${bubbleShow ? ' show' : ''}`}>
+          <span className="agent-char-dot" style={{ background: cfg.color }} />
+          <span className="agent-char-text">{msg}</span>
+        </div>
+        {/* 调试：hover 显示当前 mood */}
+        <div className="agent-char-label">{zhuMood}</div>
       </div>
     </div>
   );

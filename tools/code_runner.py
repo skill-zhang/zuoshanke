@@ -191,21 +191,39 @@ def _run_cmd(
 # ---------------------------------------------------------------------------
 
 def run_code(
-    code: str,
+    code: str = "",
     language: str = "python",
     timeout: int = DEFAULT_TIMEOUT,
+    code_b64: str = "",
 ) -> dict:
     """
     执行一段代码并返回结果。
+    对于大段代码，可使用 code_b64 参数(base64编码)替代 code 参数，
+    避免 JSON 转义问题。
 
     参数:
         code:     要执行的代码字符串
         language: 语言标识 — 'python', 'shell'/'bash', 'javascript' (或 'js', 'node')
         timeout:  超时秒数（默认 30）
+        code_b64: base64 编码的代码（替代 code，避免 JSON 转义问题）
 
     返回:
         dict: {stdout, stderr, exit_code, success, error, timed_out}
     """
+    import base64
+    # 优先使用 code_b64
+    if code_b64:
+        try:
+            code = base64.b64decode(code_b64).decode('utf-8')
+        except Exception as e:
+            return {
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "success": False,
+                "error": f"base64 解码失败: {e}",
+                "timed_out": False,
+            }
     # 安全检测
     dangerous, pattern = _is_dangerous(code)
     if dangerous:

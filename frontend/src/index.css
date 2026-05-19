@@ -1646,10 +1646,10 @@ body {
 }
 .agent-char-container {
   position:relative;
-  width:60px; height:66px;
+  width:70px; height:66px;
   pointer-events:auto;
   cursor:pointer;
-  margin-left:-25px;
+  margin-left:-5px;
   transition: opacity 0.3s, transform 0.3s;
 }
 .agent-char-container.agent-char-hidden {
@@ -1674,17 +1674,18 @@ body {
 .agent-char-bubble {
   position:absolute;
   top:10px;
-  left:68px;
+  left:calc(100% + 8px);
   background:#1a2332;
   border:1px solid #00d4ff55;
   border-radius:8px;
-  padding:3px 10px;
+  padding:4px 12px;
   font-size:13px;
   color:#c9d1d9;
-  white-space:nowrap;
-  max-width:200px;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  width:auto;
+  min-width:max-content;
+  max-width:320px;
+  white-space:normal;
+  line-height:1.4;
   pointer-events:none;
   z-index:101;
   opacity:0;

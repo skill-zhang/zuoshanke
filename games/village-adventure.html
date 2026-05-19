@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小村庄大冒险</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #0a0a12;
+  color: #ccc;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding-top: 20px;
+}
+.game-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.game-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  justify-content: space-between;
+}
+.game-header h1 {
+  font-size: 18px;
+  color: #00d4ff;
+  text-shadow: 0 0 8px rgba(0,212,255,0.3);
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+.game-controls {
+  display: flex;
+  gap: 8px;
+}
+.game-controls button {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  color: #aaa;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all .15s;
+}
+.game-controls button:hover {
+  background: #2a2a3e;
+  color: #fff;
+  border-color: #00d4ff44;
+}
+#gameCanvas {
+  border: 2px solid #2a2a3e;
+  border-radius: 8px;
+  display: block;
+  cursor: pointer;
+  image-rendering: pixelated;
+  width: 500px;
+  height: 500px;
+}
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 6px 12px;
+  background: #12121c;
+  border: 1px solid #2a2a3a;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #aaa;
+  flex-wrap: wrap;
+}
+.status-bar .stat { display: flex; align-items: center; gap: 4px; }
+.status-bar .hp-bar { width: 60px; height: 10px; background: #2a1a1a; border-radius: 4px; overflow: hidden; }
+.status-bar .hp-fill { height: 100%; background: linear-gradient(90deg, #e53e3e, #fc8181); transition: width .3s; border-radius: 4px; }
+.status-bar .atk { color: #f6ad55; }
+.status-bar .def { color: #68d391; }
+.status-bar .team { color: #63b3ed; }
+.status-bar .items { color: #d6bcfa; }
+.status-bar .msg { color: #aaa; font-style: italic; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.hint {
+  font-size: 11px;
+  color: #555;
+  text-align: center;
+}
+
+/* Fullscreen overlay */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+}
+.overlay.open { display: flex; }
+.overlay .close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: #1a1a2e;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 1001;
+}
+.overlay .close-btn:hover { background: #2a2a3e; }
+#zoomCanvas {
+  image-rendering: pixelated;
+  max-width: 95vw;
+  max-height: 95vh;
+  border: 2px solid #444;
+  border-radius: 4px;
+}
+
+/* Dialog / combat modals */
+.dialog-modal {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.85);
+  border-top: 2px solid #00d4ff44;
+  padding: 12px 16px;
+  z-index: 10;
+  min-height: 70px;
+  text-align: center;
+}
+.dialog-modal.open { display: block; }
+.dialog-modal .speaker { 
+  color: #00d4ff; 
+  font-size: 13px; 
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.dialog-modal .text { 
+  color: #ddd; 
+  font-size: 14px; 
+  line-height: 1.5;
+}
+.dialog-modal .hint {
+  font-size: 11px;
+  color: #666;
+  margin-top: 6px;
+}
+.combat-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 20;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+.combat-overlay.open { display: flex; }
+.combat-overlay .combat-title { font-size: 20px; font-weight: 700; letter-spacing: 4px; }
+.combat-overlay .combat-info { color: #aaa; font-size: 14px; }
+.combat-overlay .combat-result { font-size: 28px; font-weight: 800; margin-top: 4px; }
+.combat-overlay .combat-loot { color: #f6ad55; font-size: 13px; margin-top: 4px; }
+.combat-overlay .combat-hint { color: #666; font-size: 12px; margin-top: 8px; }
+
+/* Victory screen */
+.victory-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 30;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+}
+.victory-overlay.open { display: flex; }
+.victory-overlay h2 {
+  font-size: 32px;
+  color: #00d4ff;
+  text-shadow: 0 0 20px rgba(0,212,255,0.5);
+}
+.victory-overlay p { color: #aaa; font-size: 14px; }
+.victory-overlay .restart-btn {
+  background: #00d4ff22;
+  border: 1px solid #00d4ff66;
+  color: #00d4ff;
+  padding: 10px 28px;
+  font-size: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.victory-overlay .restart-btn:hover { background: #00d4ff44; }
+.game-container {
+  position: relative;
+  width: 500px;
+  height: 500px;
+}
+</style>
+</head>
+<body>
+<div class="game-wrapper">
+  <div class="game-header">
+    <h1>🏘️ 小村庄大冒险</h1>
+    <div class="game-controls">
+      <button onclick="toggleZoom()">⛶ 放大</button>
+      <button onclick="resetGame()">🔄 新游戏</button>
+    </div>
+  </div>
+
+  <div class="game-container">
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
+
+    <div class="dialog-modal" id="dialogModal">
+      <div class="speaker" id="dialogSpeaker"></div>
+      <div class="text" id="dialogText"></div>
+      <div class="hint">按 Space/Enter 继续</div>
+    </div>
+
+    <div class="combat-overlay" id="combatOverlay">
+      <div class="combat-title" id="combatTitle">⚔️ 战斗!</div>
+      <div class="combat-info" id="combatInfo"></div>
+      <div class="combat-result" id="combatResult"></div>
+      <div class="combat-loot" id="combatLoot"></div>
+      <div class="combat-hint" id="combatHint"></div>
+    </div>
+
+    <div class="victory-overlay" id="victoryOverlay">
+      <h2>🎉 胜利!</h2>
+      <p id="victoryText"></p>
+      <button class="restart-btn" onclick="resetGame()">🔄 再来一局</button>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <span class="stat">❤️ <span class="hp-bar"><span class="hp-fill" id="hpFill" style="width:100%"></span></span></span>
+    <span class="stat atk">⚔️ <span id="atkStat">3</span></span>
+    <span class="stat def">🛡️ <span id="defStat">1</span></span>
+    <span class="stat team">👥 <span id="teamStat">0</span>人</span>
+    <span class="stat items">🎒 <span id="itemStat">无</span></span>
+    <span class="msg" id="statusMsg">探索世界，打败怪物，帮助村民!</span>
+  </div>
+  <div class="hint">↑↓←→ 移动 · Space/Enter 对话/确认 · I 查看背包</div>
+</div>
+
+<div class="overlay" id="zoomOverlay">
+  <button class="close-btn" onclick="toggleZoom()">✕ 关闭</button>
+  <canvas id="zoomCanvas" width="500" height="500"></canvas>
+</div>
+
+<script>
+// ====================== CONSTANTS ======================
+const T = { GRASS:0, WATER:1, MOUNTAIN:2, TREE:3, STONE:4, DIRT:5, BRIDGE:6, HOUSE:7, VILLAGE:8, FLOWER:9 };
+const TILE = 10;
+const MW = 50, MH = 50;
+const CANVAS_W = 500, CANVAS_H = 500;
+
+// ====================== STATE ======================
+let map = [];
+let player = null;
+let npcs = [];
+let enemies = [];
+let rescuees = [];
+let items = [];
+let party = [];
+let inventory = [];
+let equipped = { weapon: null, armor: null };
+
+let gameState = 'playing'; // playing | dialogue | combat | victory
+let dialogueQueue = [];
+let combatState = null;
+let isGameOver = false;
+let startTime = Date.now();
+
+let trail = []; // for party following
+let inventoryShowing = false;
+let particles = [];
+let hasReceivedGift = {}; // track NPC gifts
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const zoomCanvas = document.getElementById('zoomCanvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+
+// ====================== MAP GENERATION ======================
+function generateMap() {
+  map = [];
+  for (let y = 0; y < MH; y++) {
+    map[y] = [];
+    for (let x = 0; x < MW; x++) {
+      map[y][x] = T.GRASS;
+    }
+  }
+
+  // Mountains (clusters in top-right area)
+  const mtCenters = [
+    {x: 35, y: 8}, {x: 40, y: 5}, {x: 30, y: 12},
+    {x: 38, y: 15}, {x: 44, y: 10}
+  ];
+  mtCenters.forEach(c => {
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 3 + Math.random() * 2) {
+          const nx = c.x + dx, ny = c.y + dy;
+          if (nx>=0 && nx<MW && ny>=0 && ny<MH) map[ny][nx] = T.MOUNTAIN;
+        }
+      }
+    }
+  });
+
+  // River
+  const riverStartY = 3 + Math.floor(Math.random() * 8);
+  const riverEndY = 38 + Math.floor(Math.random() * 8);
+  let ry = riverStartY, rx = 2;
+  const riverPath = [];
+  while (rx < MW - 3) {
+    riverPath.push({x: rx, y: ry});
+    rx++;
+    if (ry < riverEndY && Math.random() < 0.3) ry++;
+    if (ry > riverEndY && Math.random() < 0.3) ry--;
+    if (ry < 2) ry++;
+    if (ry > MH-3) ry--;
+    ry = Math.max(2, Math.min(MH-3, ry));
+  }
+  riverPath.forEach(p => {
+    for (let w = -1; w <= 1; w++) {
+      const ny = p.y + w;
+      if (ny >= 0 && ny < MH) {
+        if (map[ny][p.x] === T.GRASS || map[ny][p.x] === T.DIRT || map[ny][p.x] === T.FLOWER) {
+          map[ny][p.x] = T.WATER;
+        }
+      }
+    }
+  });
+
+  // Village in bottom-left
+  for (let vy = 35; vy <= 46; vy++) {
+    for (let vx = 1; vx <= 15; vx++) {
+      if (map[vy][vx] !== T.WATER) map[vy][vx] = T.VILLAGE;
+    }
+  }
+
+  // Houses (3 in village)
+  const housePositions = [[3,37], [7,40], [11,36]];
+  housePositions.forEach(([hx, hy]) => {
+    for (let dy = 0; dy < 4; dy++) {
+      for (let dx = 0; dx < 4; dx++) {
+        if (hy+dy < MH && hx+dx < MW) map[hy+dy][hx+dx] = T.HOUSE;
+      }
+    }
+  });
+
+  // Dirt paths in village
+  for (let vy = 35; vy <= 46; vy++) {
+    for (let vx = 1; vx <= 15; vx++) {
+      if (map[vy][vx] === T.VILLAGE && Math.random() < 0.06) map[vy][vx] = T.DIRT;
+    }
+  }
+  // Path from village
+  for (let py = 44; py <= 46; py++) {
+    for (let px = 12; px <= 16; px++) {
+      if (py<MH && px<MW && (map[py][px] === T.VILLAGE || map[py][px] === T.GRASS)) map[py][px] = T.DIRT;
+    }
+  }
+  // Path to bridge
+  for (let px = 22; px <= 28; px++) {
+    if (map[14][px] === T.GRASS || map[14][px] === T.WATER) {
+      if (map[14][px] === T.WATER) map[14][px] = T.BRIDGE;
+      else map[14][px] = T.DIRT;
+    }
+    if (map[15][px] === T.WATER) map[15][px] = T.BRIDGE;
+  }
+  for (let py = 14; py <= 20; py++) {
+    if (map[py][28] === T.GRASS || map[py][28] === T.WATER) {
+      if (map[py][28] === T.WATER) map[py][28] = T.BRIDGE;
+      else map[py][28] = T.DIRT;
+    }
+  }
+
+  // Second bridge
+  for (let px = 10; px <= 14; px++) {
+    for (let wy = 15; wy <= 18; wy++) {
+      if (map[wy][px] === T.WATER) map[wy][px] = T.BRIDGE;
+    }
+  }
+
+  // Trees
+  for (let i = 0; i < 40; i++) {
+    let tx, ty;
+    do {
+      tx = Math.floor(Math.random() * MW);
+      ty = Math.floor(Math.random() * MH);
+    } while (
+      map[ty][tx] !== T.GRASS || 
+      (ty >= 33 && tx <= 18) || // avoid village
+      (ty >= 5 && ty <= 15 && tx >= 35 && tx <= 48) // avoid mountain area
+    );
+    map[ty][tx] = T.TREE;
+  }
+
+  // Stones
+  for (let i = 0; i < 20; i++) {
+    let sx, sy;
+    do {
+      sx = Math.floor(Math.random() * MW);
+      sy = Math.floor(Math.random() * MH);
+    } while (
+      map[sy][sx] !== T.GRASS || 
+      (sy >= 33 && sx <= 18) // avoid village
+    );
+    map[sy][sx] = T.STONE;
+  }
+
+  // Flowers
+  for (let i = 0; i < 15; i++) {
+    let fx, fy;
+    do {
+      fx = Math.floor(Math.random() * MW);
+      fy = Math.floor(Math.random() * MH);
+    } while (
+      map[fy][fx] !== T.GRASS ||
+      (fy >= 33 && fx <= 18)
+    );
+    map[fy][fx] = T.FLOWER;
+  }
+
+  // Ensure player spawn position is clear
+  map[38][5] = T.VILLAGE;
+  map[39][5] = T.VILLAGE;
+  map[38][6] = T.VILLAGE;
+  map[39][6] = T.VILLAGE;
+}
+
+// ====================== ENTITIES ======================
+function createPlayer() {
+  return {
+    x: 5, y: 38,
+    dir: 0, // 0=down,1=left,2=right,3=up
+    hp: 20, maxHp: 20,
+    atk: 3, def: 1,
+    baseAtk: 3, baseDef: 1,
+    walkTimer: 0,
+    animFrame: 0,
+    moveCooldown: 0
+  };
+}
+
+const NPC_NAMES = ['老王', '李婶', '小芳'];
+const NPC_DIALOGUES = [
+  ['你好呀，小伙子！', '村子外面很危险，小心那些怪物。', '带上这把剑防身吧！'],
+  ['哎呀，最近村外不太平。', '听说有怪物在四处游荡。', '你要出门的话一定小心！'],
+  ['你是冒险者吗？好帅气！', '村子东边有一条河，过了桥有片大森林。', '那边好像有人需要帮助！']
+];
+
+function spawnNPCs() {
+  npcs = [];
+  const positions = [[4, 35], [8, 37], [12, 42]];
+  positions.forEach((p, i) => {
+    npcs.push({
+      x: p[0], y: p[1],
+      name: NPC_NAMES[i],
+      dialogues: NPC_DIALOGUES[i],
+      direction: 0,
+      type: 'villager'
+    });
+  });
+}
+
+const ENEMY_TYPES = [
+  { name: '💚 史莱姆', sprite: 'slime', hp: 5, atk: 1, def: 0, drops: [{name:'回复药水', type:'potion', chance:0.5}] },
+  { name: '👺 小妖精', sprite: 'goblin', hp: 8, atk: 2, def: 1, drops: [{name:'木剑', type:'weapon', atk:1, chance:0.3},{name:'回复药水', type:'potion', chance:0.4}] },
+  { name: '👻 幽灵', sprite: 'spirit', hp: 6, atk: 3, def: 0, drops: [{name:'铁剑', type:'weapon', atk:2, chance:0.25},{name:'护身符', type:'armor', def:1, chance:0.35}] },
+  { name: '🐺 野狼', sprite: 'wolf', hp: 10, atk: 3, def: 1, drops: [{name:'皮甲', type:'armor', def:1, chance:0.3},{name:'铁剑', type:'weapon', atk:2, chance:0.2}] },
+  { name: '🔥 炎魔', sprite: 'demon', hp: 14, atk: 4, def: 2, drops: [{name:'钢盾', type:'armor', def:2, chance:0.4},{name:'钢剑', type:'weapon', atk:3, chance:0.3}] },
+  { name: '🕷️ 大蜘蛛', sprite: 'spider', hp: 7, atk: 2, def: 1, drops: [{name:'回复药水', type:'potion', chance:0.6}] },
+];
+
+function spawnEnemies() {
+  enemies = [];
+  const count = 12 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < count; i++) {
+    let ex, ey, tries = 0;
+    do {
+      ex = Math.floor(Math.random() * MW);
+      ey = Math.floor(Math.random() * MH);
+      tries++;
+    } while (
+      tries < 50 &&
+      (isBlocked(ex, ey) || (ey >= 33 && ex <= 18) || (Math.abs(ex-5) < 3 && Math.abs(ey-38) < 3))
+    );
+    const type = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
+    enemies.push({
+      x: ex, y: ey,
+      type: type,
+      hp: type.hp, maxHp: type.hp,
+      atk: type.atk, def: type.def,
+      drops: type.drops,
+      name: type.name,
+      aggro: false,
+      flash: 0
+    });
+  }
+}
+
+const RESCUE_NAMES = ['迷路的旅人', '采药的小姑娘', '受伤的猎人', '迷路的小孩', '遇险的商人'];
+const RESCUE_DIALOGUES = [
+  ['救救我！我被怪物包围了！', '请你帮我赶走它们！'],
+  ['呜呜呜...我迷路了，还有怪物在追我！', '你能保护我回村子吗？'],
+  ['我受了伤，走不动了...', '帮我赶走附近的怪物吧！'],
+  ['大哥哥/大姐姐，有怪物在那边！我好害怕！', '你能不能帮帮我？'],
+  ['我的货物都被怪物抢走了！', '帮我夺回来，我愿意报答你！'],
+];
+
+function spawnRescuees() {
+  rescuees = [];
+  const count = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++) {
+    let rx, ry, tries = 0;
+    do {
+      rx = Math.floor(Math.random() * MW);
+      ry = Math.floor(Math.random() * MH);
+      tries++;
+    } while (
+      tries < 60 &&
+      (isBlocked(rx, ry) || (ry >= 33 && rx <= 18) || (Math.abs(rx-5) < 4 && Math.abs(ry-38) < 4) ||
+       enemies.some(e => Math.abs(e.x-rx)+Math.abs(e.y-ry) < 3))
+    );
+    const idx = i % RESCUE_NAMES.length;
+    rescuees.push({
+      x: rx, y: ry,
+      name: RESCUE_NAMES[idx],
+      dialogues: RESCUE_DIALOGUES[idx],
+      rescued: false,
+      flash: 0
+    });
+  }
+}
+
+function spawnItems() {
+  items = [];
+  // A few starter items near village
+  items.push({ x: 8, y: 36, name: '回复药水', type: 'potion', ground: true });
+  items.push({ x: 7, y: 28, name: '回复药水', type: 'potion', ground: true });
+  items.push({ x: 18, y: 22, name: '回复药水', type: 'potion', ground: true });
+  items.push({ x: 14, y: 30, name: '回复药水', type: 'potion', ground: true });
+  // Rare early equipment
+  if (Math.random() < 0.3) {
+    items.push({ x: 22, y: 34, name: '皮甲', type: 'armor', ground: true });
+  }
+  // A weapon outside
+  if (Math.random() < 0.4) {
+    items.push({ x: 25, y: 25, name: '铁剑', type: 'weapon', ground: true });
+  }
+}
+
+function isBlocked(x, y) {
+  if (x < 0 || x >= MW || y < 0 || y >= MH) return true;
+  const t = map[y][x];
+  return t === T.WATER || t === T.MOUNTAIN || t === T.HOUSE || 
+         t === T.TREE || t === T.STONE;
+}
+
+function canWalk(x, y) {
+  if (x < 0 || x >= MW || y < 0 || y >= MH) return false;
+  const t = map[y][x];
+  if (t === T.WATER || t === T.MOUNTAIN || t === T.HOUSE || t === T.TREE || t === T.STONE) return false;
+  // Can't walk into enemies
+  if (enemies.some(e => e.x === x && e.y === y)) return false;
+  return true;
+}
+
+// ====================== GAME INIT ======================
+function initGame() {
+  generateMap();
+  player = createPlayer();
+  spawnNPCs();
+  spawnEnemies();
+  spawnRescuees();
+  spawnItems();
+  party = [];
+  inventory = ['回复药水'];
+  equipped = { weapon: null, armor: null };
+  gameState = 'playing';
+  isGameOver = false;
+  dialogueQueue = [];
+  combatState = null;
+  trail = [];
+  particles = [];
+  hasReceivedGift = {};
+  setStatus('探索世界，打败怪物，帮助村民！');
+  updateStatusBar();
+  document.getElementById('dialogModal').classList.remove('open');
+  document.getElementById('combatOverlay').classList.remove('open');
+  document.getElementById('victoryOverlay').classList.remove('open');
+}
+
+function resetGame() {
+  document.getElementById('zoomOverlay').classList.remove('open');
+  initGame();
+  draw();
+}
+
+// ====================== INPUT ======================
+const keys = {};
+document.addEventListener('keydown', (e) => {
+  const k = e.key;
+  keys[k] = true;
+  if (gameState === 'playing') {
+    if (k === ' ' || k === 'Enter') {
+      if (inventoryShowing) {
+        inventoryShowing = false;
+        document.getElementById('dialogModal').classList.remove('open');
+      } else {
+        interactForward();
+      }
+    } else {
+      handleMovement(k);
+    }
+  } else if (gameState === 'dialogue') {
+    if (k === ' ' || k === 'Enter') advanceDialogue();
+  } else if (gameState === 'combat') {
+    if (k === ' ' || k === 'Enter') advanceCombat();
+  } else if (gameState === 'victory') {
+    // ignore keys on victory
+  }
+  if (k === 'i' || k === 'I') {
+    if (inventoryShowing) {
+      inventoryShowing = false;
+      document.getElementById('dialogModal').classList.remove('open');
+    } else {
+      showInventory();
+    }
+  }
+  if (k === 'r' || k === 'R') restAtVillage();
+  // Number keys to use/equip items from inventory
+  if (inventoryShowing && k >= '1' && k <= '9') {
+    const idx = parseInt(k) - 1;
+    if (idx < inventory.length) {
+      const item = inventory[idx];
+      if (item === '回复药水' && player.hp < player.maxHp) {
+        const heal = 5 + Math.floor(Math.random() * 3);
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        inventory.splice(idx, 1);
+        setStatus(`使用了回复药水，恢复 ${heal} HP！❤️`);
+        updateStatusBar();
+        showInventory(); // refresh display
+      } else if (item === '回复药水' && player.hp >= player.maxHp) {
+        setStatus('HP 已满，不需要使用回复药水');
+      }
+    }
+  }
+  if (!['F5','F12','Control','Shift','Alt','Tab'].includes(k)) e.preventDefault();
+});
+document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+// ====================== MOVEMENT ======================
+function interactForward() {
+  // Interact with tile the player is facing
+  let tx = player.x, ty = player.y;
+  if (player.dir === 0) ty++;
+  else if (player.dir === 1) tx--;
+  else if (player.dir === 2) tx++;
+  else if (player.dir === 3) ty--;
+
+  // NPC interaction
+  const npc = npcs.find(n => n.x === tx && n.y === ty);
+  if (npc) { startDialogue(npc.name, npc.dialogues, 'npc', npc); return; }
+
+  // Rescuee interaction
+  const rescuee = rescuees.find(r => !r.rescued && r.x === tx && r.y === ty);
+  if (rescuee) { startDialogue(rescuee.name, rescuee.dialogues, 'rescue', rescuee); return; }
+
+  // Ground item
+  const item = items.find(it => it.ground && it.x === tx && it.y === ty);
+  if (item) { pickupItem(item); return; }
+
+  // Enemy (start combat)
+  const enemy = enemies.find(e => e.x === tx && e.y === ty);
+  if (enemy) { startCombat(enemy); return; }
+}
+
+function handleMovement(key) {
+  if (player.moveCooldown > 0) return;
+  let dx = 0, dy = 0;
+  if (key === 'ArrowUp') { dy = -1; player.dir = 3; }
+  else if (key === 'ArrowDown') { dy = 1; player.dir = 0; }
+  else if (key === 'ArrowLeft') { dx = -1; player.dir = 1; }
+  else if (key === 'ArrowRight') { dx = 1; player.dir = 2; }
+  else return;
+
+  const nx = player.x + dx, ny = player.y + dy;
+
+  // Check interaction with NPCs
+  const nearbyNpc = npcs.find(n => n.x === nx && n.y === ny);
+  if (nearbyNpc) {
+    startDialogue(nearbyNpc.name, nearbyNpc.dialogues, 'npc', nearbyNpc);
+    return;
+  }
+
+  // Check interaction with rescuees
+  const nearbyRescuee = rescuees.find(r => !r.rescued && r.x === nx && r.y === ny);
+  if (nearbyRescuee) {
+    startDialogue(nearbyRescuee.name, nearbyRescuee.dialogues, 'rescue', nearbyRescuee);
+    return;
+  }
+
+  // Check interaction with items on ground
+  const groundItem = items.find(it => it.ground && it.x === nx && it.y === ny);
+  if (groundItem) {
+    pickupItem(groundItem);
+    return;
+  }
+
+  if (!canWalk(nx, ny)) {
+    // Check if there's an enemy to fight
+    const enemy = enemies.find(e => e.x === nx && e.y === ny);
+    if (enemy) {
+      startCombat(enemy);
+      return;
+    }
+    return;
+  }
+
+  // Move player
+  trail.unshift({x: player.x, y: player.y});
+  if (trail.length > 20) trail.pop();
+  player.x = nx;
+  player.y = ny;
+  player.walkTimer++;
+  player.moveCooldown = 6;
+
+  // Party follows
+  party.forEach((m, i) => {
+    const idx = (i + 1) * 2;
+    if (idx < trail.length) {
+      m.x = trail[idx].x;
+      m.y = trail[idx].y;
+    }
+  });
+
+  // Check for item pickup
+  const nearbyItem = items.find(it => it.ground && it.x === nx && it.y === ny);
+  if (nearbyItem) {
+    pickupItem(nearbyItem);
+  }
+
+  checkWinCondition();
+}
+
+// ====================== DIALOGUE ======================
+function startDialogue(name, lines, type, entity) {
+  gameState = 'dialogue';
+  dialogueQueue = { type, entity, lines: [...lines], index: 0 };
+  showDialogueLine();
+  document.getElementById('dialogModal').classList.add('open');
+}
+
+function showDialogueLine() {
+  const d = dialogueQueue;
+  document.getElementById('dialogSpeaker').textContent = '🗣️ ' + d.lines[d.index].split('|')[0];
+  document.getElementById('dialogText').textContent = d.lines[d.index];
+}
+
+function advanceDialogue() {
+  dialogueQueue.index++;
+  if (dialogueQueue.index >= dialogueQueue.lines.length) {
+    endDialogue();
+    return;
+  }
+  showDialogueLine();
+}
+
+function endDialogue() {
+  document.getElementById('dialogModal').classList.remove('open');
+  const d = dialogueQueue;
+  if (d.type === 'npc') {
+    // NPC gave a gift on first talk
+    const npcId = d.entity.name;
+    if (npcId === '老王' && !hasReceivedGift[npcId]) {
+      hasReceivedGift[npcId] = true;
+      inventory.push('木剑');
+      if (!equipped.weapon) {
+        equipped.weapon = { name: '木剑', atk: 1 };
+      }
+      recalcStats();
+      setStatus('老王给了你一把木剑！⚔️ ATK+1');
+    }
+  } else if (d.type === 'rescue') {
+    // Rescue: find nearest enemy and fight
+    const rescuee = d.entity;
+    const nearby = findNearestEnemy(rescuee.x, rescuee.y);
+    if (nearby) {
+      rescuee.flash = 10;
+      setStatus('怪物出现了！准备战斗！');
+      startCombat(nearby);
+    } else {
+      // No enemies nearby? Just rescued!
+      rescuePartyJoin(rescuee);
+    }
+  }
+  dialogueQueue = null;
+  gameState = 'playing';
+}
+
+function findNearestEnemy(x, y) {
+  let nearest = null, minDist = 999;
+  enemies.forEach(e => {
+    const d = Math.abs(e.x - x) + Math.abs(e.y - y);
+    if (d < minDist && d < 8) {
+      minDist = d;
+      nearest = e;
+    }
+  });
+  return nearest;
+}
+
+// ====================== COMBAT ======================
+function startCombat(enemy) {
+  gameState = 'combat';
+  combatState = {
+    enemy: enemy,
+    playerHp: player.hp,
+    enemyHp: enemy.hp,
+    turn: 0,
+    log: [],
+    phase: 'fighting', // fighting | done
+    result: null,
+    ticks: 0
+  };
+  document.getElementById('combatTitle').textContent = `⚔️ ${enemy.name} 出现!`;
+  document.getElementById('combatInfo').textContent = `你的HP: ${player.hp}/${player.maxHp}  |  敌方HP: ${enemy.hp}/${enemy.maxHp}`;
+  document.getElementById('combatResult').textContent = '';
+  document.getElementById('combatLoot').textContent = '';
+  document.getElementById('combatHint').textContent = '按 Space/Enter 攻击！';
+  document.getElementById('combatOverlay').classList.add('open');
+  combatState.phase = 'player_turn';
+}
+
+function advanceCombat() {
+  if (!combatState) return;
+
+  const enemy = combatState.enemy;
+
+  if (combatState.phase === 'done') {
+    // Close combat overlay
+    document.getElementById('combatOverlay').classList.remove('open');
+    combatState = null;
+    gameState = 'playing';
+    updateStatusBar();
+    return;
+  }
+
+  if (combatState.phase === 'player_turn') {
+    // Player attacks
+    const pDmg = Math.max(0, player.atk - enemy.def + Math.floor(Math.random() * 4));
+    combatState.enemyHp -= pDmg;
+    combatState.log.push(`你造成了 ${pDmg} 点伤害！`);
+    document.getElementById('combatInfo').textContent = 
+      `⚔️ 你攻击了${enemy.name}，造成 ${pDmg} 伤害！`;
+    
+    if (combatState.enemyHp <= 0) {
+      combatState.phase = 'done';
+      combatState.result = 'win';
+      finishCombat('win');
+      return;
+    }
+    combatState.phase = 'enemy_turn';
+  } else if (combatState.phase === 'enemy_turn') {
+    // Enemy attacks
+    const eDmg = Math.max(0, enemy.atk - player.def + Math.floor(Math.random() * 3));
+    combatState.playerHp -= eDmg;
+    combatState.log.push(`${enemy.name}造成了 ${eDmg} 点伤害！`);
+    document.getElementById('combatInfo').textContent = 
+      `💥 ${enemy.name}攻击了你，造成 ${eDmg} 伤害！`;
+
+    if (combatState.playerHp <= 0) {
+      combatState.phase = 'done';
+      combatState.result = 'lose';
+      finishCombat('lose');
+      return;
+    }
+    combatState.phase = 'player_turn';
+    document.getElementById('combatHint').textContent = '按 Space 继续攻击';
+  }
+}
+
+function finishCombat(result) {
+  const enemy = combatState.enemy;
+  if (result === 'win') {
+    player.hp = combatState.playerHp;
+    document.getElementById('combatResult').textContent = '🎉 胜利!';
+    document.getElementById('combatResult').style.color = '#68d391';
+
+    // Drop item
+    let dropped = null;
+    enemy.drops.forEach(d => {
+      if (Math.random() < d.chance) {
+        dropped = d;
+      }
+    });
+
+    if (dropped) {
+      const itemName = dropped.name;
+      inventory.push(itemName);
+      if (dropped.type === 'weapon' && !equipped.weapon) {
+        equipped.weapon = { name: dropped.name, atk: dropped.atk || 1 };
+      }
+      if (dropped.type === 'armor' && !equipped.armor) {
+        equipped.armor = { name: dropped.name, def: dropped.def || 1 };
+      }
+      recalcStats();
+      document.getElementById('combatLoot').textContent = `🎁 掉落: ${itemName}!`;
+    } else {
+      document.getElementById('combatLoot').textContent = '本次没有掉落物品。';
+    }
+
+    // Remove enemy
+    enemies = enemies.filter(e => e !== enemy);
+
+    // Check if this was a rescue fight
+    const rescuee = rescuees.find(r => !r.rescued && Math.abs(r.x - enemy.x) + Math.abs(r.y - enemy.y) < 8);
+    if (rescuee) {
+      rescuePartyJoin(rescuee);
+    }
+
+  } else {
+    // Lose - respawn at village
+    player.hp = Math.floor(player.maxHp / 2);
+    player.x = 5; player.y = 38;
+    document.getElementById('combatResult').textContent = '💀 战败...';
+    document.getElementById('combatResult').style.color = '#fc8181';
+    document.getElementById('combatLoot').textContent = '回到了小村庄休整...';
+    setStatus('战败了，回到村子休息了一下...');
+    
+    // Remove the enemy (it "chased" you off)
+    enemies = enemies.filter(e => e !== enemy);
+  }
+
+  document.getElementById('combatHint').textContent = '按 Space 继续';
+  combatState.phase = 'done';
+
+  updateStatusBar();
+  checkWinCondition();
+}
+
+// ====================== RESCUE ======================
+function rescuePartyJoin(rescuee) {
+  rescuee.rescued = true;
+  party.push({
+    x: rescuee.x, y: rescuee.y,
+    name: rescuee.name,
+    atkBonus: 1 + Math.floor(Math.random() * 2),
+    defBonus: Math.floor(Math.random() * 2)
+  });
+  player.baseAtk += 1 + Math.floor(Math.random() * 1);
+  recalcStats();
+  setStatus(`🎉 ${rescuee.name}加入了你的队伍！`);
+  updateStatusBar();
+}
+
+// ====================== INVENTORY ======================
+function showInventory() {
+  if (gameState !== 'playing') return;
+  let msg = '🎒 背包:\n';
+  if (inventory.length === 0) {
+    msg += '  空';
+  } else {
+    inventory.forEach((it, i) => {
+      const isWpn = equipped.weapon && equipped.weapon.name === it;
+      const isArm = equipped.armor && equipped.armor.name === it;
+      const mark = isWpn ? ' [装备中⚔️]' : isArm ? ' [装备中🛡️]' : '';
+      msg += `  ${i+1}. ${it}${mark}\n`;
+    });
+  }
+  msg += `\n⚔️ 武器: ${equipped.weapon ? equipped.weapon.name : '无'} (ATK+${equipped.weapon ? equipped.weapon.atk : 0})`;
+  msg += `\n🛡️ 防具: ${equipped.armor ? equipped.armor.name : '无'} (DEF+${equipped.armor ? equipped.armor.def : 0})`;
+  msg += `\n👥 队伍: ${party.length}人`;
+  msg += `\n\n按 R 在村庄休息回复HP`;
+  msg += `\n按对应数字键使用背包中的物品`;
+  msg += `\n按 Space/I 关闭`;
+  
+  // Simple inventory modal
+  inventoryShowing = true;
+  document.getElementById('dialogSpeaker').textContent = '🎒 背包';
+  document.getElementById('dialogText').textContent = msg;
+  document.getElementById('dialogModal').classList.add('open');
+}
+
+function autoEquip(itemName, itemType) {
+  // Auto-equip if it's better
+  if (itemType === 'weapon') {
+    const parts = itemName.match(/木剑|铁剑|钢剑/);
+    let newAtk = 0;
+    if (itemName.includes('木剑')) newAtk = 1;
+    else if (itemName.includes('铁剑')) newAtk = 2;
+    else if (itemName.includes('钢剑')) newAtk = 3;
+    
+    if (!equipped.weapon || (equipped.weapon.atk || 0) < newAtk) {
+      equipped.weapon = { name: itemName, atk: newAtk };
+      recalcStats();
+      setStatus(`自动装备了 ${itemName}！`);
+    }
+  } else if (itemType === 'armor') {
+    let newDef = 0;
+    if (itemName.includes('皮甲') || itemName.includes('护身符')) newDef = 1;
+    else if (itemName.includes('钢盾')) newDef = 2;
+    
+    if (!equipped.armor || (equipped.armor.def || 0) < newDef) {
+      equipped.armor = { name: itemName, def: newDef };
+      recalcStats();
+      setStatus(`自动装备了 ${itemName}！`);
+    }
+  }
+}
+
+function restAtVillage() {
+  if (gameState !== 'playing') return;
+  // Check if player is in village area
+  if (player.x >= 1 && player.x <= 15 && player.y >= 35 && player.y <= 47) {
+    if (player.hp < player.maxHp) {
+      player.hp = player.maxHp;
+      setStatus('在小村庄休息，HP 完全恢复！❤️');
+      updateStatusBar();
+      // Visual effect
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+          setStatus(i < 4 ? '💤 休息中...' : 'HP 完全恢复！继续冒险吧！');
+        }, i * 300);
+      }
+    } else {
+      setStatus('你的 HP 已经满了！');
+    }
+  } else {
+    setStatus('回到村子里才能休息！按 R 无效');
+  }
+}
+
+function pickupItem(item) {
+  item.ground = false;
+  
+  // Auto-use potion if HP is low
+  if (item.name === '回复药水' && player.hp < player.maxHp) {
+    const heal = 5 + Math.floor(Math.random() * 3);
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    setStatus(`使用了回复药水，恢复 ${heal} HP！❤️`);
+    updateStatusBar();
+    return;
+  }
+  
+  inventory.push(item.name);
+  
+  // Auto-equip weapons/armor
+  const isWeapon = item.name.includes('剑') || item.name.includes('刀');
+  const isArmor = item.name.includes('甲') || item.name.includes('盾') || item.name.includes('护');
+  if (isWeapon) { autoEquip(item.name, 'weapon'); }
+  else if (isArmor) { autoEquip(item.name, 'armor'); }
+  else { setStatus(`拾取了 ${item.name}！`); }
+  
+  updateStatusBar();
+}
+
+function recalcStats() {
+  let atkBonus = 0, defBonus = 0;
+  if (equipped.weapon) atkBonus += equipped.weapon.atk;
+  if (equipped.armor) defBonus += equipped.armor.def;
+  party.forEach(m => { atkBonus += m.atkBonus || 0; defBonus += m.defBonus || 0; });
+  player.atk = player.baseAtk + atkBonus;
+  player.def = player.baseDef + defBonus;
+}
+
+function setStatus(msg) {
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function updateStatusBar() {
+  const pct = Math.max(0, player.hp / player.maxHp * 100);
+  document.getElementById('hpFill').style.width = pct + '%';
+  document.getElementById('atkStat').textContent = player.atk;
+  document.getElementById('defStat').textContent = player.def;
+  document.getElementById('teamStat').textContent = party.length;
+  
+  const invText = equipped.weapon ? equipped.weapon.name : (inventory.length > 0 ? inventory[0] + '...' : '无');
+  document.getElementById('itemStat').textContent = invText;
+}
+
+function checkWinCondition() {
+  const allRescued = rescuees.every(r => r.rescued);
+  const allDefeated = enemies.length === 0;
+  
+  if (allRescued || allDefeated) {
+    gameState = 'victory';
+    isGameOver = true;
+    document.getElementById('victoryText').textContent = 
+      allRescued && allDefeated ? '你拯救了所有人，打败了所有怪物！🏆' :
+      allRescued ? '你拯救了所有遇险的人，大家安全了！' :
+      '你打败了所有怪物，世界恢复了和平！';
+    document.getElementById('victoryOverlay').classList.add('open');
+  }
+}
+
+// ====================== ZOOM OVERLAY ======================
+function toggleZoom() {
+  const overlay = document.getElementById('zoomOverlay');
+  overlay.classList.toggle('open');
+  if (overlay.classList.contains('open')) {
+    drawZoomCanvas();
+  }
+}
+
+function drawZoomCanvas() {
+  zoomCtx.clearRect(0, 0, 500, 500);
+  drawFullMap(zoomCtx);
+}
+
+// ====================== RENDERING ======================
+function draw() {
+  if (!map.length) return;
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  drawFullMap(ctx);
+}
+
+function drawFullMap(c) {
+  // Draw tiles
+  for (let y = 0; y < MH; y++) {
+    for (let x = 0; x < MW; x++) {
+      drawTile(c, x, y);
+    }
+  }
+
+  // Draw items on ground
+  items.forEach(it => {
+    if (it.ground) drawGroundItem(c, it);
+  });
+
+  // Draw rescuees
+  rescuees.forEach(r => {
+    if (!r.rescued) drawRescuee(c, r);
+  });
+
+  // Draw enemies
+  enemies.forEach(e => drawEnemy(c, e));
+
+  // Draw NPCs
+  npcs.forEach(n => drawNPC(c, n));
+
+  // Draw party
+  party.forEach(m => drawPartyMember(c, m));
+
+  // Draw player
+  drawPlayer(c);
+
+  // Draw name tags
+  drawNameTags(c);
+}
+
+function drawTile(c, x, y) {
+  const t = map[y][x];
+  const px = x * TILE, py = y * TILE;
+  
+  switch(t) {
+    case T.GRASS:
+      c.fillStyle = (x + y) % 3 === 0 ? '#3a7d2c' : '#3a8528';
+      c.fillRect(px, py, TILE, TILE);
+      break;
+    case T.WATER:
+      c.fillStyle = '#2b6cb0';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = 'rgba(100,180,255,0.15)';
+      c.fillRect(px, py, TILE, TILE);
+      break;
+    case T.MOUNTAIN:
+      c.fillStyle = '#6b7280';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = '#8b9dc3';
+      c.fillRect(px+2, py+1, 6, 3);
+      c.fillStyle = '#4a5568';
+      c.fillRect(px+3, py+4, 4, 6);
+      break;
+    case T.TREE:
+      c.fillStyle = '#3a7d2c';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = '#2d5a1e';
+      c.fillRect(px+2, py+2, 6, 6);
+      c.fillStyle = '#1a4a0e';
+      c.fillRect(px+3, py+3, 4, 4);
+      break;
+    case T.STONE:
+      c.fillStyle = '#3a7d2c';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = '#4a5568';
+      c.fillRect(px+1, py+2, 8, 7);
+      c.fillStyle = '#6b7280';
+      c.fillRect(px+2, py+3, 5, 4);
+      break;
+    case T.DIRT:
+      c.fillStyle = '#c2a77d';
+      c.fillRect(px, py, TILE, TILE);
+      break;
+    case T.BRIDGE:
+      c.fillStyle = '#8b6914';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = '#a0782c';
+      c.fillRect(px+1, py+2, 8, 2);
+      c.fillRect(px+1, py+6, 8, 2);
+      break;
+    case T.HOUSE:
+      c.fillStyle = '#d4a04a';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = '#8b4513';
+      c.fillRect(px+3, py+5, 4, 5);
+      c.fillStyle = '#333';
+      c.fillRect(px+4, py+7, 2, 3);
+      break;
+    case T.VILLAGE:
+      c.fillStyle = '#4a8a3c';
+      c.fillRect(px, py, TILE, TILE);
+      break;
+    case T.FLOWER:
+      c.fillStyle = '#3a7d2c';
+      c.fillRect(px, py, TILE, TILE);
+      c.fillStyle = (x + y) % 2 === 0 ? '#ff69b4' : '#ffdd57';
+      c.fillRect(px+3, py+3, 4, 4);
+      break;
+    default:
+      c.fillStyle = '#3a7d2c';
+      c.fillRect(px, py, TILE, TILE);
+  }
+}
+
+function drawPlayer(c) {
+  const px = player.x * TILE, py = player.y * TILE;
+  
+  // Body (blue shirt)
+  c.fillStyle = '#3182ce';
+  c.fillRect(px+2, py+3, 6, 4);
+  // Head
+  c.fillStyle = '#f5cba7';
+  c.fillRect(px+3, py+1, 4, 3);
+  // Hair
+  c.fillStyle = '#4a3728';
+  c.fillRect(px+2, py, 6, 2);
+  // Eyes
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(px+4, py+2, 1, 1);
+  c.fillRect(px+6, py+2, 1, 1);
+  // Legs
+  c.fillStyle = '#5d4037';
+  c.fillRect(px+2, py+7, 3, 3);
+  c.fillRect(px+5, py+7, 3, 3);
+  // Hat
+  c.fillStyle = '#8b4513';
+  c.fillRect(px+1, py, 8, 1);
+  
+  // Direction indicator (small mark)
+  c.fillStyle = '#00d4ff';
+  if (player.dir === 0) c.fillRect(px+4, py+9, 2, 1);
+  else if (player.dir === 1) c.fillRect(px+1, py+4, 1, 2);
+  else if (player.dir === 2) c.fillRect(px+8, py+4, 1, 2);
+  else if (player.dir === 3) c.fillRect(px+4, py+1, 2, 1);
+}
+
+function drawNPC(c, npc) {
+  const px = npc.x * TILE, py = npc.y * TILE;
+  // Body (green/red shirt)
+  c.fillStyle = npc.name === '老王' ? '#e53e3e' : npc.name === '李婶' ? '#805ad5' : '#38a169';
+  c.fillRect(px+2, py+3, 6, 4);
+  // Head
+  c.fillStyle = '#f5cba7';
+  c.fillRect(px+3, py+1, 4, 3);
+  // Hair
+  c.fillStyle = '#4a3728';
+  c.fillRect(px+2, py, 6, 2);
+  // Eyes
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(px+4, py+2, 1, 1);
+  c.fillRect(px+6, py+2, 1, 1);
+  // Legs
+  c.fillStyle = '#4a5568';
+  c.fillRect(px+2, py+7, 3, 3);
+  c.fillRect(px+5, py+7, 3, 3);
+  // Name tag above
+  c.fillStyle = 'rgba(0,0,0,0.5)';
+  c.fillRect(px-2, py-5, 14, 5);
+  c.fillStyle = '#fff';
+  c.font = '4px sans-serif';
+  c.fillText('💬', px+2, py-2);
+}
+
+function drawEnemy(c, enemy) {
+  const px = enemy.x * TILE, py = enemy.y * TILE;
+  const flash = enemy.flash > 0;
+  enemy.flash = Math.max(0, enemy.flash - 1);
+
+  if (flash) {
+    c.fillStyle = '#fff';
+    c.fillRect(px, py, TILE, TILE);
+    return;
+  }
+
+  const type = enemy.type.sprite;
+  // Body
+  if (type === 'slime') {
+    c.fillStyle = '#48bb78';
+    c.beginPath();
+    c.arc(px+5, py+5, 5, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#2f855a';
+    c.fillRect(px+3, py+2, 2, 2);
+    c.fillRect(px+6, py+2, 2, 2);
+  } else if (type === 'goblin') {
+    c.fillStyle = '#38a169';
+    c.fillRect(px+2, py+2, 6, 7);
+    c.fillStyle = '#f5cba7';
+    c.fillRect(px+3, py, 4, 3);
+    c.fillStyle = '#e53e3e';
+    c.fillRect(px+4, py+2, 2, 2);
+    c.fillStyle = '#5d4037';
+    c.fillRect(px+2, py+9, 3, 1);
+    c.fillRect(px+5, py+9, 3, 1);
+  } else if (type === 'spirit') {
+    c.fillStyle = 'rgba(155, 100, 255, 0.6)';
+    c.beginPath();
+    c.arc(px+5, py+4, 5, 0, Math.PI);
+    c.fill();
+    c.fillRect(px+2, py+4, 6, 5);
+    c.fillStyle = '#fff';
+    c.fillRect(px+4, py+3, 2, 2);
+    c.fillRect(px+6, py+3, 1, 1);
+  } else if (type === 'wolf') {
+    c.fillStyle = '#6b7280';
+    c.fillRect(px+1, py+3, 8, 5);
+    c.fillStyle = '#9ca3af';
+    c.fillRect(px+3, py+1, 4, 3);
+    c.fillStyle = '#4a5568';
+    c.fillRect(px+4, py, 2, 2);
+    c.fillStyle = '#e53e3e';
+    c.fillRect(px+8, py+4, 1, 2);
+    c.fillRect(px+1, py+4, 1, 2);
+  } else if (type === 'demon') {
+    c.fillStyle = '#c53030';
+    c.fillRect(px+1, py+2, 8, 6);
+    c.fillStyle = '#9b2c2c';
+    c.fillRect(px+3, py, 4, 3);
+    c.fillStyle = '#fbd38d';
+    c.fillRect(px+3, py+1, 4, 2);
+    c.fillStyle = '#e53e3e';
+    c.fillRect(px+2, py+8, 3, 2);
+    c.fillRect(px+5, py+8, 3, 2);
+  } else { // spider
+    c.fillStyle = '#4a5568';
+    c.fillRect(px+1, py+2, 8, 6);
+    c.fillStyle = '#718096';
+    c.fillRect(px+3, py, 4, 3);
+    c.fillStyle = '#e53e3e';
+    c.fillRect(px+4, py+1, 2, 2);
+    c.fillStyle = '#4a5568';
+    c.fillRect(px, py+1, 1, 2);
+    c.fillRect(px+9, py+1, 1, 2);
+    c.fillRect(px, py+6, 1, 2);
+    c.fillRect(px+9, py+6, 1, 2);
+  }
+}
+
+function drawRescuee(c, rescuee) {
+  if (rescuee.rescued) return;
+  const px = rescuee.x * TILE, py = rescuee.y * TILE;
+
+  // Body (yellow/orange for rescuees)
+  c.fillStyle = '#ed8936';
+  c.fillRect(px+2, py+3, 6, 4);
+  // Head
+  c.fillStyle = '#f5cba7';
+  c.fillRect(px+3, py+1, 4, 3);
+  // Hair
+  c.fillStyle = '#4a3728';
+  c.fillRect(px+2, py, 6, 2);
+  // Eyes (looking scared)
+  c.fillStyle = '#fff';
+  c.fillRect(px+4, py+2, 2, 2);
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(px+4, py+2, 1, 1);
+  c.fillRect(px+6, py+2, 1, 1);
+  // Legs
+  c.fillStyle = '#5d4037';
+  c.fillRect(px+2, py+7, 3, 3);
+  c.fillRect(px+5, py+7, 3, 3);
+  // "!" mark
+  c.fillStyle = '#e53e3e';
+  c.font = 'bold 5px sans-serif';
+  c.fillText('❗', px+1, py-1);
+}
+
+function drawPartyMember(c, member) {
+  const px = member.x * TILE, py = member.y * TILE;
+  // Party member (green)
+  c.fillStyle = '#38a169';
+  c.fillRect(px+2, py+3, 6, 4);
+  c.fillStyle = '#f5cba7';
+  c.fillRect(px+3, py+1, 4, 3);
+  c.fillStyle = '#4a3728';
+  c.fillRect(px+2, py, 6, 2);
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(px+4, py+2, 1, 1);
+  c.fillRect(px+6, py+2, 1, 1);
+  c.fillStyle = '#5d4037';
+  c.fillRect(px+2, py+7, 3, 3);
+  c.fillRect(px+5, py+7, 3, 3);
+  // Tiny heart
+  c.fillStyle = '#e53e3e';
+  c.font = '4px sans-serif';
+  c.fillText('❤️', px, py-1);
+}
+
+function drawGroundItem(c, item) {
+  const px = item.x * TILE, py = item.y * TILE;
+  c.fillStyle = '#f6e05e';
+  c.fillRect(px+2, py+2, 6, 6);
+  c.fillStyle = '#d69e2e';
+  c.fillRect(px+3, py+3, 4, 4);
+  c.fillStyle = '#f6e05e';
+  c.font = '5px sans-serif';
+  c.fillText('🎁', px+1, py-1);
+}
+
+function drawNameTags(c) {
+  // Only draw minimal tags for village area and nearby entities
+  // Actually let's skip name tags at this scale, too small
+}
+
+// ====================== GAME LOOP ======================
+function gameLoop() {
+  if (!map.length) { requestAnimationFrame(gameLoop); return; }
+  
+  // Animate water (subtle)
+  // Handle player cooldown
+  if (player.moveCooldown > 0) player.moveCooldown--;
+  
+  draw();
+  updateStatusBar();
+  requestAnimationFrame(gameLoop);
+}
+
+// ====================== START ======================
+initGame();
+gameLoop();
+
+// Canvas click to toggle zoom
+canvas.addEventListener('click', toggleZoom);
+
+// Window resize handler for zoom canvas
+window.addEventListener('resize', () => {
+  if (document.getElementById('zoomOverlay').classList.contains('open')) {
+    drawZoomCanvas();
+  }
+});
+</script>
+</body>
+</html>

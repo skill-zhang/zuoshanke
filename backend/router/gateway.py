@@ -168,6 +168,16 @@ def gateway_chat(data: GatewayChatRequest, db: Session = Depends(get_db)):
             )
 
     # ═══ 频道模式（默认闲聊） ═══
+    # 🆕 Schema v0.8: 本体观察 — 频道对话
+    from agent_core.zhu_agent import ZhuAgentManager
+    _zhu_gw = ZhuAgentManager(db)
+    channel_name = "闲聊"
+    if session.channel_id:
+        ch = db.query(Channel).filter(Channel.id == session.channel_id).first()
+        if ch:
+            channel_name = ch.name or "闲聊"
+    _zhu_gw.observe_fenshen_event("fenshen:started", channel_name)
+
     channel_id = session.channel_id
     if not channel_id:
         # 兜底：找默认频道
@@ -186,6 +196,35 @@ def gateway_chat(data: GatewayChatRequest, db: Session = Depends(get_db)):
     reply = ai_channel_chat(history, is_default=True)
     if reply is None:
         reply = "抱歉，AI 引擎暂时响应缓慢，请稍候重试。"
+
+    # 🆕 Schema v0.8: 本体观察 — 频道回复完成
+    try:
+        _zhu_gw.observe_fenshen_event("fenshen:done", channel_name)
+    except Exception:
+        pass
+
+    # 🆕 Schema v0.8+: 从 LLM 回复中解析心情表达（自然带出）
+    def _parse_mood(reply_str: str, ch_name: str):
+        import re
+        m = re.search(r'\[心情:\s*(\w+)\]\s*(.+?)\s*$', reply_str, re.DOTALL)
+        if not m:
+            return
+        try:
+            from database import SessionLocal as SL
+            from agent_core.zhu_agent import ZhuAgentManager
+            zhu_db = SL()
+            try:
+                zh = ZhuAgentManager(zhu_db)
+                zh.update_mood(m.group(1).strip().lower(), f"【{ch_name}】{m.group(2).strip()}")
+            finally:
+                zhu_db.close()
+        except Exception:
+            pass
+    _parse_mood(reply, channel_name)
+
+    # 剥离心情标签（对用户不可见）
+    import re as _re
+    reply = _re.sub(r'\s*\[心情:\s*\w+\]\s*.+?\s*$', '', reply, flags=_re.DOTALL).strip()
 
     # ── 自动场景切换检测（仅在频道模式下） ──
     switch_hint = None
