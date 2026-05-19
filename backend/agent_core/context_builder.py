@@ -175,6 +175,90 @@ def build_scene_context(
     return messages
 
 
+def build_agent_context(
+    user_content: str,
+    history_messages: Optional[list[dict]] = None,
+    user_context: Optional[str] = None,
+    db=None,
+) -> list[dict]:
+    """构建 Agent Loop 路径的上下文 — 带分层管线（DB prompt + 记忆 + skill + 工具列表），无预执行。
+
+    Args:
+        user_content: 用户当前消息
+        history_messages: 历史消息列表 [{"role": ..., "content": ...}, ...]
+        user_context: 用户自定义背景设定
+        db: 数据库会话（用于记忆和 DB settings）
+
+    Returns:
+        OpenAI 格式的消息列表，可作为 run_agent_loop() 的 initial_messages
+    """
+    from agent_core.agent_loop import _EXCLUDED_TOOLS as _AGENT_EXCLUDED
+
+    messages = []
+
+    # ── 1. System prompt（DB → SCENE_SYSTEM_PROMPT 兜底） ──
+    _scene_sp = SCENE_SYSTEM_PROMPT
+    if db is not None:
+        try:
+            from models import Setting
+            _setting = db.query(Setting).first()
+            if _setting and _setting.system_prompts:
+                _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
+        except Exception:
+            pass
+    system_parts = [f"# 角色设定\n{_scene_sp}"]
+
+    # ── 1.5 用户输入背景设定 ──
+    if user_context:
+        system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
+
+    # ── 2. 记忆块 → User 层（见下方） ──
+    memory_block = _build_memory_block(db, user_content)
+
+    # ── 3. 技能块 ──
+    skill_block = _build_skill_block(user_content)
+    if skill_block:
+        system_parts.append(skill_block)
+
+    # ── 4. 工具列表（过滤排除项，与 build_tool_definitions 一致） ──
+    matched_tools = match_tools(user_content)
+    filtered_tools = [t for t in matched_tools if t.get("name") not in _AGENT_EXCLUDED]
+    tools_text = format_tools_for_prompt(filtered_tools)
+    if tools_text:
+        system_parts.append(tools_text)
+
+    # ── 5. 使用说明（LLM 自主调工具版） ──
+    usage_parts = [
+        "## 使用说明",
+        "你可以调用以下工具来完成任务。",
+        "工具会在 function calling 中列出，选择合适工具调用即可。",
+        "一次只调一个工具，等结果回来后再决定下一步。",
+        "如果结果中有错误，分析原因后重试或告知用户。",
+    ]
+    system_parts.append("\n".join(usage_parts))
+
+    messages.append({"role": "system", "content": "\n\n".join(system_parts)})
+
+    # ── 6. 跳过工具结果（Agent Loop 无预执行） ──
+
+    # ── 7. 对话历史 ──
+    if history_messages:
+        for m in history_messages:
+            role = "assistant" if m["role"] == "ai" else m["role"]
+            messages.append({"role": role, "content": m["content"]})
+
+    # ── 8. 记忆块 + 用户消息 ──
+    user_parts = []
+    if memory_block:
+        user_parts.append(memory_block)
+    user_parts.append(user_content)
+    user_msg = "\n\n---\n\n".join(user_parts)
+
+    messages.append({"role": "user", "content": user_msg})
+
+    return messages
+
+
 def build_light_context(
     user_content: str,
     history_messages: Optional[list[dict]] = None,
