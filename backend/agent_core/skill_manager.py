@@ -209,39 +209,61 @@ triggers: {triggers_str}
                     skills.append(skill.to_dict(include_content=False))
         return skills
 
-    # ── 触发器匹配（用于 context 注入） ────────────
+    # ── 语义匹配（用于 context 注入） — jieba 分词 + token 相似度 ──
 
     def match_for_context(self, query: str, max_count: int = 2) -> list[Skill]:
-        """根据用户查询匹配相关 skill
+        """根据用户查询语义匹配相关 skill
 
-        匹配规则:
-            1. 对 query 分词（去重）
-            2. 每个 skill 的 trigger 与 query 分词做交集
-            3. 按命中数量排序，取 Top-N
+        用 jieba 分词后计算 query 与 skill 的 token 重叠率，
+        替代旧的 `if trigger in query` 子串匹配。
         """
         if not query:
             return []
 
-        query_tokens = set(self._tokenize(query))
+        query_tokens = set(self._tokenize_semantic(query))
+        if not query_tokens:
+            return []
+
         skills = self.list_all()
         scored = []
 
         for s_meta in skills:
             skill = self._parse_skill(s_meta["name"])
-            if not skill or not skill.triggers:
+            if not skill:
                 continue
 
-            # 计算 trigger 命中数
-            hits = 0
-            for trigger in skill.triggers:
-                if trigger in query:
-                    hits += 1
+            # 构建 skill 的文本表示 = trigges + description + content 前 100 字
+            skill_text = " ".join(skill.triggers or [])
+            if skill.description:
+                skill_text += " " + skill.description
+            if skill.content:
+                skill_text += " " + skill.content[:100]
 
-            if hits > 0:
-                scored.append((hits, skill))
+            skill_tokens = set(self._tokenize_semantic(skill_text))
+            if not skill_tokens:
+                continue
+
+            # 语义相似度 = overlap_count * (overlap / query_tokens_count)
+            # 既考虑绝对匹配数，也考虑 query 中有多少比例被 skill 覆盖
+            overlap = len(query_tokens & skill_tokens)
+            if overlap > 0:
+                query_coverage = overlap / len(query_tokens)
+                score = overlap * query_coverage
+                scored.append((score, skill))
 
         scored.sort(key=lambda x: -x[0])
         return [s for _, s in scored[:max_count]]
+
+    def _tokenize_semantic(self, text: str) -> list[str]:
+        """用 jieba 分词语义切分（与旧的子串分词不同）"""
+        if not text:
+            return []
+        try:
+            import jieba
+            return [w.strip() for w in jieba.cut(text) if len(w.strip()) >= 2]
+        except ImportError:
+            # 兜底：按字符级 bigram 退却
+            return [text[i:i+2] for i in range(len(text) - 1) if len(text[i:i+2]) >= 2]
 
     def _tokenize(self, text: str) -> list[str]:
         """分词"""

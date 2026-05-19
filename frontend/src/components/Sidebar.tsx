@@ -52,10 +52,10 @@ export function Sidebar() {
   }, [view]);
 
   // 加载记忆数量（用于 badge）
-  const { memoryDrawerOpen } = useStore();
+  const { view } = useStore();
   useEffect(() => {
     listMemories().then(res => setMemories(res.data)).catch(() => {});
-  }, [memoryDrawerOpen]);  // 抽屉关闭时刷新（用户可能做了增删改）
+  }, [view]);  // 每次切视图刷新（记忆管理全页可增删改）
 
   const closeMenu = () => setMenuOpen(null);
 
@@ -383,7 +383,7 @@ export function Sidebar() {
           <span>能力验证</span>
         </div>
 
-        <div className="sidebar-nav" onClick={() => useStore.getState().openMemoryDrawer()}>
+        <div className="sidebar-nav" onClick={() => { setView('memory'); useStore.getState().setCurrentScene(null); }}>
           <span className="nav-icon">🧠</span>
           <span>记忆管理</span>
           <span className="badge">{memories.length}</span>

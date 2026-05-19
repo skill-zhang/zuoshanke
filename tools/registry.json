@@ -420,6 +420,27 @@
         "triggers": [],
         "requires_city": false
       }
+    },
+    {
+      "name": "memory",
+      "description": "管理长期记忆——add 存新信息、reinforce 强化已有记忆、read 查看、replace 更新、remove 删除。存入前先用 read 检查是否已存在。用户强调「很重要」或用纠正语气时，用 reinforce 强化已存记忆。",
+      "file": "tools/memory_tool.py",
+      "function": "memory_tool",
+      "parameters": {
+        "action": {"type": "string", "description": "操作类型(add/reinforce/read/replace/remove)", "enum": ["add", "reinforce", "read", "replace", "remove"]},
+        "target": {"type": "string", "description": "记忆目标(memory/user)", "enum": ["memory", "user"]},
+        "content": {"type": "string", "description": "记忆内容（add/replace 时必需）", "optional": true},
+        "old_text": {"type": "string", "description": "要替换/删除的旧记忆内容（replace/remove 时必需）", "optional": true},
+        "key": {"type": "string", "description": "记忆唯一标识键，不传则自动生成", "optional": true}
+      },
+      "returns": "操作结果 JSON（含 success、action、key、message）",
+      "category": "tools",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
     }
   ]
 }

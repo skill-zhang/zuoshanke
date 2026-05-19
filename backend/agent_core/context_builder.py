@@ -237,6 +237,16 @@ def build_agent_context(
     ]
     system_parts.append("\n".join(usage_parts))
 
+    # ── 5.5 记忆能力说明 ──
+    system_parts.append(
+        "## 📝 记忆能力\n"
+        "你有长期记忆系统。对话中发现的重要信息（用户偏好、习惯、个人事实、\n"
+        "项目约束）可以用 memory 工具存下来。已存的记忆会在后续对话中\n"
+        "作为参考呈现给你。\n"
+        "注意：用户强调「很重要」或纠正了你的某个认知时，应当更新记忆。\n"
+        "定期用 read 检查内容，避免过时或重复。存和改之前先看一遍。"
+    )
+
     messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 
     # ── 6. 跳过工具结果（Agent Loop 无预执行） ──

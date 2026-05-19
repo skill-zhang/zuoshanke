@@ -11,6 +11,7 @@ import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
 import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { MemoryDrawer } from './components/MemoryDrawer';
+import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
 import { CapabilityVerify } from './components/CapabilityVerify';
 import { AgentCharacter } from './components/AgentCharacter';
@@ -279,6 +280,8 @@ export default function App() {
           <CapabilityVerify />
         ) : view === 'skills' ? (
           <SkillsView />
+        ) : view === 'memory' ? (
+          <MemoryView />
         ) : (
           <ChatView />
         )}

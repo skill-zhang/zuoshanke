@@ -20,7 +20,7 @@ import {
   SettingsData, ServiceStatus, RouteConfig,
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills';
+export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory';
 
 interface AppState {
   view: ViewPage;
