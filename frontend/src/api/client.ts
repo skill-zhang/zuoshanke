@@ -132,6 +132,7 @@ export interface Message {
   session_id: string | null;
   role: 'user' | 'ai' | 'system';
   content: string; map_ref: string | null; model: string | null; created_at: string;
+  display?: boolean;  // 🆕 Schema v0.7: false=内部记录不渲染
   toolCards?: ToolCard[];
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
@@ -237,7 +238,24 @@ export type StreamEvent =
   | { type: 'capacity_warning'; total_tokens: number; max_tokens: number; percentage: number; message: string }
   | { type: 'token'; token: string }
   | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string; model?: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  // 🆕 Schema v0.7: 仪表盘事件
+  | { type: 'dashboard:converge'; merge_count: number; queue_count: number }
+  | { type: 'dashboard:queue_update'; items: DashboardQueueItem[] }
+  | { type: 'dashboard:reflect'; tool: string; tool_success: boolean; result_preview: string }
+  | { type: 'thinking_map:diverged'; node_count: number };
+
+/** Schema v0.7: 仪表盘队列项 */
+export interface DashboardQueueItem {
+  id: string; title: string; priority: number; status: string; deps?: string[];
+  sort_order?: number; created_at?: string; completed_at?: string | null;
+}
+
+/** Schema v0.7: 反馈时间线项 */
+export interface DashboardReflectItem {
+  id: string; type: string; icon: string; title: string; detail?: string;
+  tag?: string; tag_text?: string; created_at?: string;
+}
 
 /** 工具执行记录（纯前端，不存库） */
 export interface ToolLog {
@@ -603,4 +621,21 @@ export const renameCategory = (oldName: string, newName: string) =>
 export const compressChannelHistory = (channelId: string) =>
   request<{ ok: boolean; summary?: string; deleted?: number; error?: string }>(
     `/channels/${channelId}/compress`, { method: 'POST' }
+  );
+
+// ═══ Schema v0.7: 仪表盘 ═══
+export const getDashboardQueue = (sceneId: string) =>
+  request<{ items: DashboardQueueItem[] }>(`/dashboard/${sceneId}/queue`);
+
+export const getDashboardReflect = (sceneId: string) =>
+  request<{ items: DashboardReflectItem[] }>(`/dashboard/${sceneId}/reflect`);
+
+export const getDashboardStatus = (sceneId: string) =>
+  request<{ queue_total: number; completed: number; current_task: DashboardQueueItem | null }>(
+    `/dashboard/${sceneId}/status`
+  );
+
+export const triggerDashboardConverge = (sceneId: string) =>
+  request<{ ok: boolean; queue_count: number; items: DashboardQueueItem[] }>(
+    `/dashboard/${sceneId}/converge`, { method: 'POST' }
   );

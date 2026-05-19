@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { Message, ToolCard, ToolLog } from '../api/client';
 import { getActionMap } from '../api/client';
+import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
 
 // ══════════════════════════════════════════════════
 //  工具卡片组件
@@ -744,6 +745,11 @@ export function ChatView() {
             </button>
             <button className="select-cancel-btn" onClick={exitSelectMode}>取消</button>
           </div>
+        )}
+
+        {/* 🆕 Schema v0.7: Agent Loop 仪表盘（仅场景模式） */}
+        {currentScene && !currentChannel && (
+          <AgentLoopDashboard />
         )}
 
         {/* 消息列表 */}

@@ -178,6 +178,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     map_ref = Column(String, nullable=True)     # 关联的 map node/drawer 操作
     model = Column(String, nullable=True)       # 生成该消息的模型名（如 Qwen3.5、DeepSeek Flash）
+    display = Column(Boolean, default=True)     # Schema v0.7: False=系统内部记录,前端不渲染
     created_at = Column(DateTime, default=utcnow)
 
     scene = relationship("Scene", back_populates="messages")
@@ -292,6 +293,39 @@ class ActionExecutionLog(Base):
     line = Column(Text, nullable=True)
     status = Column(String, nullable=True)
     result = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+# ═══ Schema v0.7 — Agent Loop 仪表盘 ═══
+class PriorityQueue(Base):
+    """Agent Loop 优先级队列"""
+    __tablename__ = "priority_queues"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    node_id = Column(String, ForeignKey("think_nodes.id"), nullable=True)
+    title = Column(String(200), nullable=False)
+    priority = Column(Integer, default=2)          # 1=P1, 2=P2, 3=P3, 4=P4
+    status = Column(String(20), default="pending") # pending | running | completed | blocked
+    deps = Column(Text, default="[]")              # JSON: ["node_id_1", "node_id_2"]
+    wip_group = Column(Integer, default=0)         # 同一批进入执行的任务组
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class ReflectTimeline(Base):
+    """反馈时间线 — Agent Loop 执行过程中的成功/失败/新发现/收敛记录"""
+    __tablename__ = "reflect_timelines"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    type = Column(String(20), nullable=False)       # success | fail | new | discover | correct | merge
+    icon = Column(String(10), default="💡")
+    title = Column(String(200), nullable=False)
+    detail = Column(Text, default="")
+    tag = Column(String(50), nullable=True)         # inject | blocked | queue_update
+    tag_text = Column(String(100), nullable=True)   # 标签文本如"↪ 注入TM: 新增节点"
     created_at = Column(DateTime, default=utcnow)
 
 

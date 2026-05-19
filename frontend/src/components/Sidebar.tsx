@@ -52,7 +52,6 @@ export function Sidebar() {
   }, [view]);
 
   // 加载记忆数量（用于 badge）
-  const { view } = useStore();
   useEffect(() => {
     listMemories().then(res => setMemories(res.data)).catch(() => {});
   }, [view]);  // 每次切视图刷新（记忆管理全页可增删改）

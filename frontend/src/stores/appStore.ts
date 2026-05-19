@@ -18,6 +18,8 @@ import {
   ActionMap as ActionMapType, ActionMapStreamEvent, ToolLog,
   getSettings, updateSettings, getServiceStatus,
   SettingsData, ServiceStatus, RouteConfig,
+  DashboardQueueItem, DashboardReflectItem,  // 🆕 Schema v0.7
+  getDashboardQueue, getDashboardReflect, getDashboardStatus,  // 🆕 Schema v0.7
 } from '../api/client';
 
 export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory';
@@ -112,6 +114,18 @@ interface AppState {
   currentToolCards: ToolCard[];      // 当前 AI 回复的工具卡片数据
   currentToolLogs: ToolLog[];        // 当前工具执行记录（纯前端，不存库）
 
+  // 🆕 Schema v0.7: 仪表盘
+  priorityQueue: DashboardQueueItem[];
+  reflectTimeline: DashboardReflectItem[];
+  dashboardPhase: string;            // diverge | converge | sort | focus | reflect
+  dashboardLoopCount: number;
+  dashboardStepCount: number;
+  loadDashboardQueue: (sceneId: string) => Promise<void>;
+  loadDashboardReflect: (sceneId: string) => Promise<void>;
+  loadDashboardStatus: (sceneId: string) => Promise<void>;
+  mindMapOpen: boolean;
+  toggleMindMap: () => void;
+
   // ═══ 消息操作 ═══
   deleteMsg: (messageId: string) => Promise<void>;
   regenerateMsg: (messageId: string) => Promise<void>;
@@ -177,6 +191,15 @@ export const useStore = create<AppState>((set, get) => ({
   capacityWarning: null,
   currentToolCards: [],
   currentToolLogs: [],
+
+  // 🆕 Schema v0.7: 仪表盘初始值
+  priorityQueue: [],
+  reflectTimeline: [],
+  dashboardPhase: 'diverge',
+  dashboardLoopCount: 0,
+  dashboardStepCount: 0,
+  mindMapOpen: false,
+  toggleMindMap: () => set(s => ({ mindMapOpen: !s.mindMapOpen })),
 
   // ═══ AI 角色动画默认值 ═══
   agentStatus: 'idle' as AgentStatus,
@@ -298,6 +321,34 @@ export const useStore = create<AppState>((set, get) => ({
       await state.loadThinkingMap(state.currentScene.id);
     }
     return result;
+  },
+
+  // 🆕 Schema v0.7: 仪表盘数据加载
+  loadDashboardQueue: async (sceneId) => {
+    try {
+      const result = await getDashboardQueue(sceneId);
+      set({ priorityQueue: result.items || [] });
+    } catch (e) {
+      console.error('[store] loadDashboardQueue failed:', e);
+    }
+  },
+  loadDashboardReflect: async (sceneId) => {
+    try {
+      const result = await getDashboardReflect(sceneId);
+      set({ reflectTimeline: result.items || [] });
+    } catch (e) {
+      console.error('[store] loadDashboardReflect failed:', e);
+    }
+  },
+  loadDashboardStatus: async (sceneId) => {
+    try {
+      const status = await getDashboardStatus(sceneId);
+      if (status.current_task) {
+        set({ dashboardPhase: 'focus' });
+      }
+    } catch (e) {
+      console.error('[store] loadDashboardStatus failed:', e);
+    }
   },
   prioritizeThinkingMap: async () => {
     const state = get();
@@ -493,6 +544,33 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'thinking_map:diverged') {
           // 自动发散完成，刷新 Thinking Map
           get().loadThinkingMap(sceneId);
+        // 🆕 Schema v0.7: 仪表盘 SSE 事件
+        } else if (event.type === 'dashboard:converge') {
+          // 收敛完成，刷新 PV 和 TM
+          set({ dashboardPhase: 'sort' });
+          get().loadDashboardQueue(sceneId);
+          get().loadThinkingMap(sceneId);
+        } else if (event.type === 'dashboard:queue_update') {
+          set({
+            priorityQueue: event.items || [],
+            dashboardPhase: 'focus',
+          });
+        } else if (event.type === 'dashboard:reflect') {
+          // 新反馈记录，刷新反射时间线
+          const icon = event.tool_success ? '✅' : '🔴';
+          const newItem: DashboardReflectItem = {
+            id: Date.now().toString(),
+            type: event.tool_success ? 'success' : 'fail',
+            icon,
+            title: event.tool_success ? `完成: ${event.tool}` : `失败: ${event.tool}`,
+            detail: event.result_preview,
+            created_at: new Date().toISOString(),
+          };
+          set(s => ({
+            reflectTimeline: [...s.reflectTimeline, newItem].slice(-20),
+            dashboardLoopCount: s.dashboardLoopCount + 1,
+            dashboardStepCount: s.dashboardStepCount + 1,
+          }));
         } else if (event.type === 'error') {
           set(state => ({
             isGenerating: false,

@@ -1224,6 +1224,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             initial_messages=agent_messages,
             max_steps=15,
             dialog_engine=dialog_engine,
+            scene_id=scene_id,  # 🆕 Schema v0.7
         )
 
         model_name = "DeepSeek Flash"
@@ -1288,6 +1289,12 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     _log.error(f"[scene agent loop] {event['message']}")
                     yield sse_event("error", message=event["message"])
                     return
+                # 🆕 Schema v0.7: 仪表盘事件透传
+                elif etype == "dashboard:reflect":
+                    yield sse_event("dashboard:reflect",
+                                    tool=event.get("tool", ""),
+                                    tool_success=event.get("tool_success", False),
+                                    result_preview=event.get("result_preview", ""))
         except Exception as e:
             _log.error(f"[scene agent loop] 迭代异常: {e}")
             yield sse_event("error", message=f"AI 响应生成异常: {e}")
@@ -1418,6 +1425,20 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                     print(f"[diverge] auto-diverge created {new_count} nodes")
                                     yield sse_event("thinking_map:diverged",
                                                     node_count=new_count)
+
+                                    # Schema v0.7: 发散后自动收敛+排序
+                                    if new_count > 0:
+                                        try:
+                                            from agent_core.converge_engine import auto_converge_and_prioritize
+                                            pq_items = auto_converge_and_prioritize(db, scene_id, tmap)
+                                            if pq_items:
+                                                yield sse_event("dashboard:converge",
+                                                                merge_count=len([x for x in pq_items if x.get("status") != "pending"]),
+                                                                queue_count=len(pq_items))
+                                                yield sse_event("dashboard:queue_update",
+                                                                items=pq_items)
+                                        except Exception as ce:
+                                            print(f"[converge] auto-converge error: {ce}")
             except Exception as e:
                 print(f"[diverge] auto-diverge error: {e}")
 

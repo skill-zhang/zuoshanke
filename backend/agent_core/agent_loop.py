@@ -267,6 +267,7 @@ def run_agent_loop(
     system_prompt: Optional[str] = None,
     initial_messages: Optional[list[dict]] = None,
     dialog_engine=None,  # 🆕 DialogEngine 实例
+    scene_id: str = "",  # 🆕 Schema v0.7: 仪表盘场景 ID，提供时自动发射 reflect/pq_update 事件
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
@@ -438,6 +439,18 @@ def run_agent_loop(
                     "tool_call_id": tc.get("id", ""),
                     "content": tool_result_content,
                 })
+
+                # 🆕 Schema v0.7: 发射仪表盘 reflect/pq_update 事件
+                if scene_id:
+                    success = result.get("success", False)
+                    r_type = "tool_done" if success else "tool_error"
+                    yield {
+                        "type": "dashboard:reflect",
+                        "scene_id": scene_id,
+                        "tool": tool_name,
+                        "tool_success": success,
+                        "result_preview": str(result.get("result", ""))[:200] if success else str(result.get("error", ""))[:200],
+                    }
 
             except json.JSONDecodeError as e:
                 yield {
