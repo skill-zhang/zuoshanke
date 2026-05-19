@@ -43,6 +43,8 @@ if __name__ == "__main__":
 
     # 预热 FTS5 全文索引（后台线程，不阻塞启动）
     try:
+        import sys
+        sys.path.insert(0, os.path.expanduser("~/zuoshanke"))
         from tools.session_search import _ensure_fts_table
         import threading
         threading.Thread(target=_ensure_fts_table, daemon=True).start()

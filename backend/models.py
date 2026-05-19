@@ -378,3 +378,22 @@ class GatewaySession(Base):
     __table_args__ = (
         UniqueConstraint("platform", "platform_user_id", name="uq_platform_user"),
     )
+
+
+# ═══ 对话阶段引擎 — DialogState ═══
+class DialogState(Base):
+    """对话阶段 — 追踪场景对话的当前进度。
+
+    每个场景最多一条记录。当 LLM 判断问题需要进入引导模式时创建。
+    阶段流: EXPLORE → FOCUS → FINALIZE → EXECUTE
+    """
+    __tablename__ = "dialog_states"
+
+    scene_id = Column(String, ForeignKey("scenes.id"), primary_key=True)
+    phase = Column(String, nullable=False, default="idle")
+    # phase: idle | explore | focus | finalize | execute
+    summary = Column(Text, default="")         # 当前阶段讨论摘要
+    decisions = Column(JSON, default=list)     # [string] 已确定的决策列表
+    context = Column(JSON, default=dict)       # {key: value} 梳理出的关键上下文
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

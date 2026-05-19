@@ -259,22 +259,26 @@ def call_llm_with_tools(
 
 
 def run_agent_loop(
-    task: str,
+    task: str = "",
     memory_context: str = "",
     tools: Optional[list[dict]] = None,
     model: str = "flash",
     max_steps: int = 25,
     system_prompt: Optional[str] = None,
+    initial_messages: Optional[list[dict]] = None,
+    dialog_engine=None,  # 🆕 DialogEngine 实例
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
     Args:
-        task: 用户任务描述
+        task: 用户任务描述（有 initial_messages 时忽略）
         memory_context: 记忆/上下文信息
         tools: 工具定义列表（None 则自动构建）
         model: 模型名
         max_steps: 最大循环步数（防止死循环）
-        system_prompt: 自定义系统提示词（None 则用默认的 build_agent_system_prompt）
+        system_prompt: 自定义系统提示词（None 则用默认的 build_agent_system_prompt，有 initial_messages 时忽略）
+        initial_messages: 预构建的初始消息列表（替代 system_prompt + task 构造）。包含 system + 历史 + 当前 user msg。
+        dialog_engine: DialogEngine 实例。传入后自动注入阶段提示到 system prompt，并在回复中检测阶段转移。
 
     Yields:
         dict: 事件对象，格式：
@@ -296,7 +300,9 @@ def run_agent_loop(
         return
 
     # 2. 构建消息
-    if system_prompt:
+    if initial_messages is not None:
+        messages = list(initial_messages)
+    elif system_prompt:
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": task},
@@ -307,6 +313,14 @@ def run_agent_loop(
             {"role": "system", "content": system_prompt_default},
             {"role": "user", "content": task},
         ]
+
+    # 🆕 Dialog Engine: 注入阶段提示到 system prompt
+    if dialog_engine and messages and messages[0]["role"] == "system":
+        sp = messages[0]["content"]
+        sp += "\n\n" + dialog_engine.get_phase_prompt()
+        if dialog_engine.is_active:
+            sp += "\n" + dialog_engine.get_transition_instruction()
+        messages[0]["content"] = sp
 
     # 工具名列表（用于日志）
     tool_names = [t["function"]["name"] for t in tools]
@@ -337,6 +351,18 @@ def run_agent_loop(
         if not tool_calls:
             # LLM 返回文本 → 完成
             content = msg.get("content", "")
+
+            # 🆕 Dialog Engine: 剥离 [PHASE:] 标记 + 检测阶段转移
+            phase_transited = False
+            if dialog_engine and content:
+                # 先检测转移（从未剥离的原始文本中找 [PHASE:]）
+                target = dialog_engine.detect_transition(content)
+                # 再剥离标记
+                content = dialog_engine.strip_transition_marker(content)
+                if target:
+                    dialog_engine.transition_to(target)
+                    phase_transited = True
+
             if content:
                 # 流式输出最终回复
                 yield {"type": "thinking", "text": content}
@@ -347,6 +373,7 @@ def run_agent_loop(
                 "summary": content or "(无回复)",
                 "steps": step + 1,
                 "finish_reason": finish_reason,
+                "phase_transited": phase_transited,  # 🆕
             }
             return
 

@@ -1206,28 +1206,24 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # ── Agent Loop：LLM 自主决策调工具（替代预执行 + 规则路由） ──
         from agent_core.agent_loop import run_agent_loop
-        from agent_core.context_builder import SCENE_SYSTEM_PROMPT as _FALLBACK_SCENE_SP
+        from agent_core.context_builder import build_agent_context
 
-        # 读 System Prompt：DB settings["scene"] → context_builder.SCENE_SYSTEM_PROMPT
-        scene_sp = _FALLBACK_SCENE_SP
-        try:
-            from models import Setting
-            _setting = db.query(Setting).first()
-            if _setting and _setting.system_prompts:
-                _db_sp = _setting.system_prompts.get("scene")
-                if _db_sp:
-                    scene_sp = _db_sp
-        except Exception:
-            pass
+        # 用 build_agent_context 构建完整分层的初始消息（DB prompt + 记忆块 + skill + 工具列表）
+        agent_messages = build_agent_context(
+            user_content=data.content,
+            history_messages=history_messages,
+            user_context=scene.user_context,
+            db=db,
+        )
 
-        scene_agent_prompt = scene_sp
-        if user_ctx:
-            scene_agent_prompt += f"\n\n=== 用户设定的背景 ===\n{user_ctx}\n==================="
+        # 🆕 Dialog Engine: 初始化/恢复阶段状态
+        from agent_core.dialog_engine import DialogEngine
+        dialog_engine = DialogEngine(db, scene_id)
 
         agent_stream = run_agent_loop(
-            task=data.content,
-            system_prompt=scene_agent_prompt,
+            initial_messages=agent_messages,
             max_steps=15,
+            dialog_engine=dialog_engine,
         )
 
         model_name = "DeepSeek Flash"
