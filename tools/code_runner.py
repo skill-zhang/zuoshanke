@@ -246,6 +246,18 @@ def run_code(
             "timed_out": False,
         }
 
+    # 长代码必须走 code_b64（避免 JSON 转义问题）
+    # 详见 code_runner.py 的 code_b64 参数说明
+    if len(code) > 3000 and not code_b64:
+        return {
+            "stdout": "",
+            "stderr": "",
+            "exit_code": -1,
+            "success": False,
+            "error": f"代码过长({len(code)}字符)，JSON转义可能出错。请使用 code_b64(base64编码)参数替代 code 参数。",
+            "timed_out": False,
+        }
+
     try:
         cmd = _build_cmd(code, language)
     except ValueError as e:

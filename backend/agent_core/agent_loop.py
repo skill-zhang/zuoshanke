@@ -35,7 +35,6 @@ _EXCLUDED_TOOLS = {
     "extract_text_from_pdf", # 被 read_file 替代
     "todo_update",           # 需要 task_id，LLM 难准确给
     "todo_delete",           # 同上
-    "write_file",            # 临时排除——大字符串JSON参数会断，LLM请用 run_code Python写文件
 }
 
 # ── 参数类型映射 ──
@@ -397,20 +396,7 @@ def run_agent_loop(
 
                 # 解析参数
                 if isinstance(raw_args, str):
-                    try:
-                        args = json.loads(raw_args)
-                    except json.JSONDecodeError as e:
-                        # 日志记录原始参数，用于诊断
-                        import traceback
-                        dbg_path = os.path.expanduser("~/zuoshanke/capability-demo/agent_loop_debug.log")
-                        with open(dbg_path, 'a') as df:
-                            df.write(f"\n=== JSON DECODE ERROR ===\n")
-                            df.write(f"tool={tool_name}\n")
-                            df.write(f"raw_args_len={len(raw_args)}\n")
-                            df.write(f"error={e}\n")
-                            df.write(f"raw_args_preview={repr(raw_args[:500])}\n")
-                            df.write(f"raw_args_end={repr(raw_args[-200:])}\n")
-                        raise
+                    args = json.loads(raw_args)
                 else:
                     args = raw_args
 

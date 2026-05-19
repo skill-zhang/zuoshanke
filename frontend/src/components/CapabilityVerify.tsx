@@ -29,15 +29,50 @@ const DEFAULT_MILESTONES: Milestone[] = [
     steps: 14,
     llmModel: 'deepseek-v4-flash',
   },
+  {
+    id: 'agent-village-adventure',
+    title: '🏘️ [Agent自造] 小村庄大冒险',
+    description: 'Agent Loop 自主构建的像素风RPG游戏（484行/22KB单文件HTML）。包含50×50地图(山脉/河流/桥/村庄)、3个NPC(对话/给剑)、5种怪物(回合制战斗/掉落)、救援系统(打怪→入队)、背包/装备/升级、胜利条件。全程LLM自主编码，25步分批写入18个文件片段后拼接完成。',
+    icon: '🤖',
+    date: '2026-05-19',
+    status: 'verified',
+    artifactPath: '/adventure-game-agent.html',
+    artifactType: 'html',
+    steps: 25,
+    llmModel: 'deepseek-v4-flash',
+  },
+  {
+    id: 'hand-village-adventure',
+    title: '🎮 [手工] 小村庄大冒险',
+    description: '手动编写(非Agent Loop)的像素风RPG游戏（1473行/43KB单文件HTML）。相同规格：50×50地图、3个NPC、6种怪物、救援系统、回合制战斗、物品掉落、自动装备、背包(数字键用药)、村庄休息回血、全屏放大、胜利条件。功能更丰富但无Agent自主构建过程。对比Agent自造版本展示AI vs 手工的差异。',
+    icon: '✍️',
+    date: '2026-05-19',
+    status: 'verified',
+    artifactPath: '/village-adventure.html',
+    artifactType: 'html',
+    steps: 1,
+    llmModel: 'deepseek-v4-flash',
+  },
 ];
 
 export function CapabilityVerify() {
   const [milestones, setMilestones] = useState<Milestone[]>(DEFAULT_MILESTONES);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [artifactContent, setArtifactContent] = useState<string | null>(null);
+  const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const selected = milestones.find(m => m.id === selectedId);
+  const fullscreenMilestone = milestones.find(m => m.id === fullscreenId);
+
+  // ── Escape 键关闭全屏 ──
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fullscreenId) setFullscreenId(null);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [fullscreenId]);
 
   // ── 加载产物 ──
   const loadArtifact = async (m: Milestone) => {
@@ -64,7 +99,7 @@ export function CapabilityVerify() {
     alert(`🔄 重跑验证：${m.title}\n（Agent Loop 引擎还没打通前端调用，先展示已有的成果）`);
   };
 
-  return (
+  return (<>
     <div className="capability-verify" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* ═══ 顶部说明 ═══ */}
       <div style={{ padding: '16px 24px', flexShrink: 0 }}>
@@ -162,6 +197,12 @@ export function CapabilityVerify() {
                   style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #30363d', background: '#21262d', color: '#e6edf3', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                   🔄 重新验证
                 </button>
+                {selected.artifactType === 'html' && selected.artifactPath && (
+                  <button className="btn" onClick={() => setFullscreenId(selected.id)}
+                    style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #00d4ff44', background: '#00d4ff11', color: '#00d4ff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    ⛶ 全屏游玩
+                  </button>
+                )}
               </div>
 
               {/* 产物展示 */}
@@ -176,11 +217,12 @@ export function CapabilityVerify() {
                     {/* HTML 产物用 iframe */}
                     {selected.artifactType === 'html' && selected.artifactPath && (
                       <iframe
+                        key={selectedId}
                         ref={iframeRef}
                         src={selected.artifactPath}
                         style={{ width: '100%', height: 500, border: 'none', background: '#fff' }}
                         title={selected.title}
-                        sandbox="allow-scripts allow-same-origin"
+                        sandbox="allow-scripts"
                       />
                     )}
 
@@ -223,6 +265,42 @@ export function CapabilityVerify() {
           )}
         </div>
       </div>
+    </div>
+    {/* 全屏弹层 */}
+    {fullscreenMilestone && fullscreenMilestone.artifactPath && (
+      <FullscreenOverlay key={fullscreenId} milestone={fullscreenMilestone} onClose={() => setFullscreenId(null)} />
+    )}
+  </>);
+
+  // ═══ 全屏弹层 ═══
+}
+
+function FullscreenOverlay({ milestone, onClose }: { milestone: Milestone; onClose: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: '#0d1117', overflow: 'hidden',
+      display: 'flex', justifyContent: 'center', alignItems: 'center',
+    }}>
+      <button onClick={onClose}
+        style={{
+          position: 'absolute', top: 16, right: 16, zIndex: 10000,
+          padding: '10px 20px', borderRadius: 8,
+          border: '1px solid #444', background: 'rgba(0,0,0,0.7)', color: '#fff',
+          cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+        ✕ 关闭 (Esc)
+      </button>
+      <iframe
+        src={milestone.artifactPath}
+        style={{
+          width: '100vw', height: '100vh',
+          border: 'none', display: 'block', overflow: 'hidden',
+        }}
+        title={milestone.title}
+        sandbox="allow-scripts"
+        scrolling="no"
+      />
     </div>
   );
 }

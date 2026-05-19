@@ -1,0 +1,11 @@
+
+=== JSON DECODE ERROR ===
+tool=run_code
+raw_args_len=10492
+error=Unterminated string starting at: line 1 column 32 (char 31)
+raw_args_preview='{"language": "python", "code": "# 生成游戏HTML - 第一部分：HTML结构和CSS\\nhtml_parts = []\\n\\nhtml_parts.append(\'\'\'<!DOCTYPE html>\\n<html lang=\\"zh-CN\\">\\n<head>\\n<meta charset=\\"UTF-8\\">\\n<meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\">\\n<title>小村庄大冒险</title>\\n<style>\\n*{margin:0;padding:0;box-sizing:border-box}\\nbody{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:\'Courier New\',monospace;overflow:hidden}\\n#game-wrapper{backgro'
+raw_args_end="    }\\n  }\\n}\\n\\nfunction talkToNPC(){\\n  if(battleState||gameOver)return;\\n  // 检查NPC\\n  for(let n of npcs){\\n    if(Math.abs(player.x-n.x)<=1&&Math.abs(player.y-n.y)<=1){\\n      if(n.id==='chief'&&!"
+
+=== STILL FAILS AFTER FIX ===
+tool=run_code
+fixed_preview='{"language": "python", "code": "import base64, os\\n\\n# 构建完整的HTML游戏文件\\nhtml_parts = []\\n\\nhtml_parts.append(\'\'\'<!DOCTYPE html>\\n<html lang=\\"zh-CN\\">\\n<head>\\n<meta charset=\\"UTF-8\\">\\n<meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\">\\n<title>小村庄大冒险</title>\\n<style>\\n*{margin:0;padding:0;box-sizing:border-box}\\nbody{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:\'Courier New\',monospace;overflow:hidden}\\n#game-contain'

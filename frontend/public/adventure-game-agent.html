@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>像素冒险 - 勇者传说</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:"Courier New",monospace;overflow:hidden}
+#game-wrapper{position:relative;background:#2d2d44;padding:20px;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,.5)}
+#game-title{color:#ffd700;text-align:center;font-size:20px;margin-bottom:10px;text-shadow:0 0 10px rgba(255,215,0,.3)}
+#game-container{position:relative;display:flex;gap:12px}
+#canvas-wrap{position:relative;border:3px solid #4a4a6a;border-radius:4px;cursor:pointer}
+#gameCanvas{display:block;background:#3a7d3a}
+#overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:100;justify-content:center;align-items:center;cursor:zoom-out}
+#overlay canvas{border:2px solid #ffd700;border-radius:4px;max-width:95vw;max-height:95vh;image-rendering:pixelated}
+#ui-panel{width:220px;background:#2a2a3e;border:2px solid #4a4a6a;border-radius:4px;padding:12px;color:#ddd;font-size:13px;line-height:1.6}
+#ui-panel h3{color:#ffd700;font-size:14px;border-bottom:1px solid #4a4a6a;padding-bottom:4px;margin-bottom:8px}
+.stat-row{display:flex;justify-content:space-between;padding:2px 0}
+.stat-label{color:#aaa}.stat-value{color:#fff;font-weight:bold}
+.hp-bar{height:8px;background:#333;border-radius:4px;margin:4px 0 8px;overflow:hidden}
+.hp-fill{height:100%;background:linear-gradient(90deg,#e74c3c,#2ecc71);border-radius:4px;transition:width .3s}
+#message-box{background:#1a1a2e;border:1px solid #4a4a6a;border-radius:4px;padding:8px;margin-top:8px;min-height:50px;font-size:12px;color:#aaf;overflow-y:auto;max-height:80px}
+#inventory-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#2a2a3e;border:3px solid #ffd700;border-radius:8px;padding:20px;z-index:50;min-width:300px;color:#ddd}
+#inventory-panel h3{color:#ffd700;text-align:center;margin-bottom:12px}
+#inv-list{max-height:200px;overflow-y:auto}
+.inv-item{padding:4px 8px;border-bottom:1px solid #444;display:flex;justify-content:space-between}
+#close-inv{display:block;margin:10px auto 0;padding:6px 20px;background:#ffd700;color:#1a1a2e;border:none;border-radius:4px;cursor:pointer;font-weight:bold}
+#victory-screen{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:80;justify-content:center;align-items:center;flex-direction:column;color:#ffd700}
+#victory-screen h1{font-size:36px;text-shadow:0 0 20px rgba(255,215,0,.5)}
+#victory-screen p{color:#ddd;margin:12px 0;font-size:16px}
+#victory-screen button{padding:12px 30px;font-size:18px;background:#ffd700;color:#1a1a2e;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
+#controls-hint{color:#666;font-size:11px;text-align:center;margin-top:6px}
+.key{display:inline-block;background:#444;padding:1px 6px;border-radius:3px;color:#ddd;font-size:10px}
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+<div id="game-title">⚔ 勇者传说 ⚔</div>
+<div id="game-container">
+<div id="canvas-wrap">
+<canvas id="gameCanvas" width="500" height="500"></canvas>
+<div id="inventory-panel">
+<h3>🎒 背包</h3>
+<div id="inv-list"></div>
+<button id="close-inv">关闭</button>
+</div>
+<div id="victory-screen">
+<h1>🎉 胜利！</h1>
+<p id="victory-msg">你拯救了所有人！</p>
+<button onclick="resetGame()">🔄 重新开始</button>
+</div>
+</div>
+<div id="ui-panel">
+<h3>👤 状态</h3>
+<div class="stat-row"><span class="stat-label">❤ HP</span><span class="stat-value" id="stat-hp">100/100</span></div>
+<div class="hp-bar"><div class="hp-fill" id="hp-fill" style="width:100%"></div></div>
+<div class="stat-row"><span class="stat-label">⚔ ATK</span><span class="stat-value" id="stat-atk">10</span></div>
+<div class="stat-row"><span class="stat-label">🛡 DEF</span><span class="stat-value" id="stat-def">5</span></div>
+<div class="stat-row"><span class="stat-label">👥 队伍</span><span class="stat-value" id="stat-party">0</span></div>
+<div class="stat-row"><span class="stat-label">🗡 装备</span><span class="stat-value" id="stat-weapon">无</span></div>
+<div class="stat-row"><span class="stat-label">🛡 防具</span><span class="stat-value" id="stat-armor">无</span></div>
+<div class="stat-row"><span class="stat-label">💊 药水</span><span class="stat-value" id="stat-potions">0</span></div>
+<div id="message-box">按方向键移动，空格键交互</div>
+</div>
+</div>
+<div id="controls-hint">
+<span class="key">↑↓←→</span> 移动 <span class="key">Space</span> 交互/对话
+<span class="key">I</span> 背包 <span class="key">R</span> 休息(回血)
+</div>
+</div>
+<div id="overlay"><canvas id="overlayCanvas"></canvas></div>
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const overlay=document.getElementById('overlay');
+const overlayCanvas=document.getElementById('overlayCanvas');
+const octx=overlayCanvas.getContext('2d');
+const GS=10, COLS=50, ROWS=50;
+const TILE={GRASS:0,WATER:1,MOUNTAIN:2,TREE:3,STONE:4,FLOWER:5,BRIDGE:6,HOUSE:7,ROAD:8};
+let map=[];
+let player={x:5,y:42,dir:0,frame:0};
+let gameState='playing';
+let messages=[];
+let inventory=[];
+let potions=0;
+let weapon=null, armor=null;
+let party=[];
+let rescued=0;
+let totalRescuable=5;
+let monstersKilled=0;
+let totalMonsters=12;
+let turnInProgress=false;
+const playerStats={hp:100,maxHp:100,atk:10,def:5};
+const npcs=[
+{id:'elder',x:8,y:44,name:'村长',color:'#d4a574',msg:'年轻人，这把木剑给你防身。村外有怪物抓了人，快去救他们！',giveItem:'wooden_sword',talked:false},
+{id:'uncle',x:12,y:43,name:'大叔',color:'#8b7355',msg:'小心！村外东边有史莱姆，北边有幽灵，非常危险！',talked:false},
+{id:'girl',x:6,y:46,name:'小姑娘',color:'#ffb6c1',msg:'呜呜…我看到了可怕的怪物抓走了好多人！',talked:false}
+];
+const monsters=[
+{id:'slime',name:'史莱姆',color:'#32cd32',hp:30,atk:6,def:2,exp:10,drop:{type:'potion',chance:0.3}},
+{id:'fairy',name:'小妖精',color:'#ff69b4',hp:25,atk:8,def:1,exp:12,drop:{type:'potion',chance:0.25}},
+{id:'ghost',name:'幽灵',color:'#dda0dd',hp:35,atk:10,def:3,exp:15,drop:{type:'ring_def',chance:0.2}},
+{id:'wolf',name:'野狼',color:'#a0522d',hp:40,atk:12,def:4,exp:18,drop:{type:'potion',chance:0.35}},
+{id:'spider',name:'蜘蛛',color:'#8b0000',hp:45,atk:14,def:5,exp:20,drop:{type:'ring_atk',chance:0.2}}
+];
+const rescuees=[
+{id:'r1',x:20,y:30,name:'旅人甲',msg:'救命！有史莱姆！',monster:'slime',saved:false,atkBonus:2,defBonus:1},
+{id:'r2',x:35,y:20,name:'商人乙',msg:'帮帮我，小妖精追着我！',monster:'fairy',saved:false,atkBonus:1,defBonus:2},
+{id:'r3',x:40,y:10,name:'猎人丙',msg:'幽灵出没，我不敢动！',monster:'ghost',saved:false,atkBonus:3,defBonus:1},
+{id:'r4',x:15,y:15,name:'信使丁',msg:'野狼围住我了！',monster:'wolf',saved:false,atkBonus:2,defBonus:2},
+{id:'r5',x:30,y:5,name:'学者戊',msg:'蜘蛛巢穴附近…救我！',monster:'spider',saved:false,atkBonus:2,defBonus:3}
+];
+let monsterInstances=[];
+let itemsOnGround=[];
+function initMap(){
+for(let y=0;y<ROWS;y++){map[y]=[];for(let x=0;x<COLS;x++){map[y][x]=TILE.GRASS;}}
+// Mountains top-right
+for(let y=0;y<15;y++)for(let x=30;x<50;x++){if(Math.random()<0.7||(x>35&&y<10))map[y][x]=TILE.MOUNTAIN;}
+// River
+for(let y=0;y<ROWS;y++){let rx=15+Math.floor(Math.sin(y*0.15)*5);map[y][rx]=TILE.WATER;map[y][rx+1]=TILE.WATER;}
+// Bridges
+map[20][15]=TILE.BRIDGE;map[20][16]=TILE.BRIDGE;
+map[35][15]=TILE.BRIDGE;map[35][16]=TILE.BRIDGE;
+// Trees
+for(let i=0;i<60;i++){let tx=5+Math.floor(Math.random()*40),ty=5+Math.floor(Math.random()*40);
+if(map[ty][tx]===TILE.GRASS&&!(tx>=2&&tx<=15&&ty>=40&&ty<=48))map[ty][tx]=TILE.TREE;}
+// Stones
+for(let i=0;i<30;i++){let sx=5+Math.floor(Math.random()*40),sy=5+Math.floor(Math.random()*40);
+if(map[sy][sx]===TILE.GRASS)map[sy][sx]=TILE.STONE;}
+// Flowers
+for(let i=0;i<40;i++){let fx=5+Math.floor(Math.random()*40),fy=5+Math.floor(Math.random()*40);
+if(map[fy][fx]===TILE.GRASS)map[fy][fx]=TILE.FLOWER;}
+// Village
+for(let y=40;y<48;y++)for(let x=2;x<15;x++){if(map[y][x]===TILE.GRASS)map[y][x]=TILE.ROAD;}
+map[44][5]=TILE.HOUSE;map[44][9]=TILE.HOUSE;map[46][7]=TILE.HOUSE;
+// Roads from village
+for(let y=35;y<42;y++){map[y][8]=TILE.ROAD;map[y][9]=TILE.ROAD;}
+}
+function spawnMonsters(){
+monsterInstances=[];
+for(let i=0;i<totalMonsters;i++){
+let m=monsters[i%monsters.length];
+let mx,my,attempts=0;
+do{mx=10+Math.floor(Math.random()*35);my=5+Math.floor(Math.random()*35);attempts++;}
+while((map[my][mx]!==TILE.GRASS||(Math.abs(mx-player.x)<3&&Math.abs(my-player.y)<3))&&attempts<50);
+monsterInstances.push({...m,x:mx,y:my,hp:m.hp,maxHp:m.hp,id:i});
+}}
+function spawnItems(){
+itemsOnGround=[];
+const itemPositions=[[12,38],[25,25],[38,15],[10,20],[42,35],[28,8],[18,40],[35,30]];
+const itemTypes=[{name:'HP药水',type:'potion',icon:'💊'},{name:'铁剑',type:'weapon',atk:5,icon:'🗡'},{name:'皮甲',type:'armor',def:3,icon:'🛡'},{name:'HP药水',type:'potion',icon:'💊'},{name:'钢剑',type:'weapon',atk:8,icon:'🗡'},{name:'铁甲',type:'armor',def:5,icon:'🛡'},{name:'HP药水',type:'potion',icon:'💊'},{name:'力量戒指',type:'ring_atk',atk:3,icon:'💍'}];
+for(let i=0;i<itemPositions.length;i++){
+let pos=itemPositions[i];
+if(map[pos[1]][pos[0]]===TILE.GRASS||map[pos[1]][pos[0]]===TILE.ROAD){
+itemsOnGround.push({...itemTypes[i],x:pos[0],y:pos[1],collected:false});
+}}}
+function drawMap(){
+for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+let t=map[y][x],px=x*GS,py=y*GS;
+if(t===TILE.GRASS){ctx.fillStyle='#3a7d3a';ctx.fillRect(px,py,GS,GS);
+if((x+y)%7===0){ctx.fillStyle='#3e843e';ctx.fillRect(px+3,py+3,2,2);}}
+else if(t===TILE.WATER){ctx.fillStyle='#2a6ba0';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#3a7bc0';ctx.fillRect(px+2,py+2,3,3);}
+else if(t===TILE.MOUNTAIN){ctx.fillStyle='#6b5b4b';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#7a6a5a';ctx.fillRect(px+2,py+2,6,4);ctx.fillStyle='#fff';ctx.fillRect(px+4,py+1,2,2);}
+else if(t===TILE.TREE){ctx.fillStyle='#3a7d3a';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#2d5a2d';ctx.beginPath();ctx.arc(px+5,py+4,5,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#5a3a1a';ctx.fillRect(px+4,py+6,2,4);}
+else if(t===TILE.STONE){ctx.fillStyle='#3a7d3a';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#888';ctx.fillRect(px+1,py+3,8,5);ctx.fillStyle='#999';ctx.fillRect(px+2,py+4,3,3);}
+else if(t===TILE.FLOWER){ctx.fillStyle='#3a7d3a';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#ff6b9d';ctx.fillRect(px+3,py+3,4,4);ctx.fillStyle='#ffeb3b';ctx.fillRect(px+4,py+4,2,2);}
+else if(t===TILE.BRIDGE){ctx.fillStyle='#2a6ba0';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#8b6b3a';ctx.fillRect(px,py+3,GS,4);ctx.fillStyle='#a07b4a';ctx.fillRect(px+1,py+4,8,2);}
+else if(t===TILE.HOUSE){ctx.fillStyle='#3a7d3a';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#c4956a';ctx.fillRect(px,py+3,GS,7);ctx.fillStyle='#c04040';ctx.beginPath();
+ctx.moveTo(px,py+3);ctx.lineTo(px+5,py-1);ctx.lineTo(px+10,py+3);ctx.fill();
+ctx.fillStyle='#5a3a1a';ctx.fillRect(px+4,py+6,2,4);}
+else if(t===TILE.ROAD){ctx.fillStyle='#b8956a';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#c8a57a';ctx.fillRect(px+2,py+2,3,3);}
+}}
+function drawEntities(){
+// NPCs
+npcs.forEach(n=>{
+let px=n.x*GS,py=n.y*GS;
+ctx.fillStyle=n.color;ctx.fillRect(px+2,py+2,6,8);
+ctx.fillStyle='#333';ctx.fillRect(px+3,py+3,2,2);ctx.fillRect(px+5,py+3,2,2);
+ctx.fillStyle='#fff';ctx.fillRect(px+3,py+1,4,2);
+if(!n.talked){ctx.fillStyle='#ff0';ctx.fillRect(px+7,py-2,3,3);}
+});
+// Rescuees
+rescuees.forEach(r=>{
+if(r.saved)return;
+let px=r.x*GS,py=r.y*GS;
+ctx.fillStyle='#ff4444';ctx.fillRect(px+1,py+1,8,8);
+ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.fillText('!',px+3,py+7);
+ctx.fillStyle='#ff0';ctx.fillRect(px+8,py-2,3,3);
+});
+// Items
+itemsOnGround.forEach(it=>{
+if(it.collected)return;
+let px=it.x*GS,py=it.y*GS;
+ctx.fillStyle='#ffd700';ctx.fillRect(px+2,py+2,6,6);
+ctx.fillStyle='#fff';ctx.font='6px monospace';ctx.fillText(it.icon,px+2,py+7);
+});
+// Monsters
+monsterInstances.forEach(m=>{
+if(m.hp<=0)return;
+let px=m.x*GS,py=m.y*GS;
+ctx.fillStyle=m.color;ctx.fillRect(px+1,py+2,8,7);
+ctx.fillStyle='#000';ctx.fillRect(px+2,py+3,2,2);ctx.fillRect(px+6,py+3,2,2);
+ctx.fillStyle='#f00';ctx.fillRect(px+3,py+5,4,2);
+});
+// Player
+let px=player.x*GS,py=player.y*GS;
+ctx.fillStyle='#3a7d3a';ctx.fillRect(px,py,GS,GS);
+ctx.fillStyle='#d4a574';ctx.fillRect(px+2,py+1,6,3);
+ctx.fillStyle='#4488cc';ctx.fillRect(px+2,py+4,6,4);
+ctx.fillStyle='#8b5a2b';ctx.fillRect(px+2,py+8,6,2);
+ctx.fillStyle='#333';ctx.fillRect(px+3,py+2,2,2);ctx.fillRect(px+5,py+2,2,2);
+ctx.fillStyle='#fff';ctx.fillRect(px+3,py,4,2);
+}
+function updateUI(){
+let hpPct=Math.max(0,playerStats.hp/playerStats.maxHp*100);
+document.getElementById('hp-fill').style.width=hpPct+'%';
+document.getElementById('stat-hp').textContent=playerStats.hp+'/'+playerStats.maxHp;
+let totalAtk=playerStats.atk+(weapon?weapon.atk:0)+(party.reduce((s,p)=>s+(p.atkBonus||0),0));
+let totalDef=playerStats.def+(armor?armor.def:0)+(party.reduce((s,p)=>s+(p.defBonus||0),0));
+document.getElementById('stat-atk').textContent=totalAtk;
+document.getElementById('stat-def').textContent=totalDef;
+document.getElementById('stat-party').textContent=party.length;
+document.getElementById('stat-weapon').textContent=weapon?weapon.name:'无';
+document.getElementById('stat-armor').textContent=armor?armor.name:'无';
+document.getElementById('stat-potions').textContent=potions;
+}
+function addMsg(msg){
+messages.push(msg);
+let mb=document.getElementById('message-box');
+mb.innerHTML+=msg+'<br>';
+mb.scrollTop=mb.scrollHeight;
+if(messages.length>20)messages.shift();
+}
+function movePlayer(dx,dy){
+if(gameState!=='playing')return;
+let nx=player.x+dx,ny=player.y+dy;
+if(nx<0||nx>=COLS||ny<0||ny>=ROWS)return;
+let t=map[ny][nx];
+if(t===TILE.WATER||t===TILE.MOUNTAIN)return;
+if(t===TILE.HOUSE)return;
+player.x=nx;player.y=ny;
+player.dir=dx;
+// Check item pickup
+itemsOnGround.forEach(it=>{
+if(!it.collected&&it.x===nx&&it.y===ny){
+it.collected=true;
+if(it.type==='potion'){potions++;addMsg('拾取了 '+it.name);}
+else if(it.type==='weapon'){weapon=it;addMsg('装备了 '+it.name+' (ATK+'+it.atk+')');}
+else if(it.type==='armor'){armor=it;addMsg('装备了 '+it.name+' (DEF+'+it.def+')');}
+else if(it.type==='ring_atk'){playerStats.atk+=it.atk;addMsg('获得 '+it.name+' (ATK+'+it.atk+')');}
+else if(it.type==='ring_def'){playerStats.def+=it.def;addMsg('获得 '+it.name+' (DEF+'+it.def+')');}
+updateUI();
+}});
+// Check monster encounter
+monsterInstances.forEach(m=>{
+if(m.hp<=0)return;
+if(Math.abs(m.x-nx)<=1&&Math.abs(m.y-ny)<=1){
+startBattle(m);return;
+}});
+// Check NPC interaction
+npcs.forEach(n=>{
+if(n.x===nx&&n.y===ny){
+talkToNpc(n);return;
+}});
+// Check rescuee
+rescuees.forEach(r=>{
+if(r.saved)return;
+if(r.x===nx&&r.y===ny){
+talkToRescuee(r);return;
+}});
+render();
+updateUI();
+}
+function talkToNpc(n){
+if(n.id==='elder'&&!n.talked){
+n.talked=true;
+if(!weapon||weapon.name!=='木剑'){
+weapon={name:'木剑',type:'weapon',atk:3,icon:'🗡'};
+addMsg('村长给了你一把木剑！(ATK+3)');
+updateUI();
+}
+addMsg('村长: '+n.msg);
+}else{
+addMsg(n.name+': '+n.msg);
+n.talked=true;
+}
+}
+function talkToRescuee(r){
+if(r.saved)return;
+addMsg(r.name+': '+r.msg);
+addMsg('💬 需要击败附近的'+r.monster+'才能救他！');
+// Find monster of this type near rescuee
+let target=monsterInstances.find(m=>m.name===r.monster&&m.hp>0&&Math.abs(m.x-r.x)<10&&Math.abs(m.y-r.y)<10);
+if(target){startBattle(target,r);}
+else{addMsg('附近没有发现'+r.monster+'…');}
+}
+function startBattle(monster,rescuee){
+if(turnInProgress)return;
+turnInProgress=true;
+gameState='battle';
+let monsterHp=monster.hp;
+let monsterMaxHp=monster.maxHp;
+let playerAtk=playerStats.atk+(weapon?weapon.atk:0)+(party.reduce((s,p)=>s+(p.atkBonus||0),0));
+let playerDef=playerStats.def+(armor?armor.def:0)+(party.reduce((s,p)=>s+(p.defBonus||0),0));
+addMsg('⚔ 遭遇 '+monster.name+'！');
+function battleTurn(){
+if(gameState!=='battle')return;
+// Player attack
+let dmg=Math.max(1,playerAtk-monster.def+Math.floor(Math.random()*5));
+monsterHp-=dmg;
+addMsg('⚔ 造成 '+dmg+' 点伤害！');
+if(monsterHp<=0){
+monster.hp=0;
+monsterHp=0;
+addMsg('🎉 击败了 '+monster.name+'！');
+monstersKilled++;
+// Drop
+if(Math.random()<monster.drop.chance){
+if(monster.drop.type==='potion'){potions++;addMsg('💊 掉落药水！');}
+else if(monster.drop.type==='ring_atk'){playerStats.atk+=2;addMsg('💍 获得力量戒指(ATK+2)');}
+else if(monster.drop.type==='ring_def'){playerStats.def+=2;addMsg('💍 获得守护戒指(DEF+2)');}
+updateUI();
+}
+// Rescue
+if(rescuee&&!rescuee.saved){
+rescuee.saved=true;
+rescued++;
+party.push(rescuee);
+addMsg('🎉 救出了 '+rescuee.name+'！队伍+1');
+}
+gameState='playing';
+turnInProgress=false;
+checkVictory();
+render();
+updateUI();
+return;
+}
+// Monster attack
+let mdmg=Math.max(1,monster.atk-playerDef+Math.floor(Math.random()*3));
+playerStats.hp-=mdmg;
+addMsg('💥 '+monster.name+'造成 '+mdmg+' 点伤害！');
+if(playerStats.hp<=0){
+playerStats.hp=0;
+addMsg('💀 你被击败了…按R键休息恢复');
+gameState='playing';
+turnInProgress=false;
+render();
+updateUI();
+return;
+}
+updateUI();
+setTimeout(battleTurn,800);
+}
+setTimeout(battleTurn,500);
+}
+function checkVictory(){
+let allRescued=rescuees.every(r=>r.saved);
+let allMonstersDead=monsterInstances.every(m=>m.hp<=0);
+if(allRescued||allMonstersDead){
+gameState='victory';
+document.getElementById('victory-screen').style.display='flex';
+let msg='';
+if(allRescued&&allMonstersDead)msg='你拯救了所有人并清除了所有怪物！\n真正的勇者！';
+else if(allRescued)msg='你成功拯救了所有遇险者！\n你是英雄！';
+else msg='你击败了所有怪物！\n世界恢复了和平！';
+document.getElementById('victory-msg').textContent=msg;
+addMsg('🏆 '+msg);
+}
+}
+function rest(){
+if(gameState!=='playing')return;
+if(playerStats.hp>=playerStats.maxHp){addMsg('HP已满，无需休息');return;}
+playerStats.hp=Math.min(playerStats.maxHp,playerStats.hp+30);
+addMsg('💤 休息恢复30HP ('+playerStats.hp+'/'+playerStats.maxHp+')');
+updateUI();
+render();
+}
+function usePotion(){
+if(potions<=0){addMsg('没有药水了！');return;}
+if(playerStats.hp>=playerStats.maxHp){addMsg('HP已满');return;}
+potions--;
+playerStats.hp=Math.min(playerStats.maxHp,playerStats.hp+50);
+addMsg('💊 使用药水恢复50HP ('+playerStats.hp+'/'+playerStats.maxHp+')');
+updateUI();
+render();
+}
+function showInventory(){
+let panel=document.getElementById('inventory-panel');
+let list=document.getElementById('inv-list');
+let html='';
+html+='<div class="inv-item"><span>💊 药水</span><span>'+potions+'瓶</span></div>';
+if(weapon)html+='<div class="inv-item"><span>'+weapon.icon+' '+weapon.name+'</span><span>ATK+'+weapon.atk+'</span></div>';
+if(armor)html+='<div class="inv-item"><span>'+armor.icon+' '+armor.name+'</span><span>DEF+'+armor.def+'</span></div>';
+party.forEach(p=>{
+html+='<div class="inv-item"><span>👤 '+p.name+'</span><span>ATK+'+p.atkBonus+' DEF+'+p.defBonus+'</span></div>';
+});
+if(!weapon&&!armor&&party.length===0&&potions===0)html+='<div class="inv-item">背包是空的</div>';
+list.innerHTML=html;
+panel.style.display='block';
+}
+function hideInventory(){
+document.getElementById('inventory-panel').style.display='none';
+}
+function resetGame(){
+document.getElementById('victory-screen').style.display='none';
+playerStats.hp=100;playerStats.maxHp=100;playerStats.atk=10;playerStats.def=5;
+player.x=5;player.y=42;
+weapon=null;armor=null;potions=0;party=[];rescued=0;monstersKilled=0;
+inventory=[];messages=[];turnInProgress=false;
+npcs.forEach(n=>n.talked=false);
+rescuees.forEach(r=>r.saved=false);
+document.getElementById('message-box').innerHTML='游戏重新开始！';
+initMap();spawnMonsters();spawnItems();
+gameState='playing';
+render();updateUI();
+addMsg('新的冒险开始了！');
+}
+function render(){
+ctx.clearRect(0,0,500,500);
+drawMap();
+drawEntities();
+}
+// Zoom overlay
+canvas.addEventListener('click',function(){
+overlay.style.display='flex';
+overlayCanvas.width=500;overlayCanvas.height=500;
+octx.imageSmoothingEnabled=false;
+octx.drawImage(canvas,0,0);
+});
+overlay.addEventListener('click',function(){
+overlay.style.display='none';
+});
+// Keyboard
+document.addEventListener('keydown',function(e){
+if(e.key==='i'||e.key==='I'){
+if(document.getElementById('inventory-panel').style.display==='block')hideInventory();
+else showInventory();return;
+}
+if(e.key==='r'||e.key==='R'){rest();return;}
+if(e.key===' '){
+e.preventDefault();
+// Try interact with adjacent tile
+let targets=[{x:player.x+1,y:player.y},{x:player.x-1,y:player.y},{x:player.x,y:player.y+1},{x:player.x,y:player.y-1}];
+let found=false;
+for(let t of targets){
+for(let n of npcs){if(n.x===t.x&&n.y===t.y){talkToNpc(n);found=true;break;}}
+if(found)break;
+for(let r of rescuees){if(!r.saved&&r.x===t.x&&r.y===t.y){talkToRescuee(r);found=true;break;}}
+if(found)break;
+// Use potion if near monster
+for(let m of monsterInstances){if(m.hp>0&&Math.abs(m.x-t.x)<=1&&Math.abs(m.y-t.y)<=1){startBattle(m);found=true;break;}}
+if(found)break;
+}
+if(!found){usePotion();}
+render();updateUI();return;
+}
+if(e.key==='ArrowUp'){movePlayer(0,-1);e.preventDefault();}
+else if(e.key==='ArrowDown'){movePlayer(0,1);e.preventDefault();}
+else if(e.key==='ArrowLeft'){movePlayer(-1,0);e.preventDefault();}
+else if(e.key==='ArrowRight'){movePlayer(1,0);e.preventDefault();}
+});
+// Close inventory
+document.getElementById('close-inv').addEventListener('click',hideInventory);
+// Init
+initMap();
+spawnMonsters();
+spawnItems();
+render();
+updateUI();
+addMsg('🏘 你在村庄中醒来。去和村民聊聊吧！');
+addMsg('💡 按方向键移动，空格交互，I背包，R休息');
+</script>
+</body>
+</html>
