@@ -40,4 +40,14 @@ if __name__ == "__main__":
 
     init_db()
     log.info("✅ 数据库已初始化")
+
+    # 预热 FTS5 全文索引（后台线程，不阻塞启动）
+    try:
+        from tools.session_search import _ensure_fts_table
+        import threading
+        threading.Thread(target=_ensure_fts_table, daemon=True).start()
+        log.info("✅ FTS5 全文索引同步已启动")
+    except Exception as e:
+        log.warning(f"FTS5 索引预热跳过: {e}")
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
