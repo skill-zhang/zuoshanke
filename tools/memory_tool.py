@@ -53,6 +53,7 @@ def memory_tool(
     content: str = None,
     old_text: str = None,
     key: str = None,
+    scope: str = None,       # 🆕 zhu | scene | channel，不传则自动推断
 ) -> str:
     """管理长期记忆
 
@@ -62,6 +63,7 @@ def memory_tool(
         content: 记忆内容（add/replace 时必须）
         old_text: 要替换或删除的旧记忆文本片段（replace/remove 时必须）
         key: 可选，记忆的唯一标识键。不传则自动生成
+        scope: 🆕 记忆作用域(zhu|scene|channel)，不传则自动推断当前上下文
 
     Returns:
         JSON 字符串，含操作结果
@@ -72,6 +74,34 @@ def memory_tool(
     if target not in ("memory", "user"):
         return json.dumps({"success": False, "error": f"不支持的 target: {target}，请用 'memory' 或 'user'"}, ensure_ascii=False)
 
+    # 🆕 自动推断 scope + context_id
+    from agent_core.tool_executor import get_tool_context
+    ctx = get_tool_context()
+    if scope is None:
+        if ctx.get("scene_id"):
+            scope = "scene"
+            context_id = ctx["scene_id"]
+        elif ctx.get("channel_id"):
+            scope = "channel"
+            context_id = ctx["channel_id"]
+        else:
+            scope = "zhu"
+            context_id = None
+    else:
+        context_id = ctx.get("scene_id") or ctx.get("channel_id") or None
+        if scope == "scene":
+            context_id = ctx.get("scene_id") or context_id
+        elif scope == "channel":
+            context_id = ctx.get("channel_id") or context_id
+
+    # 🆕 安全校验：分身不能写 zhu
+    if scope == "zhu" and (ctx.get("scene_id") or ctx.get("channel_id")):
+        return json.dumps({
+            "success": False,
+            "error": "分身不能直接写入本体记忆（scope=zhu）。"
+                     "如需将此信息存储为本体记忆，请在闲聊频道或仪表盘中提及。"
+        }, ensure_ascii=False)
+
     try:
         mm = _get_mm()
     except Exception as e:
@@ -79,7 +109,7 @@ def memory_tool(
 
     try:
         if action == "add":
-            return _handle_add(mm, target, content, key)
+            return _handle_add(mm, target, content, key, scope=scope, context_id=context_id)
         elif action == "reinforce":
             return _handle_reinforce(mm, target, old_text, key)
         elif action == "read":
@@ -95,7 +125,8 @@ def memory_tool(
 # ── 内部处理 ──
 
 
-def _handle_add(mm: MemoryManager, target: str, content: str, key: str = None) -> str:
+def _handle_add(mm: MemoryManager, target: str, content: str, key: str = None,
+                scope: str = "zhu", context_id: str = None) -> str:
     """新增记忆 — 自动去重（检查内容相似度）"""
     if not content or not content.strip():
         return json.dumps({"success": False, "error": "content 不能为空"}, ensure_ascii=False)
@@ -138,8 +169,9 @@ def _handle_add(mm: MemoryManager, target: str, content: str, key: str = None) -
     # 新建
     try:
         category = target  # "memory" 或 "user" 对应 category
-        mm.add(category, key, content, tags=[_infer_topic(content)], source="llm", base_weight=3)
-        _log_extraction(target, f"新建记忆 key={key}")
+        mm.add(category, key, content, tags=[_infer_topic(content)], source="llm",
+               base_weight=3, scope=scope, context_id=context_id)
+        _log_extraction(target, f"新建记忆 key={key} scope={scope}")
         return json.dumps({
             "success": True,
             "action": "created",

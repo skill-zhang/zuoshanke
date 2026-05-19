@@ -23,6 +23,7 @@ class Project(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+
     scenes = relationship("Scene", back_populates="project", cascade="all, delete-orphan")
 
 
@@ -50,6 +51,7 @@ class Scene(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+
     project = relationship("Project", back_populates="scenes")
     thinking_maps = relationship("ThinkingMap", back_populates="scene", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="scene", cascade="all, delete-orphan")
@@ -66,6 +68,7 @@ class ThinkingMap(Base):
     version = Column(Integer, default=1)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
 
     scene = relationship("Scene", back_populates="thinking_maps")
     nodes = relationship("ThinkNode", back_populates="map", cascade="all, delete-orphan")
@@ -163,6 +166,7 @@ class Channel(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+
     messages = relationship("Message", back_populates="channel", cascade="all, delete-orphan")
 
 
@@ -231,6 +235,7 @@ class ActionMap(Base):
     dynamic_nodes = Column(JSON, default=list)  # [node_id] 执行中动态追加的节点
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
 
     nodes = relationship("ActionNode", back_populates="map", cascade="all, delete-orphan",
                          order_by="ActionNode.order_index")
@@ -386,10 +391,14 @@ class AgentMemory(Base):
     times_accessed = Column(Integer, default=0)  # 被访问次数
     last_accessed_at = Column(DateTime, nullable=True)  # 最后被注入的时间
     last_reinforced_at = Column(DateTime, nullable=True)  # 最后被用户强化的时间
+    # ── 作用域（2026-05-27: 记忆隔离） ──
+    scope = Column(String, default="zhu", nullable=False)  # zhu | scene | channel
+    context_id = Column(String, nullable=True, index=True)  # 场景ID/频道ID
     # ── 元数据 ──
     source = Column(String, nullable=True)  # 记忆来源（auto | llm | user）
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
 
 
 # ═══ 多平台网关会话 ═══
@@ -408,6 +417,7 @@ class GatewaySession(Base):
     last_active_at = Column(DateTime, default=utcnow)         # 最后活跃时间
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
 
     __table_args__ = (
         UniqueConstraint("platform", "platform_user_id", name="uq_platform_user"),
@@ -429,5 +439,19 @@ class DialogState(Base):
     summary = Column(Text, default="")         # 当前阶段讨论摘要
     decisions = Column(JSON, default=list)     # [string] 已确定的决策列表
     context = Column(JSON, default=dict)       # {key: value} 梳理出的关键上下文
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ═══ Schema v0.8 — 坐山客本体 ═══
+class ZhuAgent(Base):
+    """坐山客本体 — 持久化人格实体"""
+    __tablename__ = "zhu_agents"
+
+    id = Column(String(32), primary_key=True)
+    name = Column(String(100), default="坐山客")
+    mood = Column(String(20), default="idle")   # idle/watching/thinking/amused/annoyed/speaking/resting
+    observation = Column(String(500), default="")  # 当前观察描述
+    core_prompt = Column(Text, default="")       # 核心人格（后续使用）
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

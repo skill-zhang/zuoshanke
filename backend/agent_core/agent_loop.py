@@ -35,6 +35,7 @@ _EXCLUDED_TOOLS = {
     "extract_text_from_pdf", # 被 read_file 替代
     "todo_update",           # 需要 task_id，LLM 难准确给
     "todo_delete",           # 同上
+    "write_file",            # 临时排除——大字符串JSON参数会断，LLM请用 run_code Python写文件
 }
 
 # ── 参数类型映射 ──
@@ -396,7 +397,13 @@ def run_agent_loop(
 
                 # 解析参数
                 if isinstance(raw_args, str):
-                    args = json.loads(raw_args)
+                    try:
+                        args = json.loads(raw_args)
+                    except json.JSONDecodeError as e:
+                        # 日志记录原始参数，用于诊断
+                        print(f"[AGENT_LOOP_DEBUG] tool={tool_name}, raw_args[:200]={raw_args[:200]}", flush=True)
+                        print(f"[AGENT_LOOP_DEBUG] raw_args_len={len(raw_args)}, error={e}", flush=True)
+                        raise
                 else:
                     args = raw_args
 
@@ -407,8 +414,13 @@ def run_agent_loop(
                     "tool_call_id": tc.get("id", ""),
                 }
 
-                # 执行工具
-                result = execute_tool(tool_name, args)
+                # 执行工具（注入场景上下文）
+                from agent_core.tool_executor import set_tool_context, clear_tool_context
+                set_tool_context(scene_id=scene_id)
+                try:
+                    result = execute_tool(tool_name, args)
+                finally:
+                    clear_tool_context()
 
                 if result.get("success"):
                     yield {

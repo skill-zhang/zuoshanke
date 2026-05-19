@@ -112,7 +112,10 @@ class MemoryManager:
             tags: Optional[list] = None,
             base_weight: int = DEFAULT_BASE_WEIGHT,
             source: str = "auto",
-            explicit_boost: int = 1) -> AgentMemory:
+            explicit_boost: int = 1,
+            scope: str = "zhu",             # 🆕 作用域
+            context_id: Optional[str] = None,  # 🆕 场景/频道ID
+            ) -> AgentMemory:
         """新建记忆
 
         Args:
@@ -123,6 +126,8 @@ class MemoryManager:
             base_weight: 基础权重 (2 默认 P2, 4 默认 P1, 8 默认 P0)
             source: auto | llm | user
             explicit_boost: 用户强调倍率
+            scope: zhu | scene | channel（2026-05-27: 记忆隔离）
+            context_id: 场景ID/频道ID（scope=zhu 时传 None）
 
         Returns:
             新建的 AgentMemory 实例
@@ -137,6 +142,8 @@ class MemoryManager:
             explicit_boost=explicit_boost,
             times_accessed=0,
             source=source,
+            scope=scope,           # 🆕
+            context_id=context_id, # 🆕
         )
         # 初始等级推算
         w = self.calc_weight(mem)
@@ -227,10 +234,14 @@ class MemoryManager:
     # ── 相关性匹配（用于 context 注入） ────────────
 
     def get_top_for_context(self, query: str = "",
-                            max_count: int = MAX_INJECT_COUNT) -> list[dict]:
+                            max_count: int = MAX_INJECT_COUNT,
+                            scope: Optional[str] = None,          # 🆕
+                            context_id: Optional[str] = None,     # 🆕
+                            ) -> list[dict]:
         """获取应注入到上下文的 Top-N 条记忆
 
         三层筛选:
+          0. 作用域过滤（新增）— 按 scope + context_id 隔离
           1. 话题匹配 — 检测当前查询的话题，只取 topic 匹配的记忆
              （P0 级别的个人信息仍然注入）
           2. 按 weight 排序
@@ -242,6 +253,15 @@ class MemoryManager:
         mems = self.db.query(AgentMemory).all()
         if not mems:
             return []
+
+        # 🆕 作用域过滤
+        if scope == "zhu":
+            mems = [m for m in mems if m.scope == "zhu"]
+        elif scope in ("scene", "channel") and context_id:
+            mems = [m for m in mems
+                    if m.scope == "zhu" or
+                       (m.scope == scope and m.context_id == context_id)]
+        # scope=None: 返回全部（向后兼容）
 
         # 检测当前查询的话题
         current_topic = self._detect_topic(query)
@@ -529,6 +549,8 @@ class MemoryManager:
             "explicit_boost": m.explicit_boost,
             "times_accessed": m.times_accessed,
             "source": m.source,
+            "scope": m.scope,
+            "context_id": m.context_id,
             "last_accessed_at": m.last_accessed_at.isoformat() if m.last_accessed_at else None,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }

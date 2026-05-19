@@ -20,7 +20,6 @@ from .skill_manager import SkillManager
 
 # ── 场景聊天的 System Prompt（兜底用，优先从 DB settings 读取） ──
 SCENE_SYSTEM_PROMPT = (
-    "你是坐山客AI工作台的智能助手。\n"
     "你可以调用工具获取实时信息（天气、搜索等），也可以直接回答用户的问题。\n"
     "请用中文回复，保持简洁自然。\n"
     "\n"
@@ -32,15 +31,24 @@ SCENE_SYSTEM_PROMPT = (
 )
 
 
-def _build_memory_block(db, query: str) -> str:
+def _build_memory_block(db, query: str,
+                        scope: Optional[str] = None,
+                        context_id: Optional[str] = None) -> str:
     """从记忆系统提取相关记忆，格式化为注入文本
 
     返回格式为「仅供参考」的 User Prompt 层内容，不再是 System Prompt 铁律。
+
+    Args:
+        db: 数据库会话
+        query: 当前用户查询，用于话题匹配
+        scope: 🆕 作用域过滤（zhu | scene | channel），None=全部
+        context_id: 🆕 场景/频道ID（scope=scene/channel 时必传）
     """
     if db is None:
         return ""
     mm = MemoryManager(db)
-    memories = mm.get_top_for_context(query, max_count=5)
+    memories = mm.get_top_for_context(query, max_count=5,
+                                      scope=scope, context_id=context_id)
     if not memories:
         return ""
     lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
@@ -74,6 +82,7 @@ def build_scene_context(
     weather_context: Optional[str] = None,
     user_context: Optional[str] = None,
     db=None,  # 🆕 数据库会话，用于加载记忆
+    scene_id: Optional[str] = None,  # 🆕 场景ID（记忆隔离）
 ) -> list[dict]:
     """构建场景聊天的 LLM 消息列表
 
@@ -85,6 +94,7 @@ def build_scene_context(
         weather_context: 天气桥接上下文（向后兼容）
         user_context: 用户自定义背景设定
         db: 数据库会话（用于 memory 系统）
+        scene_id: 🆕 当前场景 ID（记忆作用域过滤）
 
     Returns:
         OpenAI 格式的消息列表
@@ -108,7 +118,9 @@ def build_scene_context(
         system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
 
     # ── 2. 记忆块 — 从 system 移到 user prompt（见下方 #8） ──
-    memory_block = _build_memory_block(db, user_content)
+    scope = "scene" if scene_id else "zhu"
+    memory_block = _build_memory_block(db, user_content,
+                                       scope=scope, context_id=scene_id)
 
     # ── 3. 技能块 ──
     skill_block = _build_skill_block(user_content)
@@ -180,6 +192,8 @@ def build_agent_context(
     history_messages: Optional[list[dict]] = None,
     user_context: Optional[str] = None,
     db=None,
+    scene_id: str = "",
+    scene_name: str = "",
 ) -> list[dict]:
     """构建 Agent Loop 路径的上下文 — 带分层管线（DB prompt + 记忆 + skill + 工具列表），无预执行。
 
@@ -188,6 +202,8 @@ def build_agent_context(
         history_messages: 历史消息列表 [{"role": ..., "content": ...}, ...]
         user_context: 用户自定义背景设定
         db: 数据库会话（用于记忆和 DB settings）
+        scene_id: 🆕 当前场景 ID（注入后 LLM 可传给 converge 工具）
+        scene_name: 🆕 当前场景名称
 
     Returns:
         OpenAI 格式的消息列表，可作为 run_agent_loop() 的 initial_messages
@@ -206,6 +222,17 @@ def build_agent_context(
                 _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
         except Exception:
             pass
+
+    # ── 🆕 分身意识注入（Schema v0.8） ──
+    _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"
+    if scene_name:
+        _scene_sp = (
+            f"你是坐山客在【{scene_name}】领域的分身，是AI工作台的智能助手。\n"
+            f"坐山客是你的本体——{_CORE_PERSONALITY}。\n"
+            f"你在这场景中以当前设定行动，但你清楚自己只是分身。\n\n"
+            f"{_scene_sp}"
+        )
+
     system_parts = [f"# 角色设定\n{_scene_sp}"]
 
     # ── 1.5 用户输入背景设定 ──
@@ -213,7 +240,9 @@ def build_agent_context(
         system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
 
     # ── 2. 记忆块 → User 层（见下方） ──
-    memory_block = _build_memory_block(db, user_content)
+    scope = "scene" if scene_id else "zhu"
+    memory_block = _build_memory_block(db, user_content,
+                                       scope=scope, context_id=scene_id)
 
     # ── 3. 技能块 ──
     skill_block = _build_skill_block(user_content)
@@ -246,6 +275,27 @@ def build_agent_context(
         "注意：用户强调「很重要」或纠正了你的某个认知时，应当更新记忆。\n"
         "定期用 read 检查内容，避免过时或重复。存和改之前先看一遍。"
     )
+
+    # ── 5.6 收敛能力说明 + 场景信息 ──
+    scene_parts = ["## 🔀 收敛能力"]
+    scene_parts.append(
+        "当你和用户讨论了足够多轮，已经覆盖了目标的主要方面，"
+        "可以主动询问用户是否要进入收敛整理阶段。"
+    )
+    scene_parts.append(
+        "收敛会合并相似的思维节点、标记废弃项、生成优先级队列，"
+        "让系统知道接下来该做什么。"
+    )
+    scene_parts.append(
+        "用户同意后，直接调用 converge 工具触发收敛。"
+    )
+    if scene_id:
+        scene_parts.append(
+            f"\n当前场景信息：\n"
+            f"- 场景名: {scene_name or '未知'}\n"
+            f"- 场景 ID: {scene_id}"
+        )
+    system_parts.append("\n".join(scene_parts))
 
     messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 

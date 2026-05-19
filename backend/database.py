@@ -127,6 +127,20 @@ def init_db():
     except Exception as e:
         print(f"⚠️  think_nodes v1 迁移跳过: {e}")
 
+    # 迁移：memory scope 字段（零破坏，2026-05-27）
+    try:
+        with engine.connect() as conn:
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(agent_memory)")).fetchall()]
+            if "scope" not in cols:
+                conn.execute(text("ALTER TABLE agent_memory ADD COLUMN scope VARCHAR(10) NOT NULL DEFAULT 'zhu'"))
+                conn.execute(text("ALTER TABLE agent_memory ADD COLUMN context_id VARCHAR(32)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_memory_scope ON agent_memory(scope)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_memory_context_id ON agent_memory(context_id)"))
+                conn.commit()
+                print("✅ agent_memory 表新增 scope + context_id 字段")
+    except Exception as e:
+        print(f"⚠️  agent_memory scope 迁移跳过: {e}")
+
     # 种子数据：默认闲聊频道
     db = SessionLocal()
     try:

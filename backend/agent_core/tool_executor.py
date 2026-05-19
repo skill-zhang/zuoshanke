@@ -19,11 +19,35 @@ import json
 import os
 import re
 import sys
+import threading
 from typing import Optional
 
 from .tool_registry import get_all_tools, get_tool_by_name
 
 TOOLS_DIR = os.path.expanduser("~/zuoshanke/tools")
+
+# ── 工具执行线程上下文（用于注入 scene/channel ID 给工具函数） ──
+_tool_ctx = threading.local()
+
+
+def set_tool_context(scene_id: str = "", channel_id: str = ""):
+    """设置当前线程的工具执行上下文"""
+    _tool_ctx.scene_id = scene_id
+    _tool_ctx.channel_id = channel_id
+
+
+def get_tool_context() -> dict:
+    """获取当前线程的工具执行上下文"""
+    return {
+        "scene_id": getattr(_tool_ctx, "scene_id", ""),
+        "channel_id": getattr(_tool_ctx, "channel_id", ""),
+    }
+
+
+def clear_tool_context():
+    """清除当前线程的工具执行上下文"""
+    _tool_ctx.scene_id = ""
+    _tool_ctx.channel_id = ""
 
 # ── 常见城市列表（参数提取用） ──
 CITIES = ["北京", "天津", "上海", "广州", "深圳", "杭州", "成都",

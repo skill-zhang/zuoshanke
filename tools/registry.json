@@ -198,13 +198,14 @@
     },
     {
       "name": "run_code",
-      "description": "多语言代码执行（Python/Shell/JavaScript）",
+      "description": "多语言代码执行（Python/Shell/JavaScript）。大段代码用 code_b64(base64编码) 传参避免JSON转义问题",
       "file": "tools/code_runner.py",
       "function": "run_code",
       "parameters": {
-        "code": {"type": "string", "description": "要执行的代码"},
+        "code": {"type": "string", "description": "要执行的代码", "optional": true},
         "language": {"type": "string", "description": "语言(python/shell/bash/javascript)", "optional": true},
-        "timeout": {"type": "integer", "description": "超时秒数", "optional": true}
+        "timeout": {"type": "integer", "description": "超时秒数", "optional": true},
+        "code_b64": {"type": "string", "description": "base64编码的代码（替代code传参，避免大字符串JSON转义问题）", "optional": true}
       },
       "returns": "执行结果（stdout、stderr、退出码）",
       "category": "data",
@@ -423,7 +424,7 @@
     },
     {
       "name": "memory",
-      "description": "管理长期记忆——add 存新信息、reinforce 强化已有记忆、read 查看、replace 更新、remove 删除。存入前先用 read 检查是否已存在。用户强调「很重要」或用纠正语气时，用 reinforce 强化已存记忆。",
+      "description": "管理长期记忆——add 存新信息、reinforce 强化已有记忆、read 查看、replace 更新、remove 删除。存入前先用 read 检查是否已存在。用户强调「很重要」或用纠正语气时，用 reinforce 强化已存记忆。作用域(scope)：默认为当前上下文绑定（场景记忆仅限当前场景），仅当你判断此信息是用户的通用偏好/身份信息且应在所有场景中知晓时，显式传 scope='zhu'。",
       "file": "tools/memory_tool.py",
       "function": "memory_tool",
       "parameters": {
@@ -431,9 +432,28 @@
         "target": {"type": "string", "description": "记忆目标(memory/user)", "enum": ["memory", "user"]},
         "content": {"type": "string", "description": "记忆内容（add/replace 时必需）", "optional": true},
         "old_text": {"type": "string", "description": "要替换/删除的旧记忆内容（replace/remove 时必需）", "optional": true},
-        "key": {"type": "string", "description": "记忆唯一标识键，不传则自动生成", "optional": true}
+        "key": {"type": "string", "description": "记忆唯一标识键，不传则自动生成", "optional": true},
+        "scope": {"type": "string", "description": "记忆作用域：zhu=本体级(跨场景共享) / scene=当前场景(隔离) / channel=当前频道(隔离)。不传则自动绑定当前上下文", "enum": ["zhu", "scene", "channel"], "optional": true}
       },
       "returns": "操作结果 JSON（含 success、action、key、message）",
+      "category": "tools",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
+      "name": "converge",
+      "description": "收敛整理当前场景的 Thinking Map——合并相似节点、标记废弃、生成优先级队列。在讨论充分、信息足够、用户同意收敛时调用。",
+      "file": "tools/converge_tool.py",
+      "function": "converge",
+      "parameters": {
+        "scene_id": {"type": "string", "description": "场景 ID（从系统提示中的「当前场景信息」获取）"},
+        "summary": {"type": "string", "description": "收敛说明，描述当前讨论的覆盖范围或用户的目的", "optional": true}
+      },
+      "returns": "收敛结果 JSON（含 success、queue_count、queue_summary）",
       "category": "tools",
       "verified": true,
       "preexecute": {
