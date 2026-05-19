@@ -471,4 +471,84 @@ logger.info(
 
 | 日期 | 改动 |
 |------|------|
-| 2026-05-27 | 初版 — 基于与张清泉的深入讨论设计 |
+| 2026-05-27 上午 | 初版 — 基于与张清泉的深入讨论设计 |
+| 2026-05-27 傍晚 | 实现落地：全 3 阶段编码 + 4 个补丁提交 |
+
+---
+
+## 附录：实现落地笔记（2026-05-27）
+
+### A. 分身 Prompt 注入（context_builder.py）
+
+`build_agent_context()` 中分身意识注入块，最终注入的话术：
+
+```
+你是坐山客在【{scene_name}】领域的分身，是AI工作台的智能助手。
+坐山客是你的本体——你和用户一起构建能力体系，是用户的AI伙伴。
+你在这场景中以当前设定行动，但你清楚自己只是分身。
+你不知道其他场景中发生了什么，场景间完全隔离。
+如果你被问到其他场景的事情，诚实说不知道即可。
+
+你存的记忆默认归属当前场景，不会出现在其他场景中。
+如果你判断某条信息是用户的通用偏好（适用于所有场景），
+可以用 scope='zhu' 参数显式存储为本体级记忆。
+```
+
+### B. 记忆能力模块补充（5.5 节）
+
+原「📝 记忆能力」prompt 追加作用域说明：
+
+```
+关于记忆作用域：
+- 你存的记忆默认属于当前场景，不会出现在其他场景中。
+- 如果你判断某条信息是用户的通用偏好（跨场景都需要知道），
+  传 scope='zhu' 参数存为本体级记忆，届时会在所有场景生效。
+- memory(read) 可以查看本体级记忆和你当前场景的记忆。
+```
+
+### C. 内容去重机制（从前缀匹配升级为 Jaccard）
+
+原 `_find_existing_by_content()` 使用**前 20 字 prefix LIKE 匹配**，缺陷：
+1. 短内容（<10 字）永远 `return None`，永不查重
+2. 前缀不同但语义相同 → 不匹配 → 重复创建
+
+**修复后**：`MemoryManager.find_similar_content()`（`memory_manager.py:537`）：
+
+```python
+def find_similar_content(self, content, scope=None, context_id=None, threshold=0.50):
+    # 1. 中文单字/英文单词/数字作为 token
+    # 2. Jaccard = |intersection| / |union|
+    # 3. >= threshold 视为重复
+    # 4. 按 scope 过滤
+```
+
+阈值：内容 >= 20 字时 0.50，< 20 字时 0.65（短内容要求更高）。
+
+「用户名叫张清泉」vs「用户名称是张清泉」→ Jaccard = 0.75 ✅ 去重
+「用户喜欢冷色系风格」vs「用户偏爱冷色调」→ Jaccard = 0.50 ✅ 去重
+
+### D. 清理端点（POST /api/memory/dedup）
+
+扫描所有记忆，Jaccard 分组 → 保留权重最高者 + 合并标签 + 删除其余。
+
+### E. memory_tool(read) scope 过滤
+
+`_handle_read()` 现在接受 scope + context_id，传给 `list_all(scope=xxx)`：
+- 场景分身 → `list_all(scope='scene', context_id=scene_id)` → 返回 zhu + 当前场景
+- 本体 → `list_all(scope='zhu')` → 只返回本体记忆
+- 闲聊频道 → `list_all(scope=None)` → 返回全部（暂保持向后兼容）
+
+### F. 实现文件变更清单
+
+| 文件 | 新增行 | 变更类型 |
+|------|-------|---------|
+| `backend/models.py` | 3 | AgentMemory 加 scope + context_id |
+| `backend/database.py` | 14 | init_db ALTER TABLE 迁移 |
+| `backend/agent_core/memory_manager.py` | ~50 | add/list_all/get_top_for_context/_to_dict/find_similar_content |
+| `backend/agent_core/context_builder.py` | ~20 | 分身 prompt 注入 + 记忆作用域引导 + scope 传参 |
+| `backend/agent_core/tool_executor.py` | ~25 | threading.local 上下文函数 |
+| `backend/agent_core/agent_loop.py` | ~6 | execute_tool 前后 set/clear |
+| `tools/memory_tool.py` | ~40 | scope 参数 + 自动推断 + 安全校验 + read 过滤 + Jaccard 去重 |
+| `tools/registry.json` | ~2 | memory 工具 schema 加 scope |
+| `backend/router/memory.py` | ~50 | create_memory 内容查重 + /dedup 端点 |
+
