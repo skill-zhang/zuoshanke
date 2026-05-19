@@ -179,15 +179,18 @@ function estimateTextWidth(text: string): number {
   return w;
 }
 
-/** 根据文本宽度计算 rect 宽度 */
-function calcRectWidth(label: string): number {
-  return Math.max(108, Math.min(estimateTextWidth(label) + 28, 220));
+/** 根据文本宽度 + 深度计算 rect 宽度（越深越窄） */
+function calcRectWidth(label: string, depth: number = 0): number {
+  const maxW = depth === 0 ? 220 : depth === 1 ? 160 : 100;
+  const minW = depth === 0 ? 108 : depth === 1 ? 80 : 55;
+  return Math.max(minW, Math.min(estimateTextWidth(label) + 28, maxW));
 }
 
-const RECT_HEIGHT = 32;
+// 按层级的矩形高度
+const ROOT_RECT_H = 40;
+const DOMAIN_RECT_H = 32;
+const LEAF_RECT_H = 26;
 const RECT_RX = 8;
-const LEVEL_V_SPACING = 68;   // 层级之间的垂直间距
-const SIBLING_H_SPACING = 48; // 兄弟节点最小水平间距
 
 // ═══════════════════════════════════════════════════════════════════
 //  主组件
@@ -203,6 +206,15 @@ export function CustomMindMap({
 }: CustomMindMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const initTransformRef = useRef<d3.ZoomTransform | null>(null);
+
+  const handleReset = () => {
+    const svgEl = svgRef.current;
+    if (svgEl && zoomRef.current && initTransformRef.current) {
+      d3.select(svgEl).call(zoomRef.current.transform, initTransformRef.current);
+    }
+  };
 
   useEffect(() => {
     const svgEl = svgRef.current;
@@ -229,13 +241,21 @@ export function CustomMindMap({
 
     const root = stratify(nodes);
 
-    // ── 树布局 ──
-    // nodeSize: [水平间距, 垂直间距] — 用 nodeSize 而非 size 防止重叠
+    // ── 树布局：自动计算间距 ──
+    // 统计叶子数，估算合理水平间距防重叠
+    const leafCount = root.leaves().length;
+    const avgLabelWidth = nodes.reduce((s, n) => s + calcRectWidth(n.label, 1), 0) / nodes.length;
+    const availW = container.clientWidth - 40;
+    // 水平间距：让树总宽 ≈ availW × 1.2，但最小 30px（防重叠），最大 80px
+    const sepfac = 2.0; // 同父 separation 因子
+    const idealHSpacing = leafCount > 1 ? (availW * 1.2) / (leafCount * sepfac + 1) : 60;
+    const SIBLING_H_SPACING = Math.max(Math.min(idealHSpacing, 80), Math.min(avgLabelWidth / sepfac, 30));
+    const LEVEL_V_SPACING = 120; // 固定竖直间距
     const treeLayout = d3.tree<ThinkNodeData>()
       .nodeSize([SIBLING_H_SPACING, LEVEL_V_SPACING])
       .separation((a, b) => {
-        // 兄弟节点间距 2.8，非兄弟 4.0 — 防止同层重叠
-        return a.parent === b.parent ? 2.8 : 4.0;
+        // 同父间距小，异父稍大
+        return a.parent === b.parent ? 2.0 : 2.5;
       });
 
     treeLayout(root);
@@ -243,14 +263,15 @@ export function CustomMindMap({
     // ── 计算所有节点的 bounding box ──
     let bx = Infinity, bxMax = -Infinity, by = Infinity, byMax = -Infinity;
     root.each(d => {
-      const rw = calcRectWidth(d.data.label);
+      const rw = calcRectWidth(d.data.label, d.depth);
       const hw = rw / 2;
       const x = d.x || 0;
       const y = d.y || 0;
+      const rectH = d.depth === 0 ? ROOT_RECT_H : d.depth === 1 ? DOMAIN_RECT_H : LEAF_RECT_H;
       bx = Math.min(bx, x - hw);
       bxMax = Math.max(bxMax, x + hw);
       by = Math.min(by, y);
-      byMax = Math.max(byMax, y + RECT_HEIGHT);
+      byMax = Math.max(byMax, y + rectH);
     });
 
     // 无节点 → 不渲染
@@ -279,20 +300,24 @@ export function CustomMindMap({
     // ── Zoom ──
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 4])
+      .filter(event => event.type !== 'dblclick')
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
       });
 
     svg.call(zoom);
+    zoomRef.current = zoom;
 
     // ── 初始 fit：让所有节点在视口中居中 ──
     {
       const contentW = bxMax - bx + 60;
       const contentH = byMax - by + 40;
       const scale = Math.min(svgW / contentW, svgH / contentH, 1.6);
-      const tx = (svgW - (bx + bxMax) * scale / 2);
-      const ty = (svgH - (by + byMax + RECT_HEIGHT) * scale / 2);
-      svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+      const tx = svgW / 2 - (bx + bxMax) * scale / 2;
+      const ty = svgH / 2 - (by + byMax + ROOT_RECT_H) * scale / 2;
+      const initTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+      initTransformRef.current = initTransform;
+      svg.call(zoom.transform, initTransform);
     }
 
     // ── 绘制连接线 ──
@@ -300,7 +325,8 @@ export function CustomMindMap({
       const source = link.source as d3.HierarchyPointNode<ThinkNodeData>;
       const target = link.target as d3.HierarchyPointNode<ThinkNodeData>;
       const sx = source.x;
-      const sy = source.y + RECT_HEIGHT;
+      const sourceRectH = source.depth === 0 ? ROOT_RECT_H : source.depth === 1 ? DOMAIN_RECT_H : LEAF_RECT_H;
+      const sy = source.y + sourceRectH;
       const tx = target.x;
       const ty = target.y;
 
@@ -333,7 +359,7 @@ export function CustomMindMap({
     // ── 绘制节点 ──
     root.each(d => {
       const style = getNodeStyle(d.data);
-      const rw = calcRectWidth(d.data.label);
+      const rw = calcRectWidth(d.data.label, d.depth);
       const x = d.x!;
       const y = d.y!;
 
@@ -344,12 +370,17 @@ export function CustomMindMap({
           if (onNodeClick) onNodeClick(d.data.id);
         });
 
+      // 按层级设定字号：根>一级>其他
+      const fontSize = d.depth === 0 ? 18 : d.depth === 1 ? 14 : 11;
+      const fontWeight = d.depth === 0 ? 700 : d.depth === 1 ? 600 : 400;
+      const rectH = d.depth === 0 ? ROOT_RECT_H : d.depth === 1 ? DOMAIN_RECT_H : LEAF_RECT_H;
+
       // 矩形
       nodeG.append('rect')
         .attr('x', x - rw / 2)
         .attr('y', y)
         .attr('width', rw)
-        .attr('height', RECT_HEIGHT)
+        .attr('height', rectH)
         .attr('rx', RECT_RX)
         .attr('fill', style.nodeFill)
         .attr('stroke', style.stroke)
@@ -365,12 +396,12 @@ export function CustomMindMap({
 
       nodeG.append('text')
         .attr('x', x)
-        .attr('y', y + RECT_HEIGHT / 2)
+        .attr('y', y + rectH / 2)
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'central')
         .attr('fill', style.textFill)
-        .attr('font-size', 12)
-        .attr('font-weight', 500)
+        .attr('font-size', fontSize)
+        .attr('font-weight', fontWeight)
         .attr('opacity', style.labelOpacity)
         .style('text-decoration', style.textDecoration || 'none')
         .style('user-select', 'none')
@@ -389,16 +420,31 @@ export function CustomMindMap({
       className={className}
       style={{
         width: '100%',
+        height: propHeight,
         background: '#16161e',
         borderRadius: 8,
         overflow: 'hidden',
         border: '1px solid #2a2a3a',
+        position: 'relative',
       }}
     >
       <svg
         ref={svgRef}
-        style={{ width: '100%', display: 'block' }}
+        style={{ width: '100%', height: propHeight, display: 'block' }}
       />
+      <button
+        onClick={handleReset}
+        title="复位"
+        style={{
+          position: 'absolute', top: 8, right: 8,
+          width: 26, height: 26, borderRadius: 4,
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          color: '#888', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, lineHeight: 1, padding: 0, zIndex: 10,
+        }}
+      >⟲</button>
 
       {/* ── 收敛合并标注（SVG 外部 React 列表） ── */}
       {merges.length > 0 && (

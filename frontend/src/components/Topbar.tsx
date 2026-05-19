@@ -8,7 +8,7 @@ interface TopbarProps {
 export function Topbar({ extraTitle }: TopbarProps) {
   const { view, setView, currentProject, currentScene } = useStore();
 
-  const showBreadcrumb = view === 'chat' || view === 'projects';
+  const showBreadcrumb = view === 'chat' || view === 'projects' || view === 'dashboard';
 
   return (
     <div className="topbar">
@@ -22,6 +22,11 @@ export function Topbar({ extraTitle }: TopbarProps) {
           <span className="arrow">›</span>
           {view === 'projects' ? (
             <span style={{ color: '#c9d1d9' }}>项目管理</span>
+          ) : view === 'dashboard' && currentScene ? (
+            <>
+              <span style={{ color: '#8b949e' }}>{currentScene.icon || '📦'} {currentScene.name}</span>
+              <span style={{ color: '#666', marginLeft: 6 }}>| 📊 仪表盘</span>
+            </>
           ) : currentProject ? (
             <>
               <span style={{ color: '#8b949e' }}>项目</span>
@@ -49,25 +54,26 @@ export function Topbar({ extraTitle }: TopbarProps) {
 
       <span className="spacer" />
 
+      {view === 'dashboard' && currentScene && (
+        <button className="btn back-chat-btn" onClick={() => setView('chat')}>
+          💬 回到对话
+        </button>
+      )}
+
       {view === 'chat' && currentScene && (
-        <>
-          <button className="btn tm-btn" onClick={async () => {
-            const store = useStore.getState();
-            await store.loadThinkingMap(store.currentScene!.id);
-            store.openDrawer();
-          }}>
-            🧠 Thinking Map
-          </button>
-          <button className="btn am-btn" onClick={async () => {
-            const store = useStore.getState();
-            if (store.thinkingMap) {
-              await store.loadActionMaps(store.thinkingMap.id);
-            }
-            store.openActionMapDrawer();
-          }}>
-            ⚡ Action Map
-          </button>
-        </>
+        <button className="btn dash-btn" onClick={async () => {
+          const store = useStore.getState();
+          const sid = store.currentScene!.id;
+          await store.loadThinkingMap(sid);
+          await Promise.all([
+            store.loadDashboardQueue(sid),
+            store.loadDashboardReflect(sid),
+            store.loadDashboardStatus(sid),
+          ]);
+          store.setView('dashboard');
+        }}>
+          🧠 思考 <span className="dash-btn-arrow">⏩</span> ⚡ 行动
+        </button>
       )}
 
       <button className="btn settings-btn" title="系统设置" onClick={() => {

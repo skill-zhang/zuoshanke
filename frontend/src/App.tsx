@@ -15,6 +15,7 @@ import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
 import { CapabilityVerify } from './components/CapabilityVerify';
 import { AgentCharacter } from './components/AgentCharacter';
+import AgentLoopDashboard from './components/AgentLoopDashboard';
 import { Scene, createScene, listProjects } from './api/client';
 
 // ═══ 稳定选择器（避免 useSyncExternalStore getSnapshot 引用变化）═══
@@ -241,6 +242,7 @@ export default function App() {
       case 'plaza': return '🏪 场景广场';
       case 'workshop': return '🛠 工坊';
       case 'projects': return '📁 项目管理';
+      case 'dashboard': return '📊 仪表盘';
       case 'chat':
         if (currentScene) return `${currentScene.icon || '📦'} ${currentScene.name}`;
         return '💬 聊天';
@@ -280,6 +282,8 @@ export default function App() {
           <CapabilityVerify />
         ) : view === 'skills' ? (
           <SkillsView />
+        ) : view === 'dashboard' ? (
+          <AgentLoopDashboard />
         ) : view === 'memory' ? (
           <MemoryView />
         ) : (

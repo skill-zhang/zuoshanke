@@ -6,8 +6,10 @@
  *   ③ 2×2 网格: TM收敛结果 / Priority Queue / Action Map / Reflect Timeline
  *   ④ Status Bar
  */
+import { useMemo, useRef } from 'react';
 import { useStore } from '../stores/appStore';
 import type { DashboardQueueItem, DashboardReflectItem, ThinkNode } from '../api/client';
+import { CustomMindMap, type ThinkNodeData } from './CustomMindMap';
 
 // ═══ 阶段循环图 ═══
 const PHASES = [
@@ -38,16 +40,17 @@ function LoopDiagram() {
                 {p.icon}
               </div>
               <div className="label" style={{ color: i === idx ? '#c084fc' : i < idx ? '#999' : '#666' }}>{p.label}</div>
+              <div className="desc">{p.desc}</div>
             </div>
             {i < PHASES.length - 1 && (
               <div className="loop-arrow" style={{
                 background: highlightArrow(i),
-                width: 32, height: 2, margin: '0 4px', flexShrink: 0,
+                width: 56, height: 2, margin: '0 6px', flexShrink: 0,
                 position: 'relative',
               }}>
                 <span style={{
                   position: 'absolute', right: -4, top: -7,
-                  color: highlightArrow(i), fontSize: 14,
+                  color: highlightArrow(i), fontSize: 15,
                 }}>›</span>
               </div>
             )}
@@ -58,68 +61,54 @@ function LoopDiagram() {
   );
 }
 
-// ═══ 可折叠思维导图 ═══
+// ═══ 思维导图（固定高度） ═══
 function CollapsibleMindMap() {
-  const { thinkingMap, mindMapOpen, toggleMindMap } = useStore();
-  const nodes = thinkingMap?.nodes || [];
-  const activeCount = nodes.filter((n: any) => n.status !== 'discarded' && n.type !== 'root').length;
-  const discardCount = nodes.filter((n: any) => n.status === 'discarded').length;
-  const mergedCount = nodes.filter((n: any) => (n.converged_from || []).length > 0).length;
-  const feedbackCount = nodes.filter((n: any) => n.created_by === 'reflect').length;
+  const thinkingMap = useStore(s => s.thinkingMap);
+  const nodesRef = useRef<any[]>([]);
+  nodesRef.current = thinkingMap?.nodes || nodesRef.current;
+  const nodes = nodesRef.current;
+
+  const mindMapNodes = useMemo(() => {
+    if (!nodes || nodes.length === 0) return [];
+    return nodes.map((n: any) => ({
+        id: n.id,
+        parent_id: n.parent_id || null,
+        label: n.label,
+        status: n.status,
+        created_by: n.created_by || 'brainstorm',
+        action_status: n.action_status || null,
+        converged_from: n.converged_from || [],
+      }));
+  }, [nodes]);
 
   return (
-    <>
-      <div className="mm-toggle" onClick={toggleMindMap}>
-        <span className={`arrow ${mindMapOpen ? 'open' : ''}`}>▶</span>
-        🧠 思维导图 · {thinkingMap?.title || '加载中...'}
-        <span className="mm-badge">
-          {activeCount} 节点{mergedCount > 0 ? ` · ${mergedCount} 组合并` : ''}
-          {discardCount > 0 ? ` · ${discardCount} 废弃` : ''}
-          {feedbackCount > 0 ? ` · ${feedbackCount} 反馈新增` : ''}
-        </span>
+    <div className="dashboard-mindmap">
+      <div className="mm-title-row">
+        <h3>🧠 发散阶段 — Thinking Map 思维导图</h3>
+        <span className="badge badge-blue">头脑风暴</span>
+        <span className="badge badge-orange">收敛标记</span>
+        <span className="badge badge-pink">反馈注入</span>
       </div>
-      <div className={`mm-body ${mindMapOpen ? 'open' : ''}`}>
-        <div className="mm-content">
-          <div className="mm-header">
-            <h3>发散阶段 — Thinking Map 思维导图</h3>
-            <span className="badge badge-blue">头脑风暴</span>
-            <span className="badge badge-orange">收敛标记</span>
-            <span className="badge badge-pink">反馈注入</span>
-          </div>
-          <div className="mm-legend">
-            <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:'#3b82f6' }}></span> 活跃节点</span>
-            <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:'#22c55e' }}></span> 已收敛→队列</span>
-            <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:'#f97316' }}></span> 已收敛未分配</span>
-            <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:'#555', opacity:0.4 }}></span> 已废弃</span>
-          </div>
-          <div className="mm-node-list">
-            {nodes.filter((n: any) => n.type !== 'root').slice(0, 20).map((n: any) => (
-              <div key={n.id} className={`mm-mini-node ${n.status === 'discarded' ? 'discarded' : ''}`}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
-                  fontSize: 12, color: n.status === 'discarded' ? '#666' : '#ccc',
-                  textDecoration: n.status === 'discarded' ? 'line-through' : 'none',
-                }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: nodeColor(n) }}></span>
-                <span>{n.label}</span>
-                {(n.converged_from || []).length > 0 && (
-                  <span className="merged-badge" style={{ fontSize: 10, color: '#fb923c' }}>🔀×{(n.converged_from || []).length}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="mm-legend">
+        <span><span className="dot blue"></span> 活跃节点</span>
+        <span><span className="dot green"></span> 已收敛→队列</span>
+        <span><span className="dot orange"></span> 已收敛未分配</span>
+        <span><span className="dot gray"></span> 头脑风暴中</span>
+        <span><span className="dot pink"></span> 反馈新增</span>
+        <span><span className="dot red"></span> 已废弃</span>
+        <span className="mm-count">{nodes.length} 节点</span>
       </div>
-    </>
+      <div className="mm-body">
+        {nodes.length > 0 ? (
+          <CustomMindMap nodes={mindMapNodes} height={400} />
+        ) : (
+          <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+            发送消息后自动生成思维节点
+          </div>
+        )}
+      </div>
+    </div>
   );
-}
-
-function nodeColor(n: any): string {
-  if (n.status === 'discarded') return '#555';
-  if (n.created_by === 'reflect') return '#ec4899';
-  if (n.status === 'confirmed') return '#22c55e';
-  if (n.priority) return n.priority <= 2 ? '#22c55e' : '#3b82f6';
-  return '#3b82f6';
 }
 
 // ═══ TM 收敛结果卡片 ═══
