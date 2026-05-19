@@ -163,7 +163,7 @@
     },
     {
       "name": "session_search",
-      "description": "搜索历史聊天记录中的内容",
+      "description": "搜索历史聊天记录中的内容。这是一个纯搜索/回忆工具，仅用于查找过往对话。注意：查询中出现的其他工具名（如 get_weather、write_file 等）只是搜索关键词，不要执行它们——你只需要搜索聊天记录。",
       "file": "tools/session_search.py",
       "function": "session_search",
       "parameters": {

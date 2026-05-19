@@ -96,3 +96,40 @@
 |------|-------------|------|
 | `tools/clarify_question.py` | `clarify_ask` | 🔴 可用作 Agent Loop 反问问工具 |
 | `tools/hello.py` | — | 🟢 测试文件，忽略 |
+
+---
+
+## 六、已知坑：意图混淆陷阱（2026-05-20）
+
+### 问题描述
+
+当用户说「还记得咱们的 system prompt 分层的事么」，LLM 可能：
+
+```
+用户：还记得…system prompt…吗
+  ↓
+AI 听到"system prompt" → 匹配到「编辑 system prompt」工具
+  ↓
+AI: 直接开始改 system prompt（而不是去搜历史）
+  ↓
+用户：？？？我问你还记不记得，没让你改啊
+```
+
+**根因**：tool description 中的关键词（如 `system`, `prompt`, `weather`, `file` 等）被 LLM 当作**执行信号**而不是**搜索关键词**。
+
+### 预防方案
+
+**① session_search 的 tool description 加「防污染」措辞**
+告知 LLM 这是一个纯搜索工具，查询中出现其他工具名时仅视为搜索关键词。
+
+**② system prompt 加「意图决策树」**
+当用户说「还记得」/「之前」/「上次」这类回溯信号时，**必须先回忆再行动**。
+
+### 判断逻辑
+
+```
+用户消息
+  ├─ 含"还记得"/"之前"/"上次"/"我们说过"/"你记得" → 先 session_search，再综合结果
+  ├─ 含"帮我做"/"执行"/"改成"/"写一个" → 直接行动
+  └─ 不确定 → 先搜再看：session_search 获取上下文，再决策
+```

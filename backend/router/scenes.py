@@ -1206,23 +1206,23 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # ── Agent Loop：LLM 自主决策调工具（替代预执行 + 规则路由） ──
         from agent_core.agent_loop import run_agent_loop
+        from agent_core.context_builder import SCENE_SYSTEM_PROMPT as _FALLBACK_SCENE_SP
 
-        scene_agent_prompt = (
-            "你是坐山客AI工作台的智能助手。\n"
-            "你可以调用工具获取实时信息（天气、搜索等），也可以直接回答用户的问题。\n"
-            "当你需要实时数据或用户明确要求查信息时，先调用工具获取数据，再基于数据回复。\n"
-            "如果用户问的是常识性问题或你已知道的知识，直接回复即可，不需要调工具。\n"
-            "请用中文回复，保持简洁自然。\n"
-            "\n"
-            "## 追问原则\n"
-            "当用户描述了一个目标或计划（如「我想做二手车买卖」）而不是一个即时问题时：\n"
-            "- 先不要急于给出完整方案\n"
-            "- 主动追问 2-3 个关键问题来澄清需求（预算、时间、范围等）\n"
-            "- 追问要有针对性，帮助缩小问题范围\n"
-            "- 在追问末尾说明「我会逐步帮你拆分这个任务」\n"
-        )
+        # 读 System Prompt：DB settings["scene"] → context_builder.SCENE_SYSTEM_PROMPT
+        scene_sp = _FALLBACK_SCENE_SP
+        try:
+            from models import Setting
+            _setting = db.query(Setting).first()
+            if _setting and _setting.system_prompts:
+                _db_sp = _setting.system_prompts.get("scene")
+                if _db_sp:
+                    scene_sp = _db_sp
+        except Exception:
+            pass
+
+        scene_agent_prompt = scene_sp
         if user_ctx:
-            scene_agent_prompt += f"\n=== 用户设定的背景 ===\n{user_ctx}\n==================="
+            scene_agent_prompt += f"\n\n=== 用户设定的背景 ===\n{user_ctx}\n==================="
 
         agent_stream = run_agent_loop(
             task=data.content,
