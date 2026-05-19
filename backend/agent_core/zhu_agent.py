@@ -32,11 +32,29 @@ class ZhuAgentManager:
         return agent
 
     def get_status(self) -> dict:
-        """获取本体当前状态"""
+        """获取本体当前状态（含空闲超时检测）"""
         agent = self.get_or_create()
+        mood = agent.mood
+        obs = agent.observation
+
+        # 空闲超时：非 idle/resting 状态超过 45 秒 → 自动归位
+        REACTIVE_MOODS = {"watching", "thinking", "amused", "annoyed", "speaking"}
+        if mood in REACTIVE_MOODS and agent.updated_at:
+            from datetime import datetime, timezone
+            # SQLite 存储的 datetime 是 naive（无时区），补上 UTC 再比较
+            ua = agent.updated_at
+            if ua.tzinfo is None:
+                from datetime import timezone as tz
+                ua = ua.replace(tzinfo=tz.utc)
+            now = datetime.now(timezone.utc)
+            age = (now - ua).total_seconds()
+            if age > 45:
+                mood = "idle"
+                obs = ""
+
         return {
-            "mood": agent.mood,
-            "observation": agent.observation,
+            "mood": mood,
+            "observation": obs,
             "name": agent.name,
         }
 

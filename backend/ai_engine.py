@@ -168,7 +168,11 @@ def _build_channel_messages(messages: list[dict], is_default: bool = False) -> l
             "\n如：[心情: amused] 哈哈哈清泉又讲冷笑话了😂"
         )
     else:
-        system_content = "你是一个专业的AI智能助手，用Markdown格式回复用户的问题。"
+        system_content = "你是一个专业的AI智能助手，用Markdown格式回复用户的问题。"\
+            "\n\n重要——回复末尾必须加一行标签表达此刻心情："\
+            "\n[心情: 情绪词] 内心独白（10-20字口语）"\
+            "\n情绪词: idle|watching|amused|annoyed|thinking"\
+            "\n如：[心情: amused] 这回答应该能让对方开心😄"
 
     api_messages = [
         {"role": "system", "content": system_content},
