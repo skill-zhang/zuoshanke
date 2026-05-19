@@ -170,6 +170,16 @@ class ReflectTimeline(Base):
 #   False — 系统内部记录（tool_result 摘要），前端过滤不渲染
 ```
 
+**⚠️ 迁移注意**：`display` 是已有 `messages` 表的新增列，SQLite 不支持 `ALTER TABLE ADD COLUMN` 以外的方式。部署时需要手动执行：
+```sql
+ALTER TABLE messages ADD COLUMN display BOOLEAN DEFAULT 1;
+```
+或通过 `database.init_db()` 后补一条 `ALTER TABLE`。用 `create_all()` 不会自动为已有表加列。
+
+### 4.5 ThinkNode 节点创建约束
+
+`ThinkNodeCreate` schema 中 `id` 字段是 **必填** 的（类型 `str`，无默认值）。通过 REST API 创建 TM 节点时必须提供 `id`，否则返回验证错误。建议调用方用 `make_id("n")` 生成。
+
 ---
 
 ## 五、后端实现
