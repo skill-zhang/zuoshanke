@@ -81,8 +81,8 @@ def converge(scene_id: str, summary: str = "") -> str:
                 "node_count": node_count,
             }, ensure_ascii=False)
 
-        # 执行自动收敛 + 排序
-        pq_items = auto_converge_and_prioritize(db, scene_id, tmap)
+        # 执行自动收敛 + 排序（传对话摘要，指导优先级判断）
+        pq_items = auto_converge_and_prioritize(db, scene_id, tmap, summary=summary)
 
         # 写入摘要到 ReflectTimeline
         if summary and pq_items:
