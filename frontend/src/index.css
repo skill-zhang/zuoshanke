@@ -1920,7 +1920,16 @@ body {
   font-size: 10px;
 }
 .dashboard-mindmap .mm-body {
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: 55vh;
+  min-height: 200px;
+}
+.dashboard-mindmap .collapse-arrow {
+  font-size: 10px;
+  color: #777;
+  margin-right: 4px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
 }
 
 /* 2x2 网格 */

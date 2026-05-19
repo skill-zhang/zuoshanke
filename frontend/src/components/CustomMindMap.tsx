@@ -218,9 +218,9 @@ export function CustomMindMap({
 
   useEffect(() => {
     const svgEl = svgRef.current;
-    if (!svgEl || !nodes.length) return;
+    const container = containerRef.current;
+    if (!svgEl || !nodes.length || !container) return;
 
-    const container = containerRef.current!;
     const svg = d3.select(svgEl);
     const width = propWidth || container.clientWidth || 800;
     const height = propHeight;
@@ -281,11 +281,17 @@ export function CustomMindMap({
     const bw = bxMax - bx + pad * 2;
     const bh = byMax - by + pad * 2;
     const svgW = Math.max(width, bw);
-    const svgH = Math.max(height, bh);
+    const svgH = Math.max(height || 0, bh);
 
     svg
       .attr('viewBox', `0 0 ${svgW} ${svgH}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    // 自适应高度：容器高度 = 实际内容高度（按 viewBox 比例换算）
+    if (!height) {
+      const naturalH = bh * (width / svgW);
+      container.style.height = `${Math.min(Math.max(naturalH, 200), 600)}px`;
+    }
 
     // ── 背景 ──
     svg.append('rect')
@@ -420,7 +426,6 @@ export function CustomMindMap({
       className={className}
       style={{
         width: '100%',
-        height: propHeight,
         background: '#16161e',
         borderRadius: 8,
         overflow: 'hidden',
@@ -430,7 +435,7 @@ export function CustomMindMap({
     >
       <svg
         ref={svgRef}
-        style={{ width: '100%', height: propHeight, display: 'block' }}
+        style={{ width: '100%', display: 'block', height: '100%' }}
       />
       <button
         onClick={handleReset}

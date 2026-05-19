@@ -6,7 +6,7 @@
  *   ③ 2×2 网格: TM收敛结果 / Priority Queue / Action Map / Reflect Timeline
  *   ④ Status Bar
  */
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useStore } from '../stores/appStore';
 import type { DashboardQueueItem, DashboardReflectItem, ThinkNode } from '../api/client';
 import { CustomMindMap, type ThinkNodeData } from './CustomMindMap';
@@ -61,8 +61,10 @@ function LoopDiagram() {
   );
 }
 
-// ═══ 思维导图（固定高度） ═══
+// ═══ 思维导图（可收起 + 自适应高度） ═══
 function CollapsibleMindMap() {
+  const [expanded, setExpanded] = useState(true);
+  const mmRef = useRef<HTMLDivElement>(null);
   const thinkingMap = useStore(s => s.thinkingMap);
   const nodesRef = useRef<any[]>([]);
   nodesRef.current = thinkingMap?.nodes || nodesRef.current;
@@ -83,30 +85,36 @@ function CollapsibleMindMap() {
 
   return (
     <div className="dashboard-mindmap">
-      <div className="mm-title-row">
+      <div className="mm-title-row" style={{ cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setExpanded(v => !v)}>
+        <span className="collapse-arrow">{expanded ? '▼' : '▶'}</span>
         <h3>🧠 发散阶段 — Thinking Map 思维导图</h3>
         <span className="badge badge-blue">头脑风暴</span>
         <span className="badge badge-orange">收敛标记</span>
         <span className="badge badge-pink">反馈注入</span>
       </div>
-      <div className="mm-legend">
-        <span><span className="dot blue"></span> 活跃节点</span>
-        <span><span className="dot green"></span> 已收敛→队列</span>
-        <span><span className="dot orange"></span> 已收敛未分配</span>
-        <span><span className="dot gray"></span> 头脑风暴中</span>
-        <span><span className="dot pink"></span> 反馈新增</span>
-        <span><span className="dot red"></span> 已废弃</span>
-        <span className="mm-count">{nodes.length} 节点</span>
-      </div>
-      <div className="mm-body">
-        {nodes.length > 0 ? (
-          <CustomMindMap nodes={mindMapNodes} height={400} />
-        ) : (
-          <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
-            发送消息后自动生成思维节点
+      {expanded && (
+        <>
+          <div className="mm-legend">
+            <span><span className="dot blue"></span> 活跃节点</span>
+            <span><span className="dot green"></span> 已收敛→队列</span>
+            <span><span className="dot orange"></span> 已收敛未分配</span>
+            <span><span className="dot gray"></span> 头脑风暴中</span>
+            <span><span className="dot pink"></span> 反馈新增</span>
+            <span><span className="dot red"></span> 已废弃</span>
+            <span className="mm-count">{nodes.length} 节点</span>
           </div>
-        )}
-      </div>
+          <div className="mm-body" ref={mmRef}>
+            {nodes.length > 0 ? (
+              <CustomMindMap nodes={mindMapNodes} />
+            ) : (
+              <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+                发送消息后自动生成思维节点
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
