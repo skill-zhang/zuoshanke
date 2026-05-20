@@ -48,6 +48,10 @@ class SceneOut(BaseModel):
     published_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # ── Schema v0.81: 收敛/发散参数（默认值） ──
+    converge_threshold: float = 2.0
+    converge_enabled: bool = True
+    diverge_min_rounds: int = 2
 
     class Config:
         from_attributes = True
@@ -60,6 +64,10 @@ class SceneUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     guide_text: Optional[str] = None
+    # ── Schema v0.81: 收敛/发散参数 ──
+    converge_threshold: Optional[float] = None
+    converge_enabled: Optional[bool] = None
+    diverge_min_rounds: Optional[int] = None
 
 class ScenePublishRequest(BaseModel):
     version: str
@@ -384,3 +392,42 @@ class GatewayChatResponse(BaseModel):
     scene_id: Optional[str] = None
     scene_name: Optional[str] = None
     switch_hint: Optional[str] = None  # 场景切换提示
+
+
+# ═══ Schema v0.81: 项目 ═══
+class OutputProjectCreate(BaseModel):
+    """手动创建项目"""
+    scene_id: str
+    name: str
+    description: str = ""
+
+class OutputProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class OutputProjectOut(BaseModel):
+    id: str
+    scene_id: str
+    name: str
+    description: str
+    converged_at: Optional[datetime] = None
+    is_active: bool
+    created_at: datetime
+    outputs: List = []
+
+    class Config:
+        from_attributes = True
+
+class ConvergeStatusOut(BaseModel):
+    """场景收敛状态"""
+    scene_id: str
+    ai_rounds: int = 0                   # 当前 AI 回复轮数
+    diverge_min_rounds: int = 2          # 发散阈值
+    has_tree: bool = False               # 是否已建树
+    has_converged: bool = False          # 是否已收敛
+    leaf_count: int = 0                  # 叶子节点数
+    branch_count: int = 0                # 分支节点数
+    threshold: float = 2.0              # 收敛阈值
+    trigger_ready: bool = False          # 是否满足触发条件
+    project: Optional[OutputProjectOut] = None  # 活跃项目

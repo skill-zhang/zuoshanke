@@ -112,16 +112,23 @@ def converge(scene_id: str, summary: str = "") -> str:
             "node_count": node_count,
         }
 
-        # 附上 PQ 摘要（截断，避免撑爆 context）
-        if pq_items:
+        # 附上项目信息（如果有）
+        if isinstance(pq_items, dict) and pq_items.get("project"):
+            result["project"] = pq_items["project"]
+            result["project_id"] = pq_items["project"]["project_id"]
+
+        # 附上 PQ 摘要
+        pq_list = pq_items.get("pq_items", pq_items) if isinstance(pq_items, dict) else pq_items
+        if pq_list:
             summaries = []
-            for pq in pq_items:
+            for pq in pq_list:
                 summaries.append(
                     f"[P{pq.get('priority', 2)}] {pq.get('title', '')[:40]}"
                 )
             result["queue_summary"] = summaries[:8]  # 最多 8 条
             if len(summaries) > 8:
                 result["queue_summary"].append(f"... 还有 {len(summaries) - 8} 个")
+            result["queue_count"] = len(pq_list)
 
         return json.dumps(result, ensure_ascii=False)
 

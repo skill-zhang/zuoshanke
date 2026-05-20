@@ -100,6 +100,14 @@ def diverge(scene_id: str, nodes: list = None) -> str:
                 })
                 continue
 
+            # Schema v0.81: 如果父节点是 leaf，自动升级为 domain
+            if parent_id:
+                parent_node = db.query(ThinkNode).filter(ThinkNode.id == parent_id).first()
+                if parent_node and parent_node.type == "leaf":
+                    parent_node.type = "domain"
+                    print(f"[diverge] 自动升级父节点 {parent_node.label}: leaf → domain")
+                    db.commit()
+
             node = ThinkNode(
                 id=make_id("tn"),
                 map_id=tm.id,

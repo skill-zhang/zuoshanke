@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, Text, ForeignKey, JSON, UniqueConstraint
+    Column, String, Integer, Boolean, DateTime, Text, ForeignKey, JSON, UniqueConstraint, Float
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -35,6 +35,11 @@ class Scene(Base):
     published_at = Column(DateTime, nullable=True, default=None) # 最近发布时间
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    # ── Schema v0.81: 收敛／发散参数 ──
+    converge_threshold = Column(Float, default=2.0)         # 收敛阈值（叶子/分支比）
+    converge_enabled = Column(Boolean, default=True)        # 自动收敛开关
+    diverge_min_rounds = Column(Integer, default=2)         # 发散所需最少 AI 回复轮数
 
 
     thinking_maps = relationship("ThinkingMap", back_populates="scene", cascade="all, delete-orphan")
@@ -479,4 +484,23 @@ class ProjectOutput(Base):
     type = Column(String(20), nullable=False, default="html")  # html / link
     file_path = Column(String(500), nullable=True)              # 相对 outputs/ 的路径
     url = Column(String(500), nullable=True)                    # 外部链接
+    project_id = Column(String, ForeignKey("output_projects.id"), nullable=True, index=True)  # Schema v0.81
     created_at = Column(DateTime, default=utcnow)
+
+    project = relationship("OutputProject", back_populates="outputs")
+
+
+# ═══ 产出项目 — 相关产出的容器（Schema v0.81） ═══
+class OutputProject(Base):
+    """项目——一组相关产出的容器。收敛时由系统自动创建"""
+    __tablename__ = "output_projects"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)               # 项目名称
+    description = Column(Text, default="")                   # 项目描述
+    converged_at = Column(DateTime, default=utcnow)          # 收敛诞生时间
+    is_active = Column(Boolean, default=True)                # 是否活跃
+    created_at = Column(DateTime, default=utcnow)
+
+    outputs = relationship("ProjectOutput", back_populates="project", cascade="all, delete-orphan")

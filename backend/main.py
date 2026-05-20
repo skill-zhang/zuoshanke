@@ -76,4 +76,14 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"空闲提取调度启动失败: {e}")
 
+    # 🆕 Schema v0.81: 数据库迁移
+    try:
+        db = SessionLocal()
+        from router.scenes import _migrate_schema_v081
+        _migrate_schema_v081(db)
+        db.close()
+        log.info("✅ Schema v0.81 数据库迁移完成")
+    except Exception as e:
+        log.warning(f"Schema v0.81 迁移跳过: {e}")
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -287,6 +287,13 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
         scene.category = data.category or "other"
     if data.guide_text is not None:
         scene.guide_text = data.guide_text or None
+    # ── Schema v0.81: 收敛/发散参数 ──
+    if data.converge_threshold is not None:
+        scene.converge_threshold = data.converge_threshold
+    if data.converge_enabled is not None:
+        scene.converge_enabled = data.converge_enabled
+    if data.diverge_min_rounds is not None:
+        scene.diverge_min_rounds = data.diverge_min_rounds
     scene.updated_at = utcnow()
     db.commit()
     db.refresh(scene)
@@ -297,11 +304,15 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
 def delete_scene(scene_id: str, db: Session = Depends(get_db)):
     scene = _get_scene_or_404(db, scene_id)
     # 级联清理关联数据
-    from models import Message, ThinkingMap, ThinkNode, PriorityQueue, ReflectTimeline, SceneAsset, DialogState
+    from models import Message, ThinkingMap, ThinkNode, PriorityQueue, ReflectTimeline, SceneAsset, DialogState, OutputProject
     db.query(DialogState).filter(DialogState.scene_id == scene_id).delete()
     db.query(SceneAsset).filter(SceneAsset.scene_id == scene_id).delete()
     db.query(PriorityQueue).filter(PriorityQueue.scene_id == scene_id).delete()
     db.query(ReflectTimeline).filter(ReflectTimeline.scene_id == scene_id).delete()
+    # 清理项目和产出关联
+    db.query(OutputProject).filter(OutputProject.scene_id == scene_id).delete()
+    from models import ProjectOutput
+    db.query(ProjectOutput).filter(ProjectOutput.scene_id == scene_id).delete()
     tm = db.query(ThinkingMap).filter(ThinkingMap.scene_id == scene_id).first()
     if tm:
         db.query(ThinkNode).filter(ThinkNode.map_id == tm.id).delete()
@@ -1236,6 +1247,148 @@ def extract_scene_memory(scene_id: str, db: Session = Depends(get_db)):
     return {"ok": True, "extracted": saved, "total_candidates": len(entries)}
 
 
+# ═══ Schema v0.81: 异步收敛检查 ═══
+
+import threading as _threading
+
+_CONVERGE_LOCKS = {}  # scene_id → lock, 防止同一场景并发收敛
+_CONVERGE_LOCK = _threading.Lock()
+
+
+def _migrate_schema_v081(db):
+    """为已有 DB 添加 Schema v0.81 新列和新表（安全执行，不报错）"""
+    from sqlalchemy import text as _sa_text
+    # 新表由 create_all 自动创建，这里只处理 ALTER TABLE
+    for col, col_type in [
+        ("converge_threshold", "FLOAT DEFAULT 2.0"),
+        ("converge_enabled", "BOOLEAN DEFAULT 1"),
+        ("diverge_min_rounds", "INTEGER DEFAULT 2"),
+    ]:
+        try:
+            db.execute(_sa_text(f"ALTER TABLE scenes ADD COLUMN {col} {col_type}"))
+        except Exception:
+            pass  # 已有该列
+    # project_outputs 加 project_id
+    try:
+        db.execute(_sa_text("ALTER TABLE project_outputs ADD COLUMN project_id VARCHAR REFERENCES output_projects(id)"))
+    except Exception:
+        pass
+    db.commit()
+
+
+def _build_diverge_context(db, scene_id: str) -> str:
+    """构建 auto-diverge 的完整上下文（非单条消息）"""
+    from models import Scene, Message
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        return ""
+    parts = [f"场景名称：{scene.name}"]
+    if scene.user_context:
+        parts.append(f"场景设定：{scene.user_context[:200]}")
+    # 取最近 10 条对话
+    msgs = db.query(Message).filter(
+        Message.scene_id == scene_id,
+        Message.role.in_(["user", "ai"]),
+    ).order_by(Message.created_at.desc()).limit(10).all()
+    msgs.reverse()
+    if msgs:
+        dialog_lines = []
+        for m in msgs:
+            role = "用户" if m.role == "user" else "AI"
+            content = m.content[:200]
+            dialog_lines.append(f"{role}: {content}")
+        parts.append("对话历史：\n" + "\n".join(dialog_lines))
+    return "\n\n".join(parts)
+
+
+def _async_converge_worker(scene_id: str):
+    """后台异步收敛检查线程"""
+    from database import SessionLocal
+    from models import Scene, ThinkingMap, ThinkNode, Message
+    from agent_core.converge_engine import auto_converge_and_prioritize
+
+    # 每个场景一把锁，防止并发
+    with _CONVERGE_LOCK:
+        if scene_id not in _CONVERGE_LOCKS:
+            _CONVERGE_LOCKS[scene_id] = _threading.Lock()
+
+    if not _CONVERGE_LOCKS[scene_id].acquire(blocking=False):
+        print(f"[converge] 场景 {scene_id} 已有收敛线程在跑，跳过本轮")
+        return
+
+    try:
+        db = SessionLocal()
+        try:
+            scene = db.query(Scene).filter(Scene.id == scene_id).first()
+            if not scene or not scene.converge_enabled:
+                return
+
+            # 闲聊场景跳过
+            if "闲聊" in (scene.name or ""):
+                return
+
+            # 统计 AI 回复轮数
+            ai_rounds = db.query(Message).filter(
+                Message.scene_id == scene_id,
+                Message.role == "ai",
+            ).count()
+
+            # 查找场景的 ThinkingMap
+            tmap = db.query(ThinkingMap).filter(
+                ThinkingMap.scene_id == scene_id
+            ).first()
+
+            if not tmap:
+                # 轮数不够？跳过
+                if ai_rounds < (scene.diverge_min_rounds or 2):
+                    return
+                # 需要建树 — 但此时 auto-diverge 已被 SSE 流中同步执行处理
+                # 这里仅做收敛检查
+                return
+
+            # 检查已有节点（不含 root）
+            nodes = db.query(ThinkNode).filter(
+                ThinkNode.map_id == tmap.id,
+                ThinkNode.type != "root",
+            ).all()
+
+            if not nodes or len(nodes) <= 1:
+                return
+
+            # 计算叶子和分支
+            node_ids = set(n.id for n in nodes)
+            children_map = {}
+            for n in nodes:
+                if n.parent_id and n.parent_id in node_ids:
+                    children_map.setdefault(n.parent_id, []).append(n.id)
+
+            leaves = [n for n in nodes if n.id not in children_map]
+            branches = [n for n in nodes if n.id in children_map]
+
+            # 阈值检查：leaf >= branch × threshold
+            threshold = scene.converge_threshold or 2.0
+            if len(leaves) < len(branches) * threshold:
+                return
+
+            print(f"[converge] 自动触发收敛: scene={scene_id}, leaf={len(leaves)}, branch={len(branches)}, threshold={threshold}")
+
+            # 执行收敛
+            result = auto_converge_and_prioritize(db, scene_id, tmap)
+            if result.get("project"):
+                print(f"[converge] 项目认知: {result['project']}")
+
+        finally:
+            db.close()
+    finally:
+        _CONVERGE_LOCKS[scene_id].release()
+
+
+def start_async_converge_check(scene_id: str):
+    """启动异步收敛检查（在 SSE done 后调用）"""
+    t = _threading.Thread(target=_async_converge_worker, args=(scene_id,), daemon=True)
+    t.start()
+
+
 # ═══ 场景流式 ═══
 
 @router.post("/api/scenes/{scene_id}/stream")
@@ -1623,29 +1776,39 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             except Exception as e:
                 print(f"[memory] extract error: {e}")
 
-            # ── 7.5 自动发散（首次消息时自动触发 Thinking Map 拆解） ──
+            # ── 7.5 自动发散（按轮数触发，非首次消息） ──
             try:
+                from models import ThinkingMap, ThinkNode as _TN
                 tmap = db.query(ThinkingMap).filter(
                     ThinkingMap.scene_id == scene_id
                 ).first()
                 if tmap:
-                    existing = db.query(ThinkNode).filter(
-                        ThinkNode.map_id == tmap.id
+                    existing = db.query(_TN).filter(
+                        _TN.map_id == tmap.id
                     ).all()
-                    is_first_msg = len(existing) <= 1 and not any(
-                        n.type != "root" for n in existing
-                    )
-                    if is_first_msg:
-                        print(f"[diverge] auto-diverge for scene {scene_id}")
-                        # 用这个请求构建 diverge 请求
-                        d_ctx = data.content[:500]
+                    # 统计 AI 回复轮数
+                    ai_rounds = db.query(Message).filter(
+                        Message.scene_id == scene_id,
+                        Message.role == "ai",
+                    ).count()
+                    has_non_root = any(n.type != "root" for n in existing)
+                    min_rounds = scene.diverge_min_rounds or 2
+
+                    if not has_non_root and ai_rounds >= min_rounds:
+                        print(f"[diverge] auto-diverge for scene {scene_id} (round {ai_rounds})")
+                        # 用全量上下文代替单条消息
+                        d_ctx = _build_diverge_context(db, scene_id)
+                        if not d_ctx:
+                            d_ctx = data.content[:500]
                         d_messages = [
                             {"role": "system", "content": (
                                 "你是坐山客 AI 工作台的任务拆解专家。"
-                                "将用户的目标拆解为思维导图节点树。"
-                                "输出 JSON，结构: {\"categories\": [{\"label\": \"类别\", \"nodes\": [{\"label\": \"子任务\"}]}]}"
+                                "将用户的目标拆解为思维导图节点树，支持多层嵌套。"
+                                "输出 JSON 树形结构："
+                                '{"tree": [{"label": "根分类", "children": [{"label": "子分类", "children": [{"label": "最细项"}]}]}]}'
+                                "没有 children 的节点是叶子节点(leaf)，有 children 的节点是分类节点(domain)。"
                             )},
-                            {"role": "user", "content": f"目标：{d_ctx}"},
+                            {"role": "user", "content": f"基于以下对话上下文，拆解任务维度：\n\n{d_ctx}"},
                         ]
                         d_raw = call_deepseek_chat(d_messages, model="flash",
                                                    temperature=0.5, max_tokens=3072,
@@ -1664,42 +1827,40 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                 if start >= 0 and end > start:
                                     parsed = _json.loads(text[start:end+1])
                             if parsed:
-                                categories = parsed.get("categories", []) or parsed.get("nodes", [])
+                                # Schema v0.81: 支持递归 tree 和旧版 categories 格式
+                                tree = parsed.get("tree", []) or parsed.get("categories", []) or parsed.get("nodes", [])
                                 name_to_id = {n.label: n.id for n in existing}
                                 root = next((n for n in existing if n.type == "root"), None)
                                 new_count = 0
-                                for cat in categories:
-                                    p_label = cat.get("parent_label", cat.get("label", ""))
-                                    children = cat.get("nodes", [])
-                                    if root and "label" in cat and p_label not in name_to_id:
-                                        nid = make_id("n")
-                                        node = ThinkNode(
-                                            id=nid, map_id=tmap.id, parent_id=root.id,
-                                            type="domain", label=p_label,
-                                            status="discussing", created_by="brainstorm",
-                                        )
-                                        db.add(node)
-                                        name_to_id[p_label] = nid
-                                        new_count += 1
-                                    pid = name_to_id.get(p_label, root.id if root else None)
-                                    if not pid:
-                                        continue
-                                    for child in children:
-                                        cl = child.get("label", "")
-                                        if not cl:
+
+                                def _build_tree_nodes(items, parent_id):
+                                    nonlocal new_count
+                                    for item in items:
+                                        label = item.get("label", "").strip()
+                                        if not label:
                                             continue
+                                        children = item.get("children", []) or item.get("nodes", [])
+                                        ntype = "domain" if children else "leaf"
+                                        # 去重
                                         dup = any(
-                                            x.parent_id == pid and x.label == cl
+                                            x.parent_id == parent_id and x.label == label
                                             for x in existing
                                         )
-                                        if not dup:
-                                            db.add(ThinkNode(
-                                                id=make_id("n"), map_id=tmap.id,
-                                                parent_id=pid, type="leaf",
-                                                label=cl, status="discussing",
-                                                created_by="brainstorm",
-                                            ))
-                                            new_count += 1
+                                        if dup:
+                                            continue
+                                        nid = make_id("n")
+                                        db.add(ThinkNode(
+                                            id=nid, map_id=tmap.id, parent_id=parent_id,
+                                            type=ntype, label=label,
+                                            status="discussing", created_by="brainstorm",
+                                        ))
+                                        new_count += 1
+                                        # 递归处理子节点
+                                        if children:
+                                            _build_tree_nodes(children, nid)
+
+                                if root:
+                                    _build_tree_nodes(tree, root.id)
                                 if new_count:
                                     tmap.version += 1
                                     tmap.updated_at = utcnow()
@@ -1745,6 +1906,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("error", message="AI 回复保存失败")
         finally:
             new_db.close()
+            # 🆕 Schema v0.81: SSE 流结束后异步检查收敛
+            try:
+                start_async_converge_check(scene_id)
+            except Exception:
+                pass
 
     return sse_response(generate())
 
