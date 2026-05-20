@@ -178,9 +178,9 @@ SETTINGS_ID = "zuoshanke-v1"
 
 DEFAULT_ROUTING = {
     "channel":    {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.7, "max_tokens": 2048, "context_length": 32768,  "repeat_penalty": 1.0},
-    "scene":      {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 4096, "context_length": 1048576, "repeat_penalty": 1.05},
+    "scene":      {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
     "extraction": {"model": "qwen3.5-9b",  "provider": "local",     "temperature": 0.1, "max_tokens": 1024, "context_length": 32768,  "repeat_penalty": 1.0},
-    "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 4096, "context_length": 1048576, "repeat_penalty": 1.05},
+    "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
     "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "temperature": 0.5, "max_tokens": 8192, "context_length": 1048576, "repeat_penalty": 1.05},
 }
 

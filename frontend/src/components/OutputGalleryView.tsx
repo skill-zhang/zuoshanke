@@ -63,12 +63,14 @@ export function OutputGalleryView() {
             if (out.file_path && !href) {
               href = `/outputs/${out.file_path}`;
             }
+            // 前端 5173 端口 → 后端 8000 端口
+            const fullHref = href ? `http://localhost:8000${href}` : '';
             return (
               <div
                 key={out.id}
                 className="output-card"
-                onClick={() => { if (href) window.open(href, '_blank'); }}
-                style={{ cursor: href ? 'pointer' : 'default' }}
+                onClick={() => { if (fullHref) window.open(fullHref, '_blank'); }}
+                style={{ cursor: fullHref ? 'pointer' : 'default' }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
                   <span style={{ fontSize: 28, flexShrink: 0 }}>{meta.icon}</span>

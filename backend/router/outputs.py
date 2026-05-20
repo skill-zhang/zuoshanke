@@ -40,7 +40,7 @@ class OutputOut(BaseModel):
     type: str
     file_path: Optional[str] = None
     url: Optional[str] = None
-    created_at: str
+    created_at: str = ""
 
     class Config:
         from_attributes = True
@@ -55,7 +55,18 @@ def list_outputs(scene_id: Optional[str] = None, db: Session = Depends(get_db)):
     q = db.query(ProjectOutput).order_by(ProjectOutput.created_at.desc())
     if scene_id:
         q = q.filter(ProjectOutput.scene_id == scene_id)
-    return q.all()
+    rows = q.all()
+    # 手动序列化 datetime → str
+    result = []
+    for r in rows:
+        d = {
+            "id": r.id, "scene_id": r.scene_id,
+            "title": r.title, "description": r.description or "",
+            "type": r.type, "file_path": r.file_path, "url": r.url,
+            "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at),
+        }
+        result.append(OutputOut(**d))
+    return result
 
 
 @router.post("/api/outputs", response_model=OutputOut)
@@ -77,7 +88,12 @@ def create_output(data: OutputCreate, db: Session = Depends(get_db)):
     db.add(output)
     db.commit()
     db.refresh(output)
-    return output
+    return {
+        "id": output.id, "scene_id": output.scene_id,
+        "title": output.title, "description": output.description or "",
+        "type": output.type, "file_path": output.file_path, "url": output.url,
+        "created_at": output.created_at.isoformat() if hasattr(output.created_at, 'isoformat') else str(output.created_at),
+    }
 
 
 @router.delete("/api/outputs/{output_id}")

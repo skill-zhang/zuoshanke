@@ -48,6 +48,7 @@ const STATE_MAP: Record<AgentStatus, {
   greeting: { eyes:'open',   mouth:'bigSmile',defaultMsg:'来了啊！👋', color:'#00d4ff', classSuffix:'greeting' },
   thinking: { eyes:'side',   mouth:'pursed',  defaultMsg:'让我想想',  color:'#d29922', classSuffix:'thinking' },
   working:  { eyes:'focused',mouth:'neutral', defaultMsg:'拼命处理中💦',color:'#bc8cff', classSuffix:'working', showSweat:true },
+  analyzing:{ eyes:'focused',mouth:'neutral', defaultMsg:'分析数据中', color:'#58a6ff', classSuffix:'analyzing' },
   done:     { eyes:'happy',  mouth:'big',     defaultMsg:'搞定！✅',   color:'#3fb950', classSuffix:'done' },
   error:    { eyes:'worried',mouth:'frown',   defaultMsg:'出问题了⚠️',color:'#f85149', classSuffix:'error' },
   notify:   { eyes:'open',   mouth:'smile',   defaultMsg:'有情况！',  color:'#00d4ff', classSuffix:'notify' },
@@ -61,6 +62,7 @@ const STATE_MAP: Record<AgentStatus, {
 const MOOD_TO_STATUS: Record<string, AgentStatus> = {
   idle:     'idle',
   watching: 'notify',
+  analyzing:'analyzing',
   thinking: 'thinking',
   amused:   'laugh',
   annoyed:  'angry',
@@ -108,11 +110,12 @@ export function AgentCharacter({ status: propStatus, message: propMessage, hidde
   const mouthPath = MOUTH[cfg.mouth] || MOUTH.smile;
   const animClass = `char-${cfg.classSuffix}`;
 
-  // Bubble show animation: delay mount to trigger CSS transition
+  // Bubble show animation: 只有后端传了 observation 才弹气泡
   const [bubbleShow, setBubbleShow] = useState(false);
   const prevObsRef = useRef(zhuObservation);
   useEffect(() => {
     setBubbleShow(false);
+    if (!zhuObservation) return; // 空 observation 不弹气泡
     const show = setTimeout(() => setBubbleShow(true), 50);
     // 根据文本长度决定停留时间：短文案4s，长歌词8s
     const duration = Math.min(Math.max(zhuObservation.length * 100, 4000), 8000);

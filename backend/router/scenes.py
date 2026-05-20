@@ -3,6 +3,7 @@ import difflib
 import json
 import os
 import re
+import time
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -1309,7 +1310,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         agent_stream = run_agent_loop(
             initial_messages=agent_messages,
-            max_steps=15,
+            max_steps=99,
             dialog_engine=dialog_engine,
             scene_id=scene_id,  # 🆕 Schema v0.7
         )
@@ -1351,6 +1352,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 if etype == "tool_start":
                     yield sse_event("tool_status", tool=event["tool"], status="running",
                                     message=f"正在执行：{event['tool']}...")
+                    # 🆕 分身开始调工具 → analyzing
+                    try:
+                        _zhu.observe_fenshen_event("fenshen:analyzing", scene.name)
+                    except Exception:
+                        pass
                 elif etype == "tool_done":
                     yield sse_event("tool_status", tool=event["tool"], status="done",
                                     success=True, message="已完成")
@@ -1382,6 +1388,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                     tool=event.get("tool", ""),
                                     tool_success=event.get("tool_success", False),
                                     result_preview=event.get("result_preview", ""))
+        except GeneratorExit:
+            # 用户断开连接：保存已收到的回复再退出（不能 yield）
+            _log.info(f"[scene] 客户端断开，保存部分回复: scene={scene_id}")
+            _persist_scene_reply(scene_id, full_reply, data.session_id, model_name)
+            return
         except Exception as e:
             _log.error(f"[scene agent loop] 迭代异常: {e}")
             yield sse_event("error", message=f"AI 响应生成异常: {e}")
@@ -1412,7 +1423,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             # 🆕 检测 AI 回复中的 HTML 代码块 → 自动保存为产出成果
             try:
                 html_match = re.search(
-                    r'```html\s*\n(.*?)```',
+                    r'```html\s*\n(.+?)(```|$)',
                     full_reply, re.DOTALL
                 )
                 if html_match:
@@ -1444,6 +1455,151 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             except Exception as e:
                 print(f"[output] 自动提取 HTML 失败: {e}")
 
+            # 🆕 检测 run_code 通过 code_b64 写入的 HTML 文件 → 注册为产出成果
+            try:
+                out_dir = Path(__file__).resolve().parent.parent.parent / "outputs" / scene_id
+                out_dir.mkdir(parents=True, exist_ok=True)
+                # 方式A：扫目录已有 .html 文件
+                if out_dir.exists():
+                    for html_file in sorted(out_dir.glob("*.html")):
+                        fname = html_file.name
+                        fpath = f"{scene_id}/{fname}"
+                        existing = new_db.query(ProjectOutput).filter(
+                            ProjectOutput.file_path == fpath
+                        ).first()
+                        if existing:
+                            continue
+                        fsize = html_file.stat().st_size
+                        if fsize < 50:
+                            continue
+                        out_rec = ProjectOutput(
+                            id=make_id("out"), scene_id=scene_id,
+                            title=f"{scene.name or '产出'} - HTML",
+                            description=f"run_code 生成的 HTML 页面 ({fsize} 字节)",
+                            type="html", file_path=fpath,
+                        )
+                        new_db.add(out_rec); new_db.commit()
+                        yield sse_event("output:created", output_id=out_rec.id,
+                            title=out_rec.title, file_path=out_rec.file_path)
+                        print(f"[output] 目录扫描 HTML: {fpath}")
+                # 方式B：从 run_code 的 stdout 中提取 HTML（LLM print(html) 场景）
+                for idx, tr in enumerate(agent_tool_results or []):
+                    if tr.get("tool") == "run_code" and tr.get("success"):
+                        stdout = (tr.get("result") or {}).get("stdout", "") if isinstance(tr.get("result"), dict) else str(tr.get("result", ""))
+                        # 方式B1：stdout 直接包含 HTML 内容
+                        if "<!DOCTYPE html>" in stdout or "<html" in stdout[:200]:
+                            html_start = stdout.find("<!DOCTYPE html>")
+                            if html_start == -1:
+                                html_start = stdout.find("<html")
+                            if html_start >= 0:
+                                html_content = stdout[html_start:].strip()
+                                if len(html_content) > 50:
+                                    safe_name = re.sub(r'[^\w\u4e00-\u9fff_-]', '', scene.name or '产出')[:20]
+                                    out_path = out_dir / f"run-{idx}.html"
+                                    if out_path.exists():
+                                        out_path = out_dir / f"run-{idx}-{ai_msg_id[:8]}.html"
+                                    out_path.write_text(html_content, encoding="utf-8")
+                                    fpath = f"{scene_id}/{out_path.name}"
+                                    existing = new_db.query(ProjectOutput).filter(
+                                        ProjectOutput.file_path == fpath
+                                    ).first()
+                                    if not existing:
+                                        out_rec = ProjectOutput(
+                                            id=make_id("out"), scene_id=scene_id,
+                                            title=f"{safe_name} - HTML",
+                                            description="从 run_code 输出提取的 HTML",
+                                            type="html", file_path=fpath,
+                                        )
+                                        new_db.add(out_rec); new_db.commit()
+                                        yield sse_event("output:created",
+                                            output_id=out_rec.id, title=out_rec.title,
+                                            file_path=out_rec.file_path)
+                                        print(f"[output] run_code stdout HTML: {fpath}")
+                        # 方式B2：stdout 提到 .html 文件路径 → 复制到 outputs/ 目录
+                        html_paths = re.findall(r'(/[^\s]+\.html)', stdout)
+                        for html_path in html_paths:
+                            html_path = html_path.rstrip('.,;:)')
+                            if os.path.exists(html_path):
+                                file_size = os.path.getsize(html_path)
+                                if file_size >= 50:
+                                    fname = os.path.basename(html_path)
+                                    dest = out_dir / fname
+                                    if not dest.exists():
+                                        import shutil
+                                        shutil.copy2(html_path, str(dest))
+                                    fpath = f"{scene_id}/{dest.name}"
+                                    existing = new_db.query(ProjectOutput).filter(
+                                        ProjectOutput.file_path == fpath
+                                    ).first()
+                                    if not existing:
+                                        safe_name = re.sub(r'[^\w\u4e00-\u9fff_-]', '', scene.name or '产出')[:20]
+                                        out_rec = ProjectOutput(
+                                            id=make_id("out"), scene_id=scene_id,
+                                            title=f"{safe_name} - HTML",
+                                            description=f"从 {html_path} 复制",
+                                            type="html", file_path=fpath,
+                                        )
+                                        new_db.add(out_rec); new_db.commit()
+                                        yield sse_event("output:created",
+                                            output_id=out_rec.id, title=out_rec.title,
+                                            file_path=out_rec.file_path)
+                                        print(f"[output] run_code 复制 HTML: {fpath}")
+            except Exception as e:
+                print(f"[output] 扫描产出目录失败: {e}")
+
+            # 🆕 方式C：扫描所有工具执行中可能被创建的 .html 文件（不依赖 stdout）
+            try:
+                out_dir = Path(__file__).resolve().parent.parent.parent / "outputs" / scene_id
+                out_dir.mkdir(parents=True, exist_ok=True)
+                project_root = Path(__file__).resolve().parent.parent.parent  # zuoshanke/
+                scan_dirs = [project_root / "backend", project_root / "capability-demo", project_root]
+                scanned_paths = set()
+                scan_cutoff = time.time() - 120  # 只考虑120秒内修改过的文件
+                for scan_dir in scan_dirs:
+                    if not scan_dir.exists():
+                        continue
+                    for html_file in sorted(scan_dir.glob("**/*.html")):
+                        fpath_str = str(html_file.resolve())
+                        if fpath_str in scanned_paths:
+                            continue
+                        scanned_paths.add(fpath_str)
+                        # 排除已知目录
+                        exclude_dirs = {"outputs", "node_modules", ".git", "__pycache__",
+                                        "frontend", "skills", "tools", "docs", "references",
+                                        "scripts", "games", "prototypes", "data", "action-maps"}
+                        if exclude_dirs & set(html_file.parts):
+                            continue
+                        # 只取最近120秒内修改过的文件（LLM 刚生成的）
+                        fsize = html_file.stat().st_size
+                        mtime = html_file.stat().st_mtime
+                        if fsize < 100 or mtime < scan_cutoff:
+                            continue
+                        # 复制到 outputs/
+                        fname = html_file.name
+                        dest = out_dir / fname
+                        if not dest.exists():
+                            import shutil
+                            shutil.copy2(str(html_file), str(dest))
+                        fpath = f"{scene_id}/{dest.name}"
+                        existing = new_db.query(ProjectOutput).filter(
+                            ProjectOutput.file_path == fpath
+                        ).first()
+                        if not existing:
+                            safe_name = re.sub(r'[^\w\u4e00-\u9fff_-]', '', scene.name or '产出')[:20]
+                            out_rec = ProjectOutput(
+                                id=make_id("out"), scene_id=scene_id,
+                                title=f"{safe_name} - {fname}",
+                                description=f"自动发现的 HTML 页面 ({fsize} 字节)",
+                                type="html", file_path=fpath,
+                            )
+                            new_db.add(out_rec); new_db.commit()
+                            yield sse_event("output:created",
+                                output_id=out_rec.id, title=out_rec.title,
+                                file_path=fpath)
+                            print(f"[output] 扫描发现 HTML: {fpath}")
+            except Exception as e:
+                print(f"[output] 全盘扫描 HTML 失败: {e}")
+
             # 🆕 Schema v0.8: 本体观察 — 分身完成
             try:
                 _zhu.observe_fenshen_event("fenshen:done", scene.name)
@@ -1461,8 +1617,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 extract_msgs.append({"role": "ai", "content": full_reply})
 
                 # 双通道提取：快速关键词 + LLM 智能提取
-                extractor = MemoryExtractor(db)
-                mem_results = extractor.extract(extract_msgs, data.content)
+                mem_results = MemoryExtractor.extract(db, scene_id, extract_msgs)
                 if mem_results:
                     print(f"[memory] extract: {json.dumps(mem_results, ensure_ascii=False)}")
             except Exception as e:
@@ -1842,6 +1997,26 @@ def stream_agent_loop(data: AgentLoopRequest, db: Session = Depends(get_db)):
 
 
 # ═══ 辅助函数 ═══
+
+
+def _persist_scene_reply(scene_id: str, content: str, session_id: str, model_name: str) -> None:
+    """保存 AI 回复到数据库，无 yield，可在 GeneratorExit 中断连时安全调用"""
+    if not content:
+        return
+    save_db = SessionLocal()
+    try:
+        msg = Message(
+            id=make_id("msg"), scene_id=scene_id,
+            role="ai", content=content,
+            session_id=session_id, model=model_name,
+        )
+        save_db.add(msg)
+        save_db.commit()
+    except Exception:
+        pass
+    finally:
+        save_db.close()
+
 
 def _get_scene_or_404(db: Session, scene_id: str):
     scene = db.query(Scene).filter(Scene.id == scene_id).first()

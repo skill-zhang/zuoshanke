@@ -305,7 +305,7 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
               <span className="output-ref-title">{msg.outputRef.title}</span>
             </div>
             <button className="output-ref-open-btn" onClick={() => {
-              window.open(`/outputs/${msg.outputRef!.filePath}`, '_blank');
+              window.open(`http://localhost:8000/outputs/${msg.outputRef!.filePath}`, '_blank');
             }}>
               ↗ 打开
             </button>
@@ -402,7 +402,7 @@ export function ChatView() {
     sendSceneMsg, sendChannelMsg,
     deleteMsg, regenerateMsg, newSceneSession,
     batchDeleteMsgs, clearSceneMsgs, clearChannelHistory,
-    sessions, loadSceneSessions, switchSceneSession,
+    sessions, loadSceneSessions, loadSceneMessages, switchSceneSession,
     isGenerating,
     generatingEntityId,
     currentModelName,
@@ -499,10 +499,21 @@ export function ChatView() {
       : null;
   const displayModel = currentModelName || defaultModel;
 
-  // 在场景切换时加载会话列表
+  // 组件卸载时重置生成状态，防止 SSE 断连后 isGenerating 卡死
+  useEffect(() => {
+    return () => {
+      const store = useStore;
+      if (store.getState().isGenerating) {
+        store.setState({ isGenerating: false, generatingEntityId: null });
+      }
+    };
+  }, []);
+
+  // 在场景切换时加载会话列表 + 刷新消息
   useEffect(() => {
     if (currentScene) {
       loadSceneSessions(currentScene.id);
+      loadSceneMessages(currentScene.id);
     } else {
       setSelectMode(false);
       setSelectedIds(new Set());

@@ -124,9 +124,10 @@ body {
 .search-box input { background:none; border:none; color:#e6edf3; font-size:13px; outline:none; flex:1; }
 .search-box input::placeholder { color:#6e7681; }
 .card-grid {
-  flex:1; overflow-y:auto; padding:0 24px 24px;
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:16px; align-content:start;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 360px)); gap:16px; align-content:start;
+  justify-content:center; padding:0 24px 24px;
 }
+.tools-view { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 
 .output-card {
   background: #161b22;
@@ -1833,6 +1834,8 @@ body {
 .char-error .agent-char-canvas { animation:shake-sm 0.5s ease-in-out 2; }
 @keyframes notify-pulse-sm { 0%,100%{filter:drop-shadow(0 0 6px rgba(0,212,255,0.15))} 50%{filter:drop-shadow(0 0 18px rgba(0,212,255,0.4))} }
 .char-notify .agent-char-canvas { animation:notify-pulse-sm 1s ease-in-out 3; }
+@keyframes analyze-scan-sm { 0%,100%{transform:translateX(-50%) scale(1);filter:drop-shadow(0 0 2px rgba(88,166,255,0.2))} 50%{transform:translateX(-50%) scale(1.012);filter:drop-shadow(0 0 6px rgba(88,166,255,0.4))} }
+.char-analyzing .agent-char-canvas { animation:analyze-scan-sm 1.8s ease-in-out infinite; }
 
 /* ═══ 记忆管理 ═══ */
 .memory-view { flex:1; display:flex; flex-direction:column; overflow:hidden; }

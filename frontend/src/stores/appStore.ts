@@ -159,7 +159,7 @@ interface AppState {
 }
 
 export type AgentStatus =
-  | 'idle' | 'greeting' | 'thinking' | 'working'
+  | 'idle' | 'greeting' | 'thinking' | 'working' | 'analyzing'
   | 'done' | 'error' | 'notify'
   | 'resting' | 'angry' | 'laugh' | 'sad';
 

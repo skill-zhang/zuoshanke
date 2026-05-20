@@ -312,6 +312,11 @@ def _safe_parse_tool_args(raw: str) -> dict:
         return _manual_json_parse(raw)
     except (json.JSONDecodeError, Exception):
         pass
+    # 第六次尝试：暴力 swap 修复 — 把 code/language 参数分别提取后重建合法 JSON
+    try:
+        return _brute_parse_run_code(raw)
+    except (json.JSONDecodeError, Exception):
+        pass
     # 全部失败，原样抛出
     return json.loads(raw)
 
@@ -368,6 +373,39 @@ def _manual_json_parse(raw: str) -> dict:
                     result[key] = int(val_raw)
             except ValueError:
                 result[key] = val_raw
+    return result
+
+
+def _brute_parse_run_code(raw: str) -> dict:
+    """暴力解析 run_code 参数 — 无视字符串内未转义引号，直接按边界 `, "` 或 `}` 分割"""
+    import re as _re
+    result = {}
+    # 提取 language
+    lang_m = _re.search(r'["\']language["\']\s*:\s*["\']([^"\']+)["\']', raw)
+    if lang_m:
+        result["language"] = lang_m.group(1)
+    # 提取 code / code_b64
+    for key in ("code_b64", "code"):
+        # 找 key 的值：从 key: " 开始，到下一个 ", " 或 "} 结束
+        m = _re.search(r'["\']' + key + r'["\']\s*:\s*["\']', raw)
+        if not m:
+            continue
+        start = m.end()  # 值内容的开始位置（跳过 opening quote）
+        # 从 start 向后找最合适的结束位置
+        # 策略：找最后一个 " 后面跟 , " 或 }
+        rest = raw[start:]
+        # 尝试四种结束模式
+        for pattern in [r'",\s*"', r'"\s*}']:
+            matches = list(_re.finditer(pattern, rest))
+            if matches:
+                end_pos = matches[-1].start()  # 最后一个匹配的 " 位置
+                val = rest[:end_pos]
+                result[key] = val
+                break
+        if key in result:
+            break
+    if not result:
+        raise json.JSONDecodeError("brute parse failed", raw, 0)
     return result
 
 
@@ -467,8 +505,34 @@ def run_agent_loop(
     # 3. 执行循环
     from agent_core.tool_executor import execute_tool
 
+    # 🆕 工具调用模式追踪（用于死循环检测）
+    consecutive_tool_only = 0       # 连续纯工具调用步数
+    tool_call_trace = []            # [(tool_name, step), ...]
+
     for step in range(max_steps):
         yield {"type": "status", "message": f"第 {step + 1} 步：思考中...（可用工具: {len(tools)} 个）"}
+
+        # 🆕 死循环检测：连续工具超过阈值 → 提醒 LLM 收手出结论
+        if consecutive_tool_only >= 8 and consecutive_tool_only % 4 == 0:
+            messages.append({
+                "role": "user",
+                "content": f"[系统提示：你已经连续调用了 {consecutive_tool_only} 次工具。"
+                           f"如果已有足够信息，请直接给出你的分析结论，不要继续调用工具。]"
+            })
+
+        # 🆕 工具重复调用检测：同一工具连调 4+ 次 → 提醒
+        if len(tool_call_trace) >= 4:
+            from collections import Counter
+            recent = tool_call_trace[-8:]
+            counts = Counter(t[0] for t in recent)
+            repeated = [(n, c) for n, c in counts.items() if c >= 4]
+            if repeated:
+                for name, cnt in repeated:
+                    messages.append({
+                        "role": "user",
+                        "content": f"[系统提示：你已反复调用 {name} 工具 {cnt} 次。"
+                                   f"如果该工具无法提供所需信息，请换其他方式或直接给出结论。]"
+                    })
 
         # 3a. 调 LLM
         response = call_llm_with_tools(messages, tools, model=model)
@@ -489,6 +553,7 @@ def run_agent_loop(
 
         if not tool_calls:
             # LLM 返回文本 → 完成
+            consecutive_tool_only = 0  # 🆕 重置连续计数
             content = msg.get("content", "")
 
             # 🆕 Dialog Engine: 剥离 [PHASE:] 标记 + 检测阶段转移
@@ -525,6 +590,11 @@ def run_agent_loop(
             "tool_calls": tool_calls,
         }
         messages.append(assistant_msg)
+
+        # 🆕 追踪工具调用模式
+        consecutive_tool_only += 1
+        for tc in tool_calls:
+            tool_call_trace.append((tc.get("function", {}).get("name", "?"), step))
 
         for tc in tool_calls:
             try:
