@@ -6,7 +6,6 @@ import { ChatView } from './components/ChatView';
 import { PlazaView } from './components/PlazaView';
 import { WorkshopView } from './components/WorkshopView';
 import { ToolsView } from './components/ToolsView';
-import { ProjectList } from './components/ProjectList';
 import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
 import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
@@ -18,7 +17,7 @@ import { OutputGalleryView } from './components/OutputGalleryView';
 import { SecretGarden } from './components/SecretGarden';
 import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
-import { Scene, createScene, listProjects } from './api/client';
+import { Scene, createScene } from './api/client';
 
 // ═══ 稳定选择器（避免 useSyncExternalStore getSnapshot 引用变化）═══
 const selectAgentStatus = (s: any) => s.agentStatus;
@@ -31,7 +30,7 @@ const selectIsGenerating = (s: any) => s.isGenerating;
 
 export default function App() {
   const {
-    view, setView, loadProjects, currentProject,
+    view, setView,
     currentScene, setCurrentScene,
     loadThinkingMap, loadSceneMessages,
     channels, setCurrentChannel,
@@ -169,10 +168,6 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
   const handleEnterScene = async (scene: Scene) => {
     setCurrentScene(scene);
     setCurrentChannel(channels[0] || null);
@@ -212,13 +207,8 @@ export default function App() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        const projects = await listProjects();
-        if (projects.length === 0) {
-          alert('请先创建一个项目');
-          return;
-        }
         const { importScene } = await import('./api/client');
-        await importScene(projects[0].id, data);
+        await importScene('none', data);
         if (view === 'plaza') {
           const { loadPlazaScenes } = useStore.getState();
           loadPlazaScenes();
@@ -236,13 +226,8 @@ export default function App() {
     if (!createName.trim()) return;
     setCreating(true);
     try {
-      const projects = await listProjects();
-      if (projects.length === 0) {
-        alert('请先创建一个项目');
-        return;
-      }
       const category = createUseNewCategory ? createNewCategory.trim() : createCategory;
-      const scene = await createScene(projects[0].id, createName.trim(), {
+      const scene = await createScene(createName.trim(), {
         description: createDescription.trim() || undefined,
         category: category || 'other',
       });
@@ -261,7 +246,6 @@ export default function App() {
     switch (view) {
       case 'plaza': return '🏪 场景广场';
       case 'workshop': return '🛠 工坊';
-      case 'projects': return '📁 项目管理';
       case 'secret-garden': return '🌸 秘密花园';
       case 'dashboard': return '📊 仪表盘';
       case 'chat':
@@ -281,8 +265,7 @@ export default function App() {
       <div className="main">
         <Sidebar />
 
-        {view === 'projects' ? <ProjectList /> :
-         view === 'plaza' ? (
+        {view === 'plaza' ? (
            <PlazaView
              onEnterScene={handleEnterScene}
              onCreateScene={handleCreateScene}
@@ -317,12 +300,6 @@ export default function App() {
       <div className="statusbar">
         <span className="dot green" /> 坐山客 v0.2
         <span>|</span> API: http://localhost:8000
-        {currentProject && (
-          <>
-            <span>|</span>
-            项目: {currentProject.name}
-          </>
-        )}
       </div>
 
       <ThinkingMapDrawer />

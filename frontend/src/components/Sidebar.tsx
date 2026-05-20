@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, createScene, listMemories, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
 import { ChannelSvg } from './Logo';
 
 const CATEGORIES = [
@@ -19,7 +19,6 @@ export function Sidebar() {
   const {
     setView, view,
     currentScene, setCurrentScene,
-    currentProject,
     loadThinkingMap, loadSceneMessages,
     channels, currentChannel, setCurrentChannel,
     loadChannels, loadChannelMessages,
@@ -554,7 +553,7 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar-footer">
-        <span style={{ fontSize: 13, color: '#8b949e' }}>坐山客 · {currentProject?.name || '本地'}</span>
+        <span style={{ fontSize: 13, color: '#8b949e' }}>坐山客 · 本地</span>
       </div>
     </div>
   );

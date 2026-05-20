@@ -23,7 +23,6 @@ class ProjectOut(BaseModel):
 
 # ═══ 场景 ═══
 class SceneCreate(BaseModel):
-    project_id: str
     name: str
     icon: Optional[str] = None
     description: str = ""
@@ -33,7 +32,6 @@ class SceneCreate(BaseModel):
 
 class SceneOut(BaseModel):
     id: str
-    project_id: str
     name: str
     pinned: bool = False
     complexity: Optional[str] = None
@@ -83,7 +81,6 @@ class SceneExportOut(BaseModel):
 
 class SceneImportIn(BaseModel):
     """场景导入请求"""
-    project_id: str
     scene: SceneExportOut
 
 

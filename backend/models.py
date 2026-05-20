@@ -12,27 +12,12 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
-# ═══ 项目 ═══
-class Project(Base):
-    __tablename__ = "projects"
-
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    description = Column(Text, default="")
-    status = Column(String, default="active")  # active | idle | archived
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-    scenes = relationship("Scene", back_populates="project", cascade="all, delete-orphan")
-
-
 # ═══ 场景 ═══
 class Scene(Base):
     __tablename__ = "scenes"
 
     id = Column(String, primary_key=True)
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(String, nullable=False, default="")
     name = Column(String, nullable=False)
     pinned = Column(Boolean, default=False)
     complexity = Column(String, nullable=True)  # light | medium | heavy
@@ -52,7 +37,6 @@ class Scene(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-    project = relationship("Project", back_populates="scenes")
     thinking_maps = relationship("ThinkingMap", back_populates="scene", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="scene", cascade="all, delete-orphan")
 
