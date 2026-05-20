@@ -273,15 +273,15 @@ def _safe_parse_tool_args(raw: str) -> dict:
         return json.loads(raw.replace("'", '"'))
     except json.JSONDecodeError:
         pass
-    # 第三次尝试：补全未闭合的引号（去尾+逐个字符扫描）
+    # 第三次尝试：补全未闭合的引号（即使尾部的 } 也丢了）
     try:
         fixed = raw.rstrip()
         if fixed.endswith('"'):
             pass  # 正常闭合
-        elif fixed.endswith('}'):
-            # 末尾可能是 \"code\": \"... 少了闭合引号
-            # 从右向左找最后一个未匹配的双引号
-            quote_count = 0
+        elif fixed.endswith('"}'):
+            pass  # 正常闭合
+        else:
+            # 从右往左找最后一个未匹配的双引号
             in_string = False
             for ch in fixed:
                 if ch == '"' and not in_string:
@@ -290,8 +290,12 @@ def _safe_parse_tool_args(raw: str) -> dict:
                     if ch != '\\':
                         in_string = False
             if in_string:
-                # 字符串未闭合，加闭合引号
+                # 字符串未闭合 → 补全引号和对象闭合
                 fixed += '"}'
+                return json.loads(fixed)
+            elif not fixed.endswith('}'):
+                # 对象未闭合（可能字符串已正常闭合但缺 }）
+                fixed += '}'
                 return json.loads(fixed)
     except (json.JSONDecodeError, Exception):
         pass
