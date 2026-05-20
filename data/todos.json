@@ -6,5 +6,45 @@
     "priority": "medium",
     "created_at": "2026-05-17T22:59:00.052224",
     "updated_at": "2026-05-17T22:59:00.052224"
+  },
+  {
+    "id": "bb0e135c",
+    "content": "联系卖家要车架号，在查博士查维保记录+出险记录（约50元）",
+    "status": "pending",
+    "priority": "high",
+    "created_at": "2026-05-20T10:03:22.373435",
+    "updated_at": "2026-05-20T10:03:22.373435"
+  },
+  {
+    "id": "43490ce7",
+    "content": "如果维保记录没问题，约检车无忧/查博士的检测师一起去看那台2012朗逸",
+    "status": "pending",
+    "priority": "high",
+    "created_at": "2026-05-20T10:03:22.534606",
+    "updated_at": "2026-05-20T10:03:22.534606"
+  },
+  {
+    "id": "811388e5",
+    "content": "每天刷闲鱼+58同城，看北京/燕郊1-3万个人车源，熟悉行情",
+    "status": "pending",
+    "priority": "medium",
+    "created_at": "2026-05-20T10:03:22.570351",
+    "updated_at": "2026-05-20T10:03:22.570351"
+  },
+  {
+    "id": "9466e4b7",
+    "content": "打印看车验车Checklist，去看车时带着对照检查",
+    "status": "pending",
+    "priority": "medium",
+    "created_at": "2026-05-20T10:03:22.571178",
+    "updated_at": "2026-05-20T10:03:22.571178"
+  },
+  {
+    "id": "d244690f",
+    "content": "准备合同模板，确保交易合法合规",
+    "status": "pending",
+    "priority": "low",
+    "created_at": "2026-05-20T10:03:22.571974",
+    "updated_at": "2026-05-20T10:03:22.571974"
   }
 ]

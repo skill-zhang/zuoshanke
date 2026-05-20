@@ -37,8 +37,10 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
 
   // ── 编辑弹窗 ──
   const [editModal, setEditModal] = useState<Scene | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', icon: '', description: '', category: '', guide_text: '' });
+  const [editForm, setEditForm] = useState({ name: '', icon: '', description: '', category: '', guide_text: '', user_context: '' });
   const [editing, setEditing] = useState(false);
+  const [bgEditMode, setBgEditMode] = useState(false);      // 背景设定是否正在编辑
+  const [bgSaving, setBgSaving] = useState(false);            // 背景设定保存中
 
   // ── 发布弹窗 ──
   const [publishModal, setPublishModal] = useState<Scene | null>(null);
@@ -82,12 +84,14 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
 
   // ── 编辑 ──
   const openEdit = (scene: Scene) => {
+    setBgEditMode(false);
     setEditForm({
       name: scene.name,
       icon: scene.icon || '📦',
       description: scene.description || '',
       category: scene.category || 'other',
       guide_text: scene.guide_text || '',
+      user_context: scene.user_context || '',
     });
     setEditModal(scene);
   };
@@ -101,6 +105,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
         description: editForm.description.trim(),
         category: editForm.category,
         guide_text: editForm.guide_text.trim() || null,
+        user_context: editForm.user_context.trim() || null,
       });
       setEditModal(null);
       loadWorkshopScenes();
@@ -327,7 +332,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
         <div className="modal" onClick={e => e.stopPropagation()}>
           <div className="modal-title">
             ✏️ 编辑场景
-            <button className="modal-close" onClick={() => !editing && setEditModal(null)}>✕</button>
+            <button className="modal-close" onClick={() => { setBgEditMode(false); !editing && setEditModal(null); }}>✕</button>
           </div>
           {editModal && (
             <>
@@ -354,6 +359,57 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
               <div className="form-group">
                 <label className="form-label">引导语</label>
                 <textarea className="form-textarea" value={editForm.guide_text} onChange={e => setEditForm(f => ({ ...f, guide_text: e.target.value }))} placeholder="用户进入场景后的提示语" style={{ minHeight: 60 }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  背景设定
+                  {!bgEditMode ? (
+                    <button onClick={() => setBgEditMode(true)}
+                      style={{ fontSize: 11, color: '#58a6ff', padding: '2px 8px', border: '1px solid #58a6ff44', borderRadius: 4, background: 'transparent', cursor: 'pointer' }}>
+                      ✏️ 编辑
+                    </button>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 11, color: '#8b949e' }}>编辑模式</span>
+                      <button onClick={async () => {
+                        if (!editModal || bgSaving) return;
+                        setBgSaving(true);
+                        try {
+                          const res = await updateScene(editModal.id, { user_context: editForm.user_context.trim() || null });
+                          setEditForm(f => ({ ...f, user_context: res.user_context || '' }));
+                        } catch {}
+                        setBgSaving(false);
+                        setBgEditMode(false);
+                      }} disabled={bgSaving}
+                        style={{ fontSize: 11, color: '#2ea043', padding: '2px 8px', border: '1px solid #2ea04344', borderRadius: 4, background: '#23863622', cursor: 'pointer' }}>
+                        保存
+                      </button>
+                      <button onClick={() => setBgEditMode(false)}
+                        style={{ fontSize: 11, color: '#8b949e', padding: '2px 8px', border: '1px solid #30363d', borderRadius: 4, background: 'transparent', cursor: 'pointer' }}>
+                        取消
+                      </button>
+                    </>
+                  )}
+                  <button onClick={async () => {
+                    if (!editModal) return;
+                    try {
+                      const res = await updateScene(editModal.id, { user_context: null });
+                      setEditForm(f => ({ ...f, user_context: res.user_context || '' }));
+                      setBgEditMode(false);
+                    } catch {}
+                  }} style={{ marginLeft: 'auto', fontSize: 11, color: '#6e7681', padding: 0, border: 'none', background: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                    恢复默认
+                  </button>
+                </label>
+                {bgEditMode ? (
+                  <textarea className="form-textarea" value={editForm.user_context} onChange={e => setEditForm(f => ({ ...f, user_context: e.target.value }))}
+                    placeholder="定义这个场景中 AI 分身的行为规则、角色设定和工作方式…"
+                    style={{ minHeight: 200, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5 }} />
+                ) : (
+                  <div style={{ background: '#0d1117', border: '1px solid #21262d', borderRadius: 6, padding: 12, minHeight: 100, maxHeight: 300, overflow: 'auto', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, color: '#c9d1d9', whiteSpace: 'pre-wrap' }}>
+                    {editForm.user_context || <span style={{ color: '#484f58', fontStyle: 'italic' }}>未设置背景设定</span>}
+                  </div>
+                )}
               </div>
               <div className="modal-actions">
                 <button className="btn" onClick={() => setEditModal(null)} disabled={editing}>取消</button>

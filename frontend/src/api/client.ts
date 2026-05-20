@@ -43,7 +43,7 @@ export interface Scene {
 }
 export const listScenes = (projectId?: string) =>
   request<Scene[]>(`/scenes${projectId ? '?project_id=' + projectId : ''}`);
-export const createScene = (projectId: string, name: string, opts?: { icon?: string; description?: string; category?: string }) =>
+export const createScene = (projectId: string, name: string, opts?: { icon?: string; description?: string; category?: string; user_context?: string }) =>
   request<Scene>('/scenes', { method: 'POST', body: JSON.stringify({ project_id: projectId, name, ...opts }) });
 export const updateScene = (sceneId: string, data: {
   name?: string; pinned?: boolean; user_context?: string | null;

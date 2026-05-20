@@ -29,6 +29,7 @@ class SceneCreate(BaseModel):
     description: str = ""
     category: str = "other"
     guide_text: Optional[str] = None
+    user_context: Optional[str] = None  # None=新建时后端自动填默认值
 
 class SceneOut(BaseModel):
     id: str

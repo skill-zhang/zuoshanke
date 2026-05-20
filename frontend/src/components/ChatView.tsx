@@ -411,6 +411,7 @@ export function ChatView() {
   const [ucExpanded, setUcExpanded] = useState(false);
   const [ucText, setUcText] = useState('');
   const [ucSaving, setUcSaving] = useState(false);
+  const [ucEditMode, setUcEditMode] = useState(false);  // 是否正在编辑
   const [compressing, setCompressing] = useState(false);
   const ucSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ucTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -551,17 +552,25 @@ export function ChatView() {
   const handleUcSave = useCallback(() => {
     if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
     ucDoSave(ucText);
+    setUcEditMode(false);
   }, [ucDoSave, ucText]);
 
   const handleUcDelete = useCallback(async () => {
     if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
     setUcText('');
+    setUcEditMode(false);
     if (currentScene) {
       setUcSaving(true);
       await saveUserContext(currentScene.id, '');
       setUcSaving(false);
     }
   }, [currentScene, saveUserContext]);
+
+  const handleUcCopy = useCallback(() => {
+    if (ucText) {
+      navigator.clipboard.writeText(ucText).catch(() => {});
+    }
+  }, [ucText]);
 
   // ═══ 上下文压缩 ═══
   const handleCompress = useCallback(async () => {
@@ -816,7 +825,7 @@ export function ChatView() {
         {/* ═══ 用户输入背景设定 ═══ */}
         {!isChannel && currentScene && (
           <div className="user-context-panel">
-            <div className="user-context-header" onClick={() => setUcExpanded(!ucExpanded)}>
+            <div className="user-context-header" onClick={() => { setUcExpanded(!ucExpanded); setUcEditMode(false); }}>
               <span>📝 用户输入背景设定</span>
               <span className="user-context-header-right">
                 {ucText ? <span className="user-context-badge">已保存 {ucText.length} 字</span> : <span className="user-context-badge-empty">空</span>}
@@ -825,25 +834,44 @@ export function ChatView() {
             </div>
             {ucExpanded && (
               <div className="user-context-body">
-                <textarea
-                  ref={ucTextareaRef}
-                  className="user-context-textarea"
-                  value={ucText}
-                  onChange={handleUcChange}
-                  onBlur={handleUcBlur}
-                  placeholder="在此输入你想让 AI 在本次对话中始终遵循的指令或背景信息，例如「每条推荐附具体链接」「用表格输出」「重点关注性价比选项」等"
-                  maxLength={2000}
-                  rows={4}
-                />
-                <div className="user-context-toolbar">
-                  <span className="user-context-count">字数: {ucText.length}/2000</span>
-                  <div className="user-context-actions">
-                    <button className="uc-btn" onClick={handleUcDelete} title="清空内容">🗑 删除</button>
-                    <button className="uc-btn uc-btn-primary" onClick={handleUcSave} disabled={ucSaving}>
-                      {ucSaving ? '⏳' : '💾'} 保存
-                    </button>
+                {ucEditMode ? (
+                  <>
+                    <textarea
+                      ref={ucTextareaRef}
+                      className="user-context-textarea"
+                      value={ucText}
+                      onChange={handleUcChange}
+                      onBlur={handleUcBlur}
+                      placeholder="在此输入你想让 AI 在本次对话中始终遵循的指令或背景信息，例如「每条推荐附具体链接」「用表格输出」「重点关注性价比选项」等"
+                      maxLength={2000}
+                      rows={4}
+                    />
+                    <div className="user-context-toolbar">
+                      <span className="user-context-count">字数: {ucText.length}/2000</span>
+                      <div className="user-context-actions">
+                        <button className="uc-btn" onClick={handleUcDelete} title="清空内容">🗑 清空</button>
+                        <button className="uc-btn" onClick={() => setUcEditMode(false)}>取消</button>
+                        <button className="uc-btn uc-btn-primary" onClick={handleUcSave} disabled={ucSaving}>
+                          {ucSaving ? '⏳' : '💾'} 保存
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ padding: '8px 12px' }}>
+                    <div style={{ background: '#0d1117', border: '1px solid #21262d', borderRadius: 6, padding: '8px 12px', minHeight: 40, maxHeight: 200, overflow: 'auto', fontSize: 13, lineHeight: 1.6, color: '#c9d1d9', marginBottom: 8 }}>
+                      {ucText ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{ucText}</ReactMarkdown>
+                      ) : (
+                        <span style={{ color: '#484f58', fontStyle: 'italic' }}>未设置背景设定</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="uc-btn" onClick={() => setUcEditMode(true)}>✏️ 编辑</button>
+                      <button className="uc-btn" onClick={handleUcCopy} title="复制到剪贴板">📋 复制</button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>

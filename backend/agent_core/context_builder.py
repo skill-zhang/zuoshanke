@@ -31,6 +31,11 @@ SCENE_SYSTEM_PROMPT = (
     "  而不是告诉用户「你去找一下」或「你下载XX自己看看」。\n"
     "- 你是在帮用户做事，不是在教用户做事。\n"
     "\n"
+    "## 数字原生原则\n"
+    "- 优先生成可交互的数字内容（网页、Markdown 文档、清单、表格），而不是建议用户打印。\n"
+    "- 如果适合做成网页，用 run_code 写一个完整的 HTML 文件给用户。\n"
+    "- 用户在你的世界里通过屏幕和数字化工具工作，输出格式应当与之匹配。\n"
+    "\n"
     "## 对话节奏\n"
     "- 用户说了需求后，先调用工具尝试获取信息，再回答\n"
     "- 如果信息充足，直接给出分析/方案，不要反问用户「你想先做哪一步」\n"
@@ -139,21 +144,20 @@ def build_scene_context(
     """
     messages = []
 
-    # ── 1. System prompt（优先从 DB settings 读取，兜底用 SCENE_SYSTEM_PROMPT） ──
-    _scene_sp = SCENE_SYSTEM_PROMPT
-    if db is not None:
-        try:
-            from models import Setting
-            _setting = db.query(Setting).first()
-            if _setting and _setting.system_prompts:
-                _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
-        except Exception:
-            pass  # 任何异常静默兜底到 SCENE_SYSTEM_PROMPT
-    system_parts = [f"# 角色设定\n{_scene_sp}"]
-
-    # ── 1.5 用户输入背景设定 ──
+    # ── 1. 系统提示词 — 用户自定义背景设定 ＞ DB settings ＞ 默认值 ──
     if user_context:
-        system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
+        _scene_sp = user_context
+    else:
+        _scene_sp = SCENE_SYSTEM_PROMPT
+        if db is not None:
+            try:
+                from models import Setting
+                _setting = db.query(Setting).first()
+                if _setting and _setting.system_prompts:
+                    _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
+            except Exception:
+                pass
+    system_parts = [f"# 角色设定\n{_scene_sp}"]
 
     # ── 2. 记忆块 — 从 system 移到 user prompt（见下方 #8） ──
     scope = "scene" if scene_id else "zhu"
@@ -250,16 +254,19 @@ def build_agent_context(
 
     messages = []
 
-    # ── 1. System prompt（DB → SCENE_SYSTEM_PROMPT 兜底） ──
-    _scene_sp = SCENE_SYSTEM_PROMPT
-    if db is not None:
-        try:
-            from models import Setting
-            _setting = db.query(Setting).first()
-            if _setting and _setting.system_prompts:
-                _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
-        except Exception:
-            pass
+    # ── 1. 系统提示词 — 用户自定义背景设定 ＞ DB settings ＞ 默认值 ──
+    if user_context:
+        _scene_sp = user_context
+    else:
+        _scene_sp = SCENE_SYSTEM_PROMPT
+        if db is not None:
+            try:
+                from models import Setting
+                _setting = db.query(Setting).first()
+                if _setting and _setting.system_prompts:
+                    _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
+            except Exception:
+                pass
 
     # ── 分身意识注入（Schema v0.8） ──
     _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"
@@ -278,10 +285,6 @@ def build_agent_context(
         )
 
     system_parts = [f"# 角色设定\n{_scene_sp}"]
-
-    # ── 1.5 用户输入背景设定 ──
-    if user_context:
-        system_parts.append(f"=== 用户输入背景设定 ===\n{user_context}\n=====================")
 
     # ── 2. 记忆块 → User 层（见下方） ──
     scope = "scene" if scene_id else "zhu"

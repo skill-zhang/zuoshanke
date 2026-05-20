@@ -229,6 +229,15 @@ def auto_converge_and_prioritize(db: Session, scene_id: str, tm: ThinkingMap,
 
     db.commit()
 
+    # ── 7.5 同步更新入队节点的状态 ──
+    for entry in queue_entries:
+        target_id = entry.get("target_id", "")
+        if target_id:
+            node = db.query(ThinkNode).filter(ThinkNode.id == target_id).first()
+            if node and node.status != "discarded":
+                node.status = "confirmed"
+    db.commit()
+
     # ── 8. 写入 ReflectTimeline（收敛记录） ──
     reflect_records = []
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db, SessionLocal
-from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset
+from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset, PriorityQueue
 from schemas import (
     SceneCreate, SceneOut, SceneUpdate, ScenePublishRequest,
     SceneExportOut, SceneImportIn,
@@ -117,6 +117,9 @@ def auto_detect_icon(name: str) -> str:
 @router.post("/api/scenes", response_model=SceneOut)
 def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
     _get_project_or_404(db, data.project_id)
+    # 新建场景默认填入 SCENE_SYSTEM_PROMPT 作为背景设定
+    from agent_core.context_builder import SCENE_SYSTEM_PROMPT
+    default_prompt = SCENE_SYSTEM_PROMPT
     scene = Scene(
         id=make_id("scene"),
         project_id=data.project_id,
@@ -124,6 +127,7 @@ def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
         description=data.description or "",
         category=data.category or "other",
         guide_text=data.guide_text or None,
+        user_context=data.user_context or default_prompt,
     )
     # 有显式图标用显式，否则根据名称自动匹配
     scene.icon = data.icon or auto_detect_icon(data.name) or "📦"
@@ -248,8 +252,14 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
                 scene.icon = detected
     if data.pinned is not None:
         scene.pinned = data.pinned
-    if data.user_context is not None:
-        scene.user_context = data.user_context.strip() or None
+    if 'user_context' in data.model_dump(exclude_unset=True):
+        val = data.user_context
+        if val is None or not val.strip():
+            # 显式传 null/空 → 恢复为默认 prompt
+            from agent_core.context_builder import SCENE_SYSTEM_PROMPT
+            scene.user_context = SCENE_SYSTEM_PROMPT
+        else:
+            scene.user_context = val.strip()
     if data.icon is not None:
         scene.icon = data.icon or "📦"
     if data.description is not None:
@@ -1452,6 +1462,83 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                     }
                                 finally:
                                     _a_db.close()
+
+                    # ── 🆕 自动执行 P1 任务（收敛→执行闭环） ──
+                    if pq_items:
+                        p1_tasks = [p for p in pq_items if p.get('priority') == 1]
+                        if p1_tasks:
+                            yield sse_event("tool_status", tool="auto_exec_pq",
+                                            status="running",
+                                            message="正在执行优先级最高的任务...")
+                            try:
+                                from agent_core.agent_loop import run_agent_loop
+                                from agent_core.context_builder import build_agent_context
+
+                                task = p1_tasks[0]
+                                task_title = task.get('title', '')
+                                task_id = task.get('id', '')
+
+                                # 更新 PQ 状态为执行中
+                                pq_obj = db.query(PriorityQueue).filter(
+                                    PriorityQueue.id == task_id
+                                ).first()
+                                if pq_obj:
+                                    pq_obj.status = "in_progress"
+                                    db.commit()
+
+                                # 构建执行上下文
+                                exec_messages = build_agent_context(
+                                    user_content=f"请执行以下任务：{task_title}",
+                                    history_messages=history_messages,
+                                    user_context=scene.user_context,
+                                    db=db,
+                                    scene_id=scene_id,
+                                    scene_name=scene.name,
+                                )
+
+                                # 运行 Agent Loop 执行任务
+                                exec_stream = run_agent_loop(
+                                    initial_messages=exec_messages,
+                                    max_steps=10,
+                                    scene_id=scene_id,
+                                )
+
+                                exec_tool_results = []
+                                for ev in exec_stream:
+                                    et = ev.get("type", "")
+                                    if et == "agent_loop:tool_start":
+                                        yield sse_event("tool_status",
+                                                        tool=ev["tool"],
+                                                        status="running",
+                                                        message=f"执行 P1 任务: {ev.get('tool', '')}")
+                                    elif et == "agent_loop:tool_done":
+                                        exec_tool_results.append({
+                                            "tool": ev.get("tool"),
+                                            "result": ev.get("result"),
+                                        })
+                                    elif et == "agent_loop:tool_error":
+                                        yield sse_event("tool_error",
+                                                        tool=ev.get("tool", ""),
+                                                        error=str(ev.get("error", ""))[:200])
+                                    elif et == "agent_loop:thinking":
+                                        yield sse_event("exec_output",
+                                                        text=ev.get("text", ""))
+                                    elif et == "dashboard:reflect":
+                                        yield sse_event("dashboard:reflect", **ev)
+                                    elif et == "agent_loop:done":
+                                        finish = ev.get("finish_reason", "completed")
+                                        # 标记 PQ 完成
+                                        if pq_obj:
+                                            pq_obj.status = "completed" if finish == "completed" else "failed"
+                                            db.commit()
+                                        yield sse_event("tool_status",
+                                                        tool="auto_exec_pq",
+                                                        status="done",
+                                                        message=f"P1 任务执行{'成功' if finish == 'completed' else '失败'}")
+                            except Exception as e:
+                                _log.error(f"[scene] 自动执行 P1 失败: {e}")
+                                yield sse_event("tool_status", tool="auto_exec_pq",
+                                                status="error", message=f"执行出错: {str(e)[:80]}")
             except Exception as e:
                 _log.error(f"[scene] 自动收敛/产出失败: {e}")
         # ── 结束自动收敛 + 产出生成 ──
