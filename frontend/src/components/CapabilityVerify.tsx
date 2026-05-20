@@ -103,7 +103,7 @@ export function CapabilityVerify() {
     <div className="capability-verify" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* ═══ 顶部说明 ═══ */}
       <div style={{ padding: '16px 24px', flexShrink: 0 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 6px', color: '#e6edf3', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px', color: '#e6edf3', display: 'flex', alignItems: 'center', gap: 10 }}>
           🧪 能力验证
         </h2>
         <p style={{ fontSize: 13, color: '#8b949e', margin: 0 }}>

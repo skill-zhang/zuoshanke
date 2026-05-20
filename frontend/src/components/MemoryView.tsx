@@ -156,10 +156,10 @@ export function MemoryView() {
   };
 
   return (
-    <div className="view-page memory-view">
+    <div className={`view-page memory-view${detailMem ? ' modal-open' : ''}`}>
       {/* ── 顶栏 ── */}
       <div className="view-header">
-        <span style={{ fontSize: 18, fontWeight: 600, color: '#e6edf3' }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: '#e6edf3' }}>
           {selectedGroup
             ? `${selectedGroup.icon || '🧠'} ${selectedGroup.name} 的记忆`
             : '🧠 记忆管理'}
@@ -185,7 +185,7 @@ export function MemoryView() {
           {groups.length === 0 && !loading && (
             <div className="empty-state">暂无记忆，会话结束后会自动提取</div>
           )}
-          <div className="card-grid">
+          <div className="memory-grid">
             {groups.map(g => (
               <div key={`${g.scope}:${g.context_id || ''}`}
                 className="memory-group-card"
@@ -205,40 +205,42 @@ export function MemoryView() {
       {/* ═══ 下层：某个组的全部记忆 ═══ */}
       {selectedGroup && (
         <>
-          {/* 返回按钮 */}
-          <div className="mem-back-row">
-            <span className="mem-back-link" onClick={handleBack}>← 全部来源</span>
-            <span className="mem-back-name">{selectedGroup.icon} {selectedGroup.name}</span>
-          </div>
-
-          {/* 新建表单 */}
-          {showForm && (
-            <div className="mem-form-card">
-              <textarea className="form-textarea" value={newContent} onChange={e => setNewContent(e.target.value)}
-                placeholder="记忆内容" rows={2} style={{ marginBottom: 6, width: '100%' }} />
-              <input className="form-input" value={newTags} onChange={e => setNewTags(e.target.value)}
-                placeholder="标签（逗号分隔）" style={{ marginBottom: 6, width: '100%' }} />
-              <button className="btn-primary" onClick={handleCreate} disabled={creating || !newContent.trim()}>
-                {creating ? '创建中…' : '创建'}
-              </button>
+          <div style={{ flexShrink: 0 }}>
+            {/* 返回按钮 */}
+            <div className="mem-back-row">
+              <span className="mem-back-link" onClick={handleBack}>← 全部来源</span>
+              <span className="mem-back-name">{selectedGroup.icon} {selectedGroup.name}</span>
             </div>
-          )}
 
-          {/* 分类 Tabs */}
-          <div className="view-tabs">
-            {[
-              { key: 'all', icon: '🔍', label: `全部 (${counts.all})` },
-              { key: 'P0', icon: '🔒', label: `P0 (${counts.P0})` },
-              { key: 'P1', icon: '⭐', label: `P1 (${counts.P1})` },
-              { key: 'P2', icon: '📝', label: `P2 (${counts.P2})` },
-              { key: 'P3', icon: '💤', label: `P3 (${counts.P3})` },
-            ].map(t => (
-              <div key={t.key}
-                className={`view-tab${filterLevel === t.key ? ' active' : ''}`}
-                onClick={() => setFilterLevel(t.key)}>
-                {t.icon} {t.label}
+            {/* 新建表单 */}
+            {showForm && (
+              <div className="mem-form-card">
+                <textarea className="form-textarea" value={newContent} onChange={e => setNewContent(e.target.value)}
+                  placeholder="记忆内容" rows={2} style={{ marginBottom: 6, width: '100%' }} />
+                <input className="form-input" value={newTags} onChange={e => setNewTags(e.target.value)}
+                  placeholder="标签（逗号分隔）" style={{ marginBottom: 6, width: '100%' }} />
+                <button className="btn-primary" onClick={handleCreate} disabled={creating || !newContent.trim()}>
+                  {creating ? '创建中…' : '创建'}
+                </button>
               </div>
-            ))}
+            )}
+
+            {/* 分类 Tabs */}
+            <div className="view-tabs">
+              {[
+                { key: 'all', icon: '🔍', label: `全部 (${counts.all})` },
+                { key: 'P0', icon: '🔒', label: `P0 (${counts.P0})` },
+                { key: 'P1', icon: '⭐', label: `P1 (${counts.P1})` },
+                { key: 'P2', icon: '📝', label: `P2 (${counts.P2})` },
+                { key: 'P3', icon: '💤', label: `P3 (${counts.P3})` },
+              ].map(t => (
+                <div key={t.key}
+                  className={`view-tab${filterLevel === t.key ? ' active' : ''}`}
+                  onClick={() => setFilterLevel(t.key)}>
+                  {t.icon} {t.label}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 卡片网格 */}
@@ -248,7 +250,7 @@ export function MemoryView() {
             </div>
           )}
 
-          <div className="card-grid">
+          <div className="memory-grid">
             {filtered.map(m => (
               <div key={m.id}
                 className={`memory-card level-${(m.priority_level || 'p2').toLowerCase()}`}
@@ -275,7 +277,7 @@ export function MemoryView() {
           {/* 详情 Modal */}
           {detailMem && (
             <>
-              <div className="modal-overlay" onClick={() => setDetailMem(null)} />
+              <div className="modal-overlay show" onClick={() => setDetailMem(null)} />
               <div className="modal mem-detail-modal">
                 <div className="modal-header">
                   <span>

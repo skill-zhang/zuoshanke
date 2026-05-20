@@ -713,6 +713,25 @@ def converge_thinking_map(map_id: str, db: Session = Depends(get_db)):
     ).all()
 
     if not nodes:
+        # 没有待收敛的节点，但可能有已确认节点需要生成 PQ/Reflect
+        scene_id = tmap.scene_id
+        confirmed_total = db.query(ThinkNode).filter(
+            ThinkNode.map_id == map_id, ThinkNode.status.in_(["confirmed", "refined"])
+        ).count()
+        pq_existing = db.query(PriorityQueue).filter(
+            PriorityQueue.scene_id == scene_id
+        ).count()
+        if confirmed_total >= 2 and pq_existing == 0:
+            try:
+                from agent_core.converge_engine import generate_pq_from_existing
+                print(f"[converge] 已有收敛节点但无队列，补齐 PQ/Reflect: scene={scene_id}, confirmed={confirmed_total}")
+                result = generate_pq_from_existing(db, scene_id, tmap)
+                pq_count = len(result.get("pq_items", []))
+                print(f"[converge] 补齐完成: PQ={pq_count}")
+            except Exception as e:
+                print(f"[converge] 补齐异常: {e}")
+                import traceback
+                traceback.print_exc()
         return {"map_id": map_id, "merged": [], "discarded": [], "message": "没有需要收敛的节点"}
 
     # 1. 聚类：共享公共子串检测（对中文短标签友好）
@@ -778,6 +797,27 @@ def converge_thinking_map(map_id: str, db: Session = Depends(get_db)):
     tmap.version += 1
     tmap.updated_at = utcnow()
     db.commit()
+
+    # ── 旧收敛 + 新引擎接力：生成 PQ + Reflect ──
+    # 如果产生了 refined 节点，接力调 LLM 收敛引擎生成优先级队列和反馈时间线
+    has_new_nodes = bool(merged_pairs)  # 有合并
+    total_refined = db.query(ThinkNode).filter(
+        ThinkNode.map_id == map_id, ThinkNode.status == "refined"
+    ).count()
+    try:
+        from agent_core.converge_engine import auto_converge_and_prioritize
+        if total_refined >= 2:
+            scene_id = tmap.scene_id
+            print(f"[converge] 规则收敛完成，接力 LLM 引擎: scene={scene_id}, refined={total_refined}")
+            result = auto_converge_and_prioritize(db, scene_id, tmap)
+            if result.get("project"):
+                print(f"[converge] 项目认知: {result['project']}")
+            pq_count = len(result.get("pq_items", []))
+            print(f"[converge] 接力完成: PQ={pq_count}, merged={result.get('merged', 0)}")
+    except Exception as e:
+        print(f"[converge] 接力收敛异常（非致命，已捕获）: {e}")
+        import traceback
+        traceback.print_exc()
 
     # 刷新返回
     db.refresh(tmap)

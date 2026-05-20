@@ -88,7 +88,7 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
         </div>
       </div>
 
-      <div className="card-grid">
+      <div className="plaza-grid">
         {loadingPlaza ? (
           <div className="empty-state">
             <div className="empty-state-text">加载中...</div>

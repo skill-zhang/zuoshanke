@@ -431,3 +431,164 @@ def _reflect_to_dict(r: ReflectTimeline) -> dict:
         "tag_text": r.tag_text,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
+
+
+def generate_pq_from_existing(db: Session, scene_id: str, tm: ThinkingMap,
+                               summary: str = "") -> dict:
+    """（补齐用）对已收敛节点重新生成 PriorityQueue + ReflectTimeline
+
+    适用于旧规则收敛后没有 PQ/Reflect 的场景。
+    只生成队列，不修改节点状态。
+    """
+    from ai_engine import call_deepseek_chat
+    from utils import make_id
+
+    all_nodes = db.query(ThinkNode).filter(
+        ThinkNode.map_id == tm.id,
+        ThinkNode.type != "root",
+        ThinkNode.status.in_(["confirmed", "refined"]),
+    ).all()
+
+    if not all_nodes or len(all_nodes) < 2:
+        return {"pq_items": [], "project": None}
+
+    parent_labels = {n.id: n.label for n in all_nodes}
+    node_summary = [
+        {"id": n.id, "label": n.label, "type": n.type, "status": n.status,
+         "parent_label": parent_labels.get(n.parent_id, ""),
+         "children": [c.id for c in n.children] if n.children else []}
+        for n in all_nodes
+    ]
+
+    prompt = '''你是一个任务调度专家。分析以下已收敛的任务节点，生成优先级队列。
+
+输出严格 JSON（不要 markdown 代码块）：
+{
+  "queue": [
+    {
+      "target_id": "节点ID",
+      "title": "任务名",
+      "priority": 1,
+      "deps": ["依赖ID"]
+    }
+  ],
+  "project": {
+    "is_project": false,
+    "name": "",
+    "description": "",
+    "structure": []
+  }
+}
+
+规则：
+1. 为每个节点分配 P1-P4 优先级和依赖链
+2. P1=最高优先级，P4=最低优先级
+3. 根据任务的实际工作流逻辑判断先后顺序和依赖关系
+4. project: 判断这些节点是否构成一个可交付的项目（多页面/多文档等）
+'''
+
+    user_msg = f"请分析以下任务节点：\\n{json.dumps(node_summary, ensure_ascii=False, indent=2)}"
+    if summary:
+        user_msg += f"\\n\\n对话背景：\\n{summary}\\n"
+
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": user_msg},
+    ]
+
+    raw = call_deepseek_chat(messages, model="flash", temperature=0.1, max_tokens=4096, route="medium")
+    if not raw:
+        print(f"[pq_gen] LLM 返回空")
+        return {"pq_items": [], "project": None}
+
+    text = raw.strip()
+    if "```json" in text:
+        text = text.split("```json")[1].split("```")[0].strip()
+    elif "```" in text:
+        text = text.split("```")[1].split("```")[0].strip()
+
+    try:
+        parsed = json.loads(text) if text.startswith("{") else None
+        if not parsed:
+            start, end = text.find("{"), text.rfind("}")
+            if start >= 0 and end > start:
+                parsed = json.loads(text[start:end+1])
+        if not parsed:
+            print(f"[pq_gen] 无法解析 LLM 输出: {raw[:200]}")
+            return {"pq_items": [], "project": None}
+    except json.JSONDecodeError as e:
+        print(f"[pq_gen] JSON 解析失败: {e}\\n{raw[:300]}")
+        return {"pq_items": [], "project": None}
+
+    # 清空旧 PQ
+    db.query(PriorityQueue).filter(PriorityQueue.scene_id == scene_id).delete()
+
+    queue_entries = parsed.get("queue", [])
+    pq_items = []
+    for idx, entry in enumerate(queue_entries):
+        target_id = entry.get("target_id", "")
+        title = entry.get("title", "")
+        priority = entry.get("priority", 2)
+        deps = entry.get("deps", [])
+        if not target_id or not title:
+            continue
+        node = db.query(ThinkNode).filter(ThinkNode.id == target_id).first()
+        if not node:
+            continue
+        pq = PriorityQueue(
+            id=make_id("pq"), scene_id=scene_id, node_id=target_id,
+            title=title, priority=priority, status="pending",
+            deps=json.dumps(deps, ensure_ascii=False), sort_order=idx,
+        )
+        db.add(pq)
+        pq_items.append(pq)
+
+    db.commit()
+
+    # Reflect 摘要
+    if pq_items:
+        p1_count = sum(1 for e in queue_entries if e.get("priority") == 1)
+        rt = ReflectTimeline(
+            id=make_id("ref"), scene_id=scene_id, type="new",
+            icon="📊", title=f"优先级队列就绪（补齐）",
+            detail=f"{len(queue_entries)} 个任务入队，P1={p1_count} 个",
+            tag="queue_update",
+        )
+        db.add(rt)
+        db.commit()
+
+    # 项目认知
+    project_info = parsed.get("project", {})
+    project_result = None
+    if project_info and project_info.get("is_project"):
+        from models import OutputProject
+        proj_name = project_info.get("name", "未命名项目")[:200]
+        proj_desc = project_info.get("description", "")[:500]
+        existing = db.query(OutputProject).filter(
+            OutputProject.scene_id == scene_id, OutputProject.is_active == True,
+        ).first()
+        if existing:
+            existing.name = proj_name
+            existing.description = proj_desc
+            db.commit()
+            project_result = {"project_id": existing.id, "name": proj_name, "description": proj_desc}
+        else:
+            proj = OutputProject(
+                id=make_id("proj"), scene_id=scene_id, name=proj_name, description=proj_desc,
+            )
+            db.add(proj)
+            db.commit()
+            project_result = {"project_id": proj.id, "name": proj_name, "description": proj_desc}
+            rt = ReflectTimeline(
+                id=make_id("ref"), scene_id=scene_id, type="new", icon="🏗️",
+                title=f"项目: {proj_name}", detail=proj_desc[:100],
+                tag="inject", tag_text="收敛补齐自动创建",
+            )
+            db.add(rt)
+            db.commit()
+
+    print(f"[pq_gen] 完成: {len(queue_entries)} 入队")
+    return {
+        "pq_items": [_pq_to_dict(p) for p in pq_items],
+        "project": project_result,
+    }

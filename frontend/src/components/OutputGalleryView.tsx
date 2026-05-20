@@ -56,7 +56,7 @@ export function OutputGalleryView() {
           <div style={{ fontSize: 13 }}>分身创建 HTML 或注册入口后，会出现在这里</div>
         </div>
       ) : (
-        <div className="card-grid">
+        <div className="output-gallery-grid">
           {outputs.map(out => {
             const meta = getTypeMeta(out.type);
             let href = out.url || '';
