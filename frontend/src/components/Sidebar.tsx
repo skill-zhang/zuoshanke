@@ -338,7 +338,7 @@ export function Sidebar() {
         </div>
 
         {/* ═══ 场景广场 ═══ */}
-        <div className="sidebar-section" style={{ marginTop: 4 }}>
+        <div className="sidebar-section">
           <div className={`sidebar-section-header${collapsedSections.has('plaza') ? ' collapsed' : ''}`}
             onClick={() => toggleSection('plaza')}>
             <span className="sec-arrow">▼</span>
@@ -364,7 +364,7 @@ export function Sidebar() {
         </div>
 
         {/* ═══ 工坊 ═══ */}
-        <div className="sidebar-section" style={{ marginTop: 4 }}>
+        <div className="sidebar-section">
           <div className={`sidebar-section-header${collapsedSections.has('workshop') ? ' collapsed' : ''}`}
             onClick={() => toggleSection('workshop')}>
             <span className="sec-arrow">▼</span>
@@ -489,11 +489,11 @@ export function Sidebar() {
         </div>
 
         {/* ═══ 系统工具 ═══ */}
-        <div className="sidebar-section" style={{ marginTop: 12 }}>
+        <div className="sidebar-section section-spaced">
           <div className={`sidebar-section-header${collapsedSections.has('system-tools') ? ' collapsed' : ''}`}
             onClick={() => toggleSection('system-tools')}>
             <span className="sec-arrow">▼</span>
-            🧰 系统工具
+            <span className="sec-icon">🧰</span> 系统工具
           </div>
         </div>
         <div className={`sidebar-section-children${collapsedSections.has('system-tools') ? ' collapsed' : ''}`}>
