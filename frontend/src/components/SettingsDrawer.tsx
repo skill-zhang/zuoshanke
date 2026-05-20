@@ -20,6 +20,7 @@ export function SettingsDrawer() {
     settingsDrawerOpen, closeSettingsDrawer,
     settingsData, serviceStatus, settingsLoading,
     loadSettings, refreshServiceStatus, updateSettingsPartial,
+    setView,
   } = useStore();
 
   const [dirty, setDirty] = useState(false);
@@ -295,6 +296,18 @@ export function SettingsDrawer() {
                   </div>
                 </div>
                 <p className="settings-hint">功能开发中，未来版本解锁</p>
+              </section>
+
+              {/* ── 🌸 秘密花园入口 ── */}
+              <section className="settings-section">
+                <div
+                  className="garden-entry-btn"
+                  onClick={() => { closeSettingsDrawer(); setView('secret-garden'); }}
+                >
+                  <span className="garden-entry-icon">🌸</span>
+                  <span className="garden-entry-text">坐山客的秘密花园</span>
+                  <span className="garden-entry-arrow">›</span>
+                </div>
               </section>
             </>
           )}

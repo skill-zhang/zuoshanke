@@ -139,6 +139,7 @@ export interface Message {
   display?: boolean;  // 🆕 Schema v0.7: false=内部记录不渲染
   toolCards?: ToolCard[];
   asset?: { type: string; title: string; content: string };  // 🆕 场景产出
+  outputRef?: { outputId: string; title: string; filePath: string };  // 🆕 自动提取的 HTML 产出链接
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
@@ -645,6 +646,14 @@ export const renameCategory = (oldName: string, newName: string) =>
   request<{ ok: boolean; updated: number }>(`/categories/${encodeURIComponent(oldName)}`, {
     method: 'PUT', body: JSON.stringify({ new_name: newName }),
   });
+export const createCategory = (data: { name: string; label?: string; icon?: string }) =>
+  request<{ ok: boolean; category: Category }>('/categories', {
+    method: 'POST', body: JSON.stringify(data),
+  });
+export const deleteCategory = (name: string) =>
+  request<{ ok: boolean; deleted: string }>(`/categories/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  });
 
 // ═══ 上下文压缩 ═══
 export const compressChannelHistory = (channelId: string) =>
@@ -668,3 +677,26 @@ export const triggerDashboardConverge = (sceneId: string) =>
   request<{ ok: boolean; queue_count: number; items: DashboardQueueItem[] }>(
     `/dashboard/${sceneId}/converge`, { method: 'POST' }
   );
+
+// ═══ 秘密花园 ═══
+export interface GardenData {
+  name: string;
+  mood: string;
+  observation: string;
+  memory_garden: {
+    total: number;
+    items: { content: string; key: string; weight: number; level: number; created_at: string | null }[];
+  };
+  growth: {
+    scenes: number;
+    tools: number;
+    skills: number;
+    channels: number;
+    thoughts: number;
+    versions: string;
+  };
+  milestones: { date: string; icon: string; text: string }[];
+  updated_at: string;
+}
+
+export const getSecretGarden = () => request<GardenData>('/zhu-agent/garden');

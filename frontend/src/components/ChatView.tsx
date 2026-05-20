@@ -297,6 +297,20 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
             </div>
           </div>
         )}
+        {/* 🆕 自动 HTML 产出卡片 */}
+        {msg.outputRef && (
+          <div className="output-ref-card">
+            <div className="output-ref-header">
+              <span className="output-ref-icon">📄</span>
+              <span className="output-ref-title">{msg.outputRef.title}</span>
+            </div>
+            <button className="output-ref-open-btn" onClick={() => {
+              window.open(`/outputs/${msg.outputRef!.filePath}`, '_blank');
+            }}>
+              ↗ 打开
+            </button>
+          </div>
+        )}
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}

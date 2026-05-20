@@ -1,14 +1,13 @@
 /** 📦 产出成果视图 — 分身生成的独立 HTML/入口卡片网格 */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { request } from '../api/client';
 
 interface Output {
   id: string;
   scene_id: string;
   title: string;
   description: string;
-  type: string;     // html / link
+  type: string;
   file_path: string | null;
   url: string | null;
   created_at: string;
@@ -31,7 +30,8 @@ export function OutputGalleryView() {
   const loadOutputs = async () => {
     setLoading(true);
     try {
-      const data = await request<Output[]>('/outputs');
+      const resp = await fetch('/api/outputs');
+      const data = await resp.json();
       setOutputs(data || []);
     } catch {
       setOutputs([]);
@@ -43,12 +43,10 @@ export function OutputGalleryView() {
 
   return (
     <div className="tools-view">
-      {/* ═══ 顶栏 ═══ */}
       <div className="view-header">
         <div style={{ fontSize: 16, fontWeight: 600 }}>📦 产出成果</div>
       </div>
 
-      {/* ═══ 内容 ═══ */}
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: '#8b949e' }}>加载中...</div>
       ) : outputs.length === 0 ? (
@@ -61,7 +59,6 @@ export function OutputGalleryView() {
         <div className="card-grid">
           {outputs.map(out => {
             const meta = getTypeMeta(out.type);
-            // 构建访问链接
             let href = out.url || '';
             if (out.file_path && !href) {
               href = `/outputs/${out.file_path}`;

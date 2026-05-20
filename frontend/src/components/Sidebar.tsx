@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories, renameCategory, listTools, listSkills } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, listProjects, createScene, listMemories, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
 import { ChannelSvg } from './Logo';
 
 const CATEGORIES = [
@@ -32,6 +32,25 @@ export function Sidebar() {
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
   const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
   const [catManageOpen, setCatManageOpen] = useState(false);
+  // ── 类别重命名状态 ──
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ name: string; label: string } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+  // ── 新建类别状态 ──
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatLabel, setNewCatLabel] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('📁');
+  const [newCatCreating, setNewCatCreating] = useState(false);
+  // ── 动态类别列表 ──
+  const [categories, setCategories] = useState<{ name: string; label: string; icon: string; count: number }[]>([]);
+
+  // 加载类别元数据
+  useEffect(() => {
+    listCategories().then(setCategories).catch(() => {});
+  }, [catManageOpen]);
+
   const [toolsCount, setToolsCount] = useState(0);
   const [skillsCount, setSkillsCount] = useState(0);
 
@@ -144,14 +163,9 @@ export function Sidebar() {
   };
 
   const handleRenameCategory = async (catKey: string, currentLabel: string) => {
-    const name = prompt('新类别名称：', currentLabel);
-    if (!name || name === currentLabel) return;
-    try {
-      await renameCategory(catKey, name);
-      loadWorkshopScenes(); // 刷新后 category 已变
-    } catch (e: any) {
-      alert('重命名失败: ' + (e.message || ''));
-    }
+    setRenameTarget({ name: catKey, label: currentLabel });
+    setRenameValue(currentLabel);
+    setRenameOpen(true);
   };
 
   // 按类别统计工坊场景
@@ -407,42 +421,135 @@ export function Sidebar() {
             📁 类别管理
             <button className="modal-close" onClick={() => setCatManageOpen(false)}>✕</button>
           </div>
-          {Object.entries(catCounts).length === 0 ? (
+          {categories.length === 0 ? (
             <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
           ) : (
             <>
-            {Object.entries(catCounts)
-              .sort((a, b) => b[1] - a[1]) // 按场景数降序
-              .map(([catKey, count]) => {
-                const predef = CATEGORIES.find(c => c.key === catKey);
-                return (
-                  <div key={catKey} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '8px 0', borderBottom: '1px solid #21262d',
-                  }}>
-                    <span style={{ fontSize: 20 }}>{predef?.icon || '📁'}</span>
-                    <span style={{ flex: 1, fontSize: 14 }}>{predef?.label || catKey}</span>
-                    <span style={{ fontSize: 12, color: '#6e7681' }}>{count} 个场景</span>
-                    <span className="sidebar-menu-btn" style={{ fontSize: 13 }}
-                      onClick={() => { setCatManageOpen(false); handleRenameCategory(catKey, predef?.label || catKey); }}
-                      title="重命名"
-                    >✏️</span>
-                  </div>
-                );
-              })}
-            <div style={{ borderTop: '1px solid #21262d', paddingTop: 8, marginTop: 4 }}>
-              <span className="sidebar-menu-btn" style={{ fontSize: 13, color: '#58a6ff' }}
-                onClick={() => {
-                  const name = prompt('新类别名称：');
-                  if (!name) return;
-                  // 类别存在即可用，实际会在创建场景时写入
-                  setCatManageOpen(false);
-                  useStore.getState().setCreateSceneModalOpen(true);
+              {categories.map(c => (
+                <div key={c.name} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 0', borderBottom: '1px solid #21262d',
+                }}>
+                  <span style={{ fontSize: 20 }}>{c.icon}</span>
+                  <span style={{ flex: 1, fontSize: 14 }}>{c.label}</span>
+                  <span style={{ fontSize: 12, color: '#6e7681' }}>{c.count} 个场景</span>
+                  <span className="sidebar-menu-btn" style={{ fontSize: 13 }}
+                    onClick={() => handleRenameCategory(c.name, c.label)}
+                    title="重命名"
+                  >✏️</span>
+                  {c.count === 0 && (
+                    <span className="sidebar-menu-btn" style={{ fontSize: 13, color: '#f85149' }}
+                      onClick={async () => {
+                        if (!confirm(`确定删除类别「${c.label}」？`)) return;
+                        try { await deleteCategory(c.name); setCatManageOpen(false); }
+                        catch (e: any) { alert('删除失败: ' + (e.message || '')); }
+                      }}
+                      title="删除"
+                    >🗑️</span>
+                  )}
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid #21262d', paddingTop: 10, marginTop: 4 }}>
+                <button onClick={() => {
+                  setNewCatName('');
+                  setNewCatOpen(true);
                 }}
-              >➕ 新建类别</span>
-            </div>
+                  style={{
+                    padding: '6px 16px', borderRadius: 6, border: '1px solid #2ea043',
+                    background: '#238636', color: '#fff', cursor: 'pointer', fontSize: 13,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >➕ 新建类别</button>
+              </div>
             </>
           )}
+        </div>
+      </div>
+
+      {/* ═══ 新建类别弹窗 ═══ */}
+      <div className={`modal-overlay${newCatOpen ? ' show' : ''}`} onClick={() => !newCatCreating && setNewCatOpen(false)}>
+        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            ➕ 新建类别
+            <button className="modal-close" onClick={() => !newCatCreating && setNewCatOpen(false)}>✕</button>
+          </div>
+          <div style={{ padding: '0 0 16px' }}>
+            <div className="form-group">
+              <label className="form-label">类别名称</label>
+              <input className="form-input" value={newCatName}
+                onChange={e => setNewCatName(e.target.value)}
+                placeholder="输入类别名称，如 汽车、房产、美食"
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') document.getElementById('sidebar-newcat-btn')?.click(); }} />
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setNewCatOpen(false)} disabled={newCatCreating}>取消</button>
+            <button id="sidebar-newcat-btn" onClick={async () => {
+              if (!newCatName.trim()) return;
+              setNewCatCreating(true);
+              try {
+                const catName = newCatName.trim();
+                await createCategory({ name: catName, label: catName });
+                listCategories().then(setCategories).catch(() => {});
+                setNewCatOpen(false);
+                setCatManageOpen(false);
+              } catch (e: any) { alert('创建失败: ' + (e.message || '')); }
+              finally { setNewCatCreating(false); }
+            }} disabled={newCatCreating || !newCatName.trim()}
+              style={{
+                padding: '6px 16px', borderRadius: 6,
+                background: newCatCreating || !newCatName.trim() ? '#23863666' : '#238636', color: '#fff',
+                border: '1px solid #2ea043', cursor: newCatCreating || !newCatName.trim() ? 'not-allowed' : 'pointer', fontSize: 13,
+              }}>
+              {newCatCreating ? '创建中...' : '✅ 确定'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 重命名类别弹窗 ═══ */}
+      <div className={`modal-overlay${renameOpen ? ' show' : ''}`} onClick={() => !renameSaving && setRenameOpen(false)}>
+        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            ✏️ 重命名类别
+            <button className="modal-close" onClick={() => !renameSaving && setRenameOpen(false)}>✕</button>
+          </div>
+          {renameTarget && (
+            <div style={{ padding: '0 0 16px' }}>
+              <div style={{ marginBottom: 12, fontSize: 14, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                原名：<span style={{ color: '#e6edf3', fontWeight: 500 }}>{renameTarget.label}</span>
+              </div>
+              <div className="form-group">
+                <label className="form-label">新名称</label>
+                <input className="form-input" value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  placeholder="输入新的类别名称" autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') document.getElementById('sidebar-rename-btn')?.click(); }} />
+              </div>
+            </div>
+          )}
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setRenameOpen(false)} disabled={renameSaving}>取消</button>
+            <button id="sidebar-rename-btn" onClick={async () => {
+              if (!renameTarget || !renameValue.trim() || renameSaving) return;
+              setRenameSaving(true);
+              try {
+                await renameCategory(renameTarget.name, renameValue.trim());
+                setRenameOpen(false);
+                setCatManageOpen(false);
+                loadWorkshopScenes();
+              } catch (e: any) { alert('重命名失败: ' + (e.message || '')); }
+              finally { setRenameSaving(false); }
+            }} disabled={renameSaving || !renameValue.trim() || !renameTarget}
+              style={{
+                padding: '6px 16px', borderRadius: 6,
+                background: renameSaving || !renameValue.trim() ? '#23863666' : '#238636', color: '#fff',
+                border: '1px solid #2ea043', cursor: renameSaving || !renameValue.trim() ? 'not-allowed' : 'pointer', fontSize: 13,
+              }}>
+              {renameSaving ? '保存中...' : '✅ 确定'}
+            </button>
+          </div>
         </div>
       </div>
 

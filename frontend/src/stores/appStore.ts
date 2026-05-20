@@ -22,7 +22,7 @@ import {
   getDashboardQueue, getDashboardReflect, getDashboardStatus,  // 🆕 Schema v0.7
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs';
+export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'secret-garden';
 
 interface AppState {
   view: ViewPage;
@@ -564,6 +564,18 @@ export const useStore = create<AppState>((set, get) => ({
               created_at: new Date().toISOString(),
             }],
           }));
+        } else if (event.type === 'output:created') {
+          // 🆕 自动提取的 HTML 产出 — 附加到最后一条 AI 消息
+          set(state => {
+            const msgs = [...state.messages];
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].role === 'ai' && !msgs[i].id.startsWith('temp-')) {
+                msgs[i] = { ...msgs[i], outputRef: { outputId: event.output_id, title: event.title, filePath: event.file_path } };
+                break;
+              }
+            }
+            return { messages: msgs };
+          });
         } else if (event.type === 'thinking_map:diverged') {
           // 自动发散完成，刷新 Thinking Map
           get().loadThinkingMap(sceneId);

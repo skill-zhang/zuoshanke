@@ -81,6 +81,9 @@ def list_memory_groups(db: Session = Depends(get_db)):
 
     groups = []
     for r in rows:
+        # 隐藏本体记忆（scope=zhu）— 它属于秘密花园
+        if r.scope == "zhu":
+            continue
         name, icon = _resolve_group_name(db, r.scope, r.context_id)
         # 取最新一条作为预览
         preview_entry = (

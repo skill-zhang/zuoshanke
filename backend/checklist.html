@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>二手车看车验车 Checklist</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f7fa;color:#333;padding:16px 12px 40px;max-width:600px;margin:0 auto}
+h1{font-size:22px;font-weight:700;margin-bottom:4px;color:#1a1a2e}
+.subtitle{font-size:14px;color:#888;margin-bottom:16px}
+.pbw{background:#e0e0e0;border-radius:20px;height:8px;margin-bottom:6px;overflow:hidden}
+.pb{height:100%;background:linear-gradient(90deg,#4facfe,#00f2fe);border-radius:20px;width:0%;transition:width .4s ease}
+.pt{font-size:13px;color:#666;margin-bottom:16px;text-align:right}
+.sec{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.st{font-size:16px;font-weight:600;color:#1a1a2e;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.st .ic{font-size:18px}
+.it{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.it:last-child{border-bottom:none}
+.it .cb{width:22px;height:22px;min-width:22px;border-radius:50%;border:2px solid #ccc;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .2s;font-size:12px;color:#fff}
+.it.done .cb{background:#4facfe;border-color:#4facfe}
+.it .lb{font-size:14px;line-height:1.5;flex:1}
+.it .lb .ht{font-size:12px;color:#999;display:block;margin-top:2px}
+.it.done .lb{color:#aaa;text-decoration:line-through}
+.rst{display:block;width:100%;padding:12px;border:none;border-radius:12px;background:#fff;color:#d32f2f;font-size:14px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,.06);cursor:pointer;margin-top:8px;-webkit-tap-highlight-color:transparent}
+.rst:active{background:#f5f5f5}
+.ft{text-align:center;font-size:12px;color:#bbb;margin-top:20px}
+</style>
+</head>
+<body>
+<h1>🚗 看车验车 Checklist</h1>
+<p class="subtitle">张清泉 · 新手入行专用 · 点一下打勾 ✅</p>
+<div class="pbw"><div class="pb" id="pb"></div></div>
+<div class="pt" id="pt">0 / 0 项完成</div>
+<div id="app"></div>
+<button class="rst" onclick="ra()">🔄 重置所有勾选</button>
+<div class="ft">数据自动保存在手机浏览器中，关闭页面不丢失</div>
+<script>
+const D=[
+{t:"📄 看车前准备（在家做）",i:"🏠",is:[
+{l:"查维保记录",h:"查博士App/小程序，输入车架号查4S店记录"},
+{l:"查违章",h:"交管12123App，输入车牌号"},
+{l:"查抵押/查封",h:"车300或查博士，确认不是抵押车"},
+{l:"约第三方检测",h:"检车无忧/查博士，200-300块，检测师陪你看车"}]},
+{t:"📋 看证件",i:"🪪",is:[
+{l:"行驶证车主和卖车人一致",h:"不一致可能是车商"},
+{l:"登记证（大绿本）看过户次数",h:"0-1次最好，超3次小心"},
+{l:"保险单在有效期内",h:"过期了过户前要补"},
+{l:"年检在有效期内",h:"过期了要补年检"}]},
+{t:"🔍 外观检查（绕车走一圈）",i:"👀",is:[
+{l:"车身缝隙均匀",h:"引擎盖、车门、后备箱缝隙是否一致"},
+{l:"漆面无色差",h:"不同角度看颜色是否一致"},
+{l:"车门螺丝无拧动痕迹",h:"拧过=拆过门，可能事故"},
+{l:"玻璃日期和车辆年份匹配",h:"玻璃角落数字如...19=2019年"},
+{l:"4条轮胎品牌一致、磨损均匀",h:"不一致=换过，偏磨=底盘问题"}]},
+{t:"🚪 内饰检查",i:"💺",is:[
+{l:"方向盘磨损和公里数匹配",h:"太新可能调过表"},
+{l:"座椅塌陷程度正常",h:"主驾驶座椅和公里数匹配"},
+{l:"刹车踏板磨损正常",h:"磨损程度判断公里数"},
+{l:"安全带无水渍/霉斑",h:"拉到底检查，泡水车标志"},
+{l:"仪表盘故障灯正常",h:"通电后全亮然后熄灭"},
+{l:"空调制冷制热正常",h:"听声音、闻异味"},
+{l:"天窗开关顺畅",h:"排水孔是否堵塞"}]},
+{t:"🔧 发动机舱检查",i:"⚙️",is:[
+{l:"冷车启动无异响抖动",h:"听声音"},
+{l:"机油盖无白色乳化物",h:"有=机油进水，冲缸"},
+{l:"防冻液颜色正常无油花",h:"有油花=缸垫问题"},
+{l:"电瓶生产日期不太旧",h:"太旧了要换"},
+{l:"纵梁无褶皱/焊接痕迹",h:"重大事故标志"}]},
+{t:"🛞 底盘检查",i:"🔩",is:[
+{l:"底盘无严重锈蚀",h:"北方车一般还好"},
+{l:"发动机/变速箱底部无漏油",h:"有油渍要注意"},
+{l:"排气管无锈穿磕碰",h:""}]},
+{t:"🏎️ 试驾（必须试）",i:"🚀",is:[
+{l:"起步平顺无顿挫",h:"挂D挡松刹车"},
+{l:"加速顺畅，换挡平顺",h:"踩油门感受"},
+{l:"刹车不跑偏、无异响",h:"踩刹车测试"},
+{l:"转向无虚位、无异响",h:"打方向盘"},
+{l:"过减速带底盘不松散",h:"听声音，减震器问题"},
+{l:"高速方向盘不抖",h:"上快速路跑一下"}]},
+{t:"✅ 看完车后",i:"📝",is:[
+{l:"对比第三方检测报告",h:"看有没有隐瞒的问题"},
+{l:"查同款车市场行情价",h:"闲鱼/58搜同款同年份"},
+{l:"按检测问题砍价",h:"轮胎该换砍500，划痕砍300"},
+{l:"签合同写清楚保障条款",h:"无重大事故、无泡水、无火烧、公里数真实"},
+{l:"过户",h:"车管所或找代办，北京几百块"}]}
+];
+const K='car_cl_q';
+function ls(){try{const r=localStorage.getItem(K);if(r)return JSON.parse(r)}catch(e){}return{}}
+function ss(s){localStorage.setItem(K,JSON.stringify(s))}
+function rn(){
+const s=ls();let fi=[],c=0;D.forEach((sec,si)=>{sec.is.forEach((it,ii)=>{fi.push(si+'-'+ii);if(s[si+'-'+ii])c++})});
+const t=fi.length;
+document.getElementById('pb').style.width=(t>0?Math.round(c/t*100):0)+'%';
+document.getElementById('pt').textContent=c+' / '+t+' 项完成';
+let h='';
+D.forEach((sec,si)=>{
+h+='<div class="sec"><div class="st"><span class="ic">'+sec.i+'</span>'+sec.t+'</div>';
+sec.is.forEach((it,ii)=>{
+const id=si+'-'+ii,ch=s[id]||false;
+h+='<div class="it'+(ch?' done':'')+'" d="'+id+'"><div class="cb">'+(ch?'✓':'')+'</div><div class="lb">'+it.l+(it.h?'<span class="ht">💡 '+it.h+'</span>':'')+'</div></div>';
+});
+h+='</div>';
+});
+document.getElementById('app').innerHTML=h;
+document.querySelectorAll('.it').forEach(el=>{el.addEventListener('click',function(){const st=ls(),id=this.getAttribute('d');st[id]=!st[id];ss(st);rn()})});
+}
+function ra(){if(confirm('确定重置所有勾选？')){localStorage.removeItem(K);rn()}}
+rn();
+</script>
+</body>
+</html>

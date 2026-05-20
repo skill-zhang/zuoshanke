@@ -471,6 +471,18 @@ class SceneAsset(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+# ═══ 类别元数据 ═══
+class CategoryMeta(Base):
+    """类别定义 — 存储所有已知类别的元数据（图标、标签、排序）"""
+    __tablename__ = "category_meta"
+
+    name = Column(String(50), primary_key=True)         # 英文 key，如 "life"
+    label = Column(String(100), nullable=False)          # 中文名，如 "生活"
+    icon = Column(String(10), nullable=False, default="📁")
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=utcnow)
+
+
 # ═══ 产出成果 — 分身生成的独立 HTML/入口 ═══
 class ProjectOutput(Base):
     """分身生成的独立产出（HTML 页面、系统入口等），可在新标签页打开"""

@@ -1,7 +1,7 @@
 /** 🛠 创作空间 — 全页卡片网格，管理所有场景（草稿 + 已发布） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { Scene, updateScene, deleteScene, renameCategory } from '../api/client';
+import { Scene, updateScene, deleteScene, renameCategory, createCategory, deleteCategory, listCategories } from '../api/client';
 
 // ── 分类配置 ──
 const CATEGORIES = [
@@ -17,6 +17,15 @@ const CATEGORIES = [
 ];
 const CATEGORY_META: Record<string, { icon: string; label: string }> = {};
 CATEGORIES.forEach(c => { if (c.key !== 'all') CATEGORY_META[c.key] = { icon: c.icon, label: c.label }; });
+
+// 类别英文标识 → 中文名简单映射
+const autoLabel = (name: string) => {
+  const known: Record<string, string> = {
+    life: '生活', ecommerce: '电商', work: '工作', learn: '学习',
+    create: '创作', finance: '金融', media: '自媒体', other: '其他',
+  };
+  return known[name] || name;
+};
 
 const ICON_STYLE: React.CSSProperties = {
   width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -54,10 +63,27 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
 
   // ── 类别管理 ──
   const [catManageOpen, setCatManageOpen] = useState(false);
+  const [categories, setCategories] = useState<{ name: string; label: string; icon: string; count: number }[]>([]);
+  // ── 新建类别弹窗 ──
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatLabel, setNewCatLabel] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('📁');
+  const [newCatCreating, setNewCatCreating] = useState(false);
+  // ── 重命名类别弹窗 ──
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ name: string; label: string } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
 
   useEffect(() => { loadWorkshopScenes(); }, []);
 
-  // ── 前端过滤 ──
+  // 加载类别元数据
+  useEffect(() => {
+    listCategories().then(setCategories).catch(() => {});
+  }, [catManageOpen]);
+
+  // ── 过滤场景 ──
   const filtered = workshopScenes.filter(s => {
     if (category !== 'all' && s.category !== category) return false;
     if (search) {
@@ -66,6 +92,19 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
     }
     return true;
   });
+
+  // ── 动态分类 tab ──
+  const categoryTabs = (() => {
+    const keys = new Set(categories.map(c => c.name));
+    const allCount = workshopScenes.length;
+    const tabs: { key: string; icon: string; label: string }[] = [
+      { key: 'all', icon: '🔍', label: `全部 (${allCount})` },
+    ];
+    categories.forEach(c => {
+      tabs.push({ key: c.name, icon: c.icon, label: `${c.label} (${c.count})` });
+    });
+    return tabs;
+  })();
 
   // ── 日期格式化 ──
   const formatDate = (d: string | null) => {
@@ -181,7 +220,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* ═══ 分类 Tabs ═══ */}
       <div style={{ display: 'flex', gap: 6, padding: '16px 24px 0', overflowX: 'auto', flexShrink: 0 }}>
-        {CATEGORIES.map(c => (
+        {categoryTabs.map(c => (
           <div key={c.key}
             onClick={() => setCategory(c.key)}
             style={{
@@ -238,7 +277,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
           </div>
         ) : filtered.map(s => {
           const isPublished = s.version !== '0.0';
-          const catMeta = CATEGORY_META[s.category];
+          const catMeta = categories.find(c => c.name === s.category);
           return (
             <div key={s.id}
               className="ws-card-wrapper"
@@ -347,8 +386,8 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
               <div className="form-group">
                 <label className="form-label">类别</label>
                 <select className="form-select" value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
-                  {Object.entries(CATEGORY_META).map(([k, v]) => (
-                    <option key={k} value={k}>{v.icon} {v.label}</option>
+                  {categories.map(c => (
+                    <option key={c.name} value={c.name}>{c.icon} {c.label}</option>
                   ))}
                 </select>
               </div>
@@ -502,55 +541,161 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
             📁 类别管理
             <button className="modal-close" onClick={() => setCatManageOpen(false)}>✕</button>
           </div>
-          {(() => {
-            const catCounts: Record<string, number> = {};
-            workshopScenes.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1; });
-            return Object.entries(catCounts).length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
-            ) : (
-              <>
-                {Object.entries(catCounts)
-                .sort((a, b) => b[1] - a[1])
-                .map(([catKey, count]) => {
-                  const meta = CATEGORY_META[catKey];
-                  return (
-                    <div key={catKey} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 0', borderBottom: '1px solid #21262d',
-                    }}>
-                      <span style={{ fontSize: 20 }}>{meta?.icon || '📁'}</span>
-                      <span style={{ flex: 1, fontSize: 14 }}>{meta?.label || catKey}</span>
-                      <span style={{ fontSize: 12, color: '#6e7681' }}>{count} 个场景</span>
-                      <span style={{ fontSize: 13, cursor: 'pointer', color: '#8b949e' }}
-                        onClick={async () => {
-                          const name = prompt('新类别名称：', meta?.label || catKey);
-                          if (!name || name === (meta?.label || catKey)) return;
-                          try {
-                            await renameCategory(catKey, name);
-                            setCatManageOpen(false);
-                            loadWorkshopScenes();
-                          } catch (e: any) {
-                            alert('重命名失败: ' + (e.message || ''));
-                          }
-                        }}
-                        title="重命名"
-                      >✏️</span>
-                    </div>
-                  );
-                })}
-                <div style={{ borderTop: '1px solid #21262d', paddingTop: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 13, color: '#58a6ff', cursor: 'pointer' }}
+          {categories.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: '#6e7681' }}>暂无类别</div>
+          ) : (
+            <>
+              {categories.map(c => (
+                <div key={c.name} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 0', borderBottom: '1px solid #21262d',
+                }}>
+                  <span style={{ fontSize: 20 }}>{c.icon}</span>
+                  <span style={{ flex: 1, fontSize: 14 }}>{c.label}</span>
+                  <span style={{ fontSize: 12, color: '#6e7681' }}>{c.count} 个场景</span>
+                  {/* 重命名 */}
+                  <span style={{ fontSize: 13, cursor: 'pointer', color: '#8b949e', padding: 4 }}
                     onClick={() => {
-                      setCatManageOpen(false);
-                      useStore.getState().setCreateSceneModalOpen(true);
+                      setRenameTarget({ name: c.name, label: c.label });
+                      setRenameValue(c.label);
+                      setRenameOpen(true);
                     }}
-                  >➕ 新建类别</span>
+                    title="重命名"
+                  >✏️</span>
+                  {/* 删除（仅当 count=0 时才可删） */}
+                  {c.count === 0 && (
+                    <span style={{ fontSize: 13, cursor: 'pointer', color: '#f85149', padding: 4 }}
+                      onClick={async () => {
+                        if (!confirm(`确定删除类别「${c.label}」？`)) return;
+                        try {
+                          await deleteCategory(c.name);
+                          setCatManageOpen(false);
+                        } catch (e: any) {
+                          alert('删除失败: ' + (e.message || ''));
+                        }
+                      }}
+                      title="删除"
+                    >🗑️</span>
+                  )}
                 </div>
-              </>
-            );
-          })()}
+              ))}
+              <div style={{ borderTop: '1px solid #21262d', paddingTop: 10, marginTop: 4 }}>
+                <button onClick={() => {
+                  setNewCatName('');
+                  setNewCatOpen(true);
+                }}
+                  style={{
+                    padding: '6px 16px', borderRadius: 6, border: '1px solid #2ea043',
+                    background: '#238636', color: '#fff', cursor: 'pointer', fontSize: 13,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >➕ 新建类别</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* ═══ 新建类别弹窗 ═══ */}
+      <div className={`modal-overlay${newCatOpen ? ' show' : ''}`} onClick={() => !newCatCreating && setNewCatOpen(false)}>
+        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            ➕ 新建类别
+            <button className="modal-close" onClick={() => !newCatCreating && setNewCatOpen(false)}>✕</button>
+          </div>
+          <div style={{ padding: '0 0 16px' }}>
+            <div className="form-group">
+              <label className="form-label">类别名称</label>
+              <input className="form-input" value={newCatName}
+                onChange={e => setNewCatName(e.target.value)}
+                placeholder="输入类别名称，如 汽车、房产、美食"
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') document.getElementById('ws-newcat-btn')?.click(); }} />
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setNewCatOpen(false)} disabled={newCatCreating}
+              style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #30363d', background: 'transparent', color: '#e6edf3', cursor: 'pointer', fontSize: 13 }}>
+              取消
+            </button>
+            <button onClick={async () => {
+              if (!newCatName.trim()) return;
+              setNewCatCreating(true);
+              try {
+                const catName = newCatName.trim();
+                await createCategory({ name: catName, label: catName });
+                listCategories().then(setCategories).catch(() => {});
+                setNewCatOpen(false);
+                setCatManageOpen(false);
+              } catch (e: any) {
+                alert('创建失败: ' + (e.message || ''));
+              } finally {
+                setNewCatCreating(false);
+              }
+            }} disabled={newCatCreating || !newCatName.trim()}
+              style={{
+                padding: '6px 16px', borderRadius: 6, border: '1px solid #2ea043',
+                background: newCatCreating ? '#23863666' : '#238636', color: '#fff',
+                cursor: newCatCreating || !newCatName.trim() ? 'not-allowed' : 'pointer', fontSize: 13,
+              }}>
+              {newCatCreating ? '创建中...' : '✅ 确定'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 重命名类别弹窗 ═══ */}
+      <div className={`modal-overlay${renameOpen ? ' show' : ''}`} onClick={() => !renameSaving && setRenameOpen(false)}>
+        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+          <div className="modal-title">
+            ✏️ 重命名类别
+            <button className="modal-close" onClick={() => !renameSaving && setRenameOpen(false)}>✕</button>
+          </div>
+          {renameTarget && (
+            <div style={{ padding: '0 0 16px' }}>
+              <div style={{ marginBottom: 12, fontSize: 14, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                原名：<span style={{ color: '#e6edf3', fontWeight: 500 }}>{renameTarget.label}</span>
+              </div>
+              <div className="form-group">
+                <label className="form-label">新名称</label>
+                <input className="form-input" value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  placeholder="输入新的类别名称"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') document.getElementById('rename-confirm-btn')?.click(); }} />
+              </div>
+            </div>
+          )}
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setRenameOpen(false)} disabled={renameSaving}
+              style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #30363d', background: 'transparent', color: '#e6edf3', cursor: 'pointer', fontSize: 13 }}>
+              取消
+            </button>
+            <button id="rename-confirm-btn" onClick={async () => {
+              if (!renameTarget || !renameValue.trim() || renameSaving) return;
+              setRenameSaving(true);
+              try {
+                await renameCategory(renameTarget.name, renameValue.trim());
+                setRenameOpen(false);
+                setCatManageOpen(false);
+                loadWorkshopScenes();
+              } catch (e: any) {
+                alert('重命名失败: ' + (e.message || ''));
+              } finally {
+                setRenameSaving(false);
+              }
+            }} disabled={renameSaving || !renameValue.trim() || !renameTarget}
+              style={{
+                padding: '6px 16px', borderRadius: 6, border: '1px solid #2ea043',
+                background: renameSaving ? '#23863666' : '#238636', color: '#fff',
+                cursor: renameSaving || !renameValue.trim() ? 'not-allowed' : 'pointer', fontSize: 13,
+              }}>
+              {renameSaving ? '保存中...' : '✅ 确定'}
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

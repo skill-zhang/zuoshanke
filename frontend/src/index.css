@@ -326,7 +326,7 @@ body {
 .chat-empty-hint { font-size: 13px; opacity: 0.6; }
 
 /* ═══ 消息气泡 ═══ */
-.chat-msg { max-width:82%; display:flex; flex-direction:column; gap:6px; }
+.chat-msg { max-width:82%; min-width:0; display:flex; flex-direction:column; gap:6px; }
 .chat-msg.user { align-self:flex-end; }
 .chat-msg.ai { align-self:flex-start; }
 
@@ -335,6 +335,7 @@ body {
   border-radius: 16px;
   font-size: 15px;
   line-height: 1.75;
+  min-width: 0;
 }
 .chat-msg.user .chat-msg-content {
   background: linear-gradient(135deg, #1f3a5f, #1a3050);
@@ -422,6 +423,50 @@ body {
 /* highlight.js 暗色主题覆盖 */
 .chat-msg-content .hljs { background: #0d1117 !important; color: #c9d1d9; }
 .chat-msg-content .hljs-keyword { color: #ff7b72; }
+
+/* ═══ 自动 HTML 产出卡片 ═══ */
+.chat-msg-content .output-ref-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.output-ref-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.output-ref-icon { font-size: 16px; flex-shrink: 0; }
+.output-ref-title {
+  font-size: 13px;
+  color: #c9d1d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.output-ref-open-btn {
+  flex-shrink: 0;
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: #00d4ff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.output-ref-open-btn:hover {
+  background: rgba(0,212,255,0.2);
+  border-color: #00d4ff;
+}
 .chat-msg-content .hljs-string { color: #a5d6ff; }
 .chat-msg-content .hljs-comment { color: #8b949e; font-style: italic; }
 .chat-msg-content .hljs-function { color: #d2a8ff; }
@@ -1324,6 +1369,39 @@ body {
 .settings-hint {
   font-size: 12px; color: #484f58; margin-top: 8px;
 }
+
+/* ── 秘密花园入口（设置抽屉底部） ── */
+.garden-entry-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(107,158,255,0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(107,158,255,0.03);
+}
+.garden-entry-btn:hover {
+  background: rgba(107,158,255,0.08);
+  border-color: rgba(107,158,255,0.3);
+}
+.garden-entry-icon { font-size: 16px; }
+.garden-entry-text {
+  flex: 1;
+  font-size: 13px;
+  color: #c9d1d9;
+  letter-spacing: 1px;
+}
+.garden-entry-arrow {
+  font-size: 16px;
+  color: #555;
+  transition: transform 0.2s;
+}
+.garden-entry-btn:hover .garden-entry-arrow {
+  transform: translateX(3px);
+  color: #6b9eff;
+}
 .badge-locked {
   font-size: 11px; color: #8b949e; background: #21262d; padding: 2px 8px; border-radius: 4px;
   font-weight: 400; vertical-align: middle; margin-left: 6px;
@@ -2159,4 +2237,766 @@ body {
 .asset-download-btn:hover {
   background: rgba(0,212,255,0.2);
   border-color: #00d4ff;
+}
+
+/* ═══════════════════════════════════════
+   🌸 秘密花园 — 坐山客内心世界
+   ═══════════════════════════════════════ */
+
+/* ── 根容器 ── */
+.secret-garden {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #08080e;
+  overflow: hidden;
+  color: #c9d1d9;
+}
+
+/* ── 全屏粒子背景（闪烁动画） ── */
+.garden-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(107,158,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 30% 60%, rgba(179,136,255,0.3) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 50% 10%, rgba(0,212,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 40%, rgba(105,240,174,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 70%, rgba(255,107,107,0.2) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 15% 80%, rgba(255,171,64,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 15%, rgba(107,158,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 45% 85%, rgba(179,136,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 55%, rgba(0,212,255,0.2) 0%, transparent 100%),
+    radial-gradient(1px 1px at 5% 50%, rgba(105,240,174,0.2) 0%, transparent 100%);
+}
+.garden-particles-animated {
+  animation: garden-star-twinkle 4s ease-in-out infinite;
+}
+@keyframes garden-star-twinkle {
+  0%, 100% { opacity: 0.6; }
+  25% { opacity: 1; }
+  50% { opacity: 0.4; }
+  75% { opacity: 0.9; }
+}
+
+/* ── 顶栏 ── */
+.garden-topbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(48,54,61,0.4);
+  flex-shrink: 0;
+}
+.garden-topbar-title {
+  font-size: 14px;
+  color: #c9d1d9;
+  letter-spacing: 2px;
+  font-weight: 300;
+}
+.garden-back-btn {
+  background: none;
+  border: 1px solid rgba(107,158,255,0.2);
+  color: #6b9eff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.garden-back-btn:hover {
+  background: rgba(107,158,255,0.1);
+  border-color: rgba(107,158,255,0.4);
+}
+.garden-nav-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #8b949e;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.garden-nav-btn:hover {
+  border-color: rgba(107,158,255,0.4);
+  color: #6b9eff;
+}
+
+/* ── 导航浮层 ── */
+.garden-nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.garden-nav-menu {
+  background: #0f0f1a;
+  border: 1px solid #1a1a2e;
+  border-radius: 12px;
+  padding: 20px 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.garden-nav-menu a {
+  color: #8b949e;
+  text-decoration: none;
+  padding: 10px 24px;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+.garden-nav-menu a:hover {
+  color: #6b9eff;
+  background: rgba(107,158,255,0.06);
+}
+
+/* ── 滚动区 ── */
+.garden-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px;
+}
+
+/* ── 区域标题 ── */
+.garden-section {
+  margin-top: 28px;
+}
+.garden-section:first-of-type {
+  margin-top: 20px;
+}
+.garden-section-title {
+  font-size: 16px;
+  font-weight: 400;
+  color: #e6edf3;
+  margin: 0 0 12px 0;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.garden-section-count {
+  font-size: 11px;
+  color: #666;
+  font-weight: 300;
+}
+
+/* ── ① 心绪 — 双栏布局 ── */
+.garden-mood-dual {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+.garden-mood-left {
+  flex: 1;
+  min-width: 0;
+}
+.garden-mood-right {
+  flex: 0 0 500px;
+  min-height: 180px;
+}
+
+/* ── 心绪卡片（左栏内） ── */
+.garden-mood-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0e0e1a 0%, #0a0a14 100%);
+  border: 1px solid rgba(107,158,255,0.15);
+  border-radius: 14px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 100%;
+  min-height: 180px;
+}
+.garden-mood-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mood-pulse {
+  animation: mood-glow-pulse 3s ease-in-out infinite;
+}
+@keyframes mood-glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+.garden-mood-icon {
+  font-size: 38px;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+.garden-mood-info {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+.garden-mood-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e6edf3;
+  letter-spacing: 2px;
+}
+.garden-mood-state {
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 4px;
+  letter-spacing: 4px;
+}
+.garden-mood-obs {
+  font-size: 11px;
+  color: #555;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ── 动态生命力卡片（左栏内） ── */
+.garden-vitality-card {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  background: rgba(107,158,255,0.05);
+  border: 1px solid rgba(107,158,255,0.12);
+  border-radius: 10px;
+  min-width: 80px;
+  transition: all 0.3s;
+}
+.garden-vitality-card:hover {
+  background: rgba(107,158,255,0.1);
+  border-color: rgba(107,158,255,0.25);
+}
+.garden-vitality-value {
+  font-size: 26px;
+  font-weight: 300;
+  color: #6b9eff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.garden-vitality-label {
+  font-size: 10px;
+  color: #666;
+  margin-top: 2px;
+  letter-spacing: 2px;
+}
+.garden-vitality-bar {
+  width: 100%;
+  height: 2px;
+  background: rgba(107,158,255,0.1);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.garden-vitality-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6b9eff, #b388ff);
+  transition: width 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ── 花园场景 SVG（右栏） ── */
+.garden-scene-svg {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  border-radius: 14px;
+  background: #0a0a14;
+  border: 1px solid rgba(107,158,255,0.1);
+  display: block;
+}
+
+/* ★ SVG 内部动画 ★ */
+
+/* 星星闪烁（三组不同节奏） */
+.star-0 { animation: star-blink 2.5s ease-in-out infinite; }
+.star-1 { animation: star-blink 3.2s ease-in-out infinite 0.5s; }
+.star-2 { animation: star-blink 1.8s ease-in-out infinite 1s; }
+@keyframes star-blink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* 既心绪辉光 — 呼吸脉冲 */
+.mood-glow-pulse {
+  animation: glow-breathe 3s ease-in-out infinite;
+}
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
+}
+
+/* 草地摇摆 */
+.grass-sway {
+  animation: grass-sway 3s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes grass-sway {
+  0%, 100% { transform: skewX(-0.5deg); }
+  50% { transform: skewX(0.5deg); }
+}
+
+/* 草叶摆头 */
+.grass-blade-0 { animation: blade-wave 2s ease-in-out infinite; }
+.grass-blade-1 { animation: blade-wave 2.4s ease-in-out infinite 0.4s; }
+.grass-blade-2 { animation: blade-wave 1.8s ease-in-out infinite 0.8s; }
+@keyframes blade-wave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(3deg); }
+}
+
+/* 花朵绽放呼吸 */
+.flower-bloom {
+  animation: flower-breathe 3s ease-in-out infinite;
+  transform-origin: center;
+}
+.flower-bloom:nth-child(2) { animation-delay: 0.5s; }
+.flower-bloom:nth-child(3) { animation-delay: 1.0s; }
+.flower-bloom:nth-child(5) { animation-delay: 0.3s; }
+.flower-bloom:nth-child(6) { animation-delay: 1.4s; }
+@keyframes flower-breathe {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+
+/* 蝴蝶漂浮 */
+.butterfly {
+  animation: butterfly-float 6s ease-in-out infinite;
+}
+@keyframes butterfly-float {
+  0%, 100% { transform: translate(100px, 60px); }
+  25% { transform: translate(110px, 50px); }
+  50% { transform: translate(105px, 55px); }
+  75% { transform: translate(95px, 45px); }
+}
+
+/* 坐山客小机器人 — 轻轻上下晃动 */
+.agent-sit {
+  animation: agent-bob 2.5s ease-in-out infinite;
+}
+@keyframes agent-bob {
+  0%, 100% { transform: translate(15px, 30px) translateY(0); }
+  50% { transform: translate(15px, 30px) translateY(-1.5px); }
+}
+
+/* 眼睛辉光 */
+.eye-glow {
+  animation: eye-twinkle 2s ease-in-out infinite;
+}
+.eye-glow:last-child {
+  animation-delay: 0.3s;
+}
+@keyframes eye-twinkle {
+  0%, 100% { opacity: 0.6; }
+  30% { opacity: 1; }
+  60% { opacity: 0.7; }
+}
+
+/* 天线闪烁 */
+.antenna-pulse {
+  animation: antenna-pulse 1.5s ease-in-out infinite;
+}
+@keyframes antenna-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+/* 松树轻摇 */
+.tree-sway {
+  animation: tree-sway 3s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes tree-sway {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(0.8deg); }
+}
+
+/* Avatar 站立轻晃（内层 g，相对外层 translate） */
+.avatar-stand {
+  animation: avatar-stand 3s ease-in-out infinite;
+}
+@keyframes avatar-stand {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+
+/* 脚下光环脉动 */
+.avatar-glow-ring {
+  animation: glow-ring-pulse 2.5s ease-in-out infinite;
+}
+@keyframes glow-ring-pulse {
+  0%, 100% { opacity: 0.06; transform: scale(1); }
+  50% { opacity: 0.18; transform: scale(1.15); }
+}
+
+/* 风衣下摆飘动 */
+.coat-sway {
+  animation: coat-sway 2s ease-in-out infinite;
+  transform-origin: top center;
+}
+@keyframes coat-sway {
+  0%, 100% { transform: skewX(-0.5deg); }
+  50% { transform: skewX(0.5deg); }
+}
+
+/* V 型护目镜辉光闪烁 */
+.visor-glow {
+  animation: visor-glow 2s ease-in-out infinite;
+}
+@keyframes visor-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* 风衣星辰流动（三组节奏） */
+.star-drift-1 { animation: star-drift 3s ease-in-out infinite; }
+.star-drift-2 { animation: star-drift 2.5s ease-in-out infinite 0.5s; }
+.star-drift-3 { animation: star-drift 3.5s ease-in-out infinite 1s; }
+@keyframes star-drift {
+  0%, 100% { opacity: 0.15; transform: translateY(0); }
+  50% { opacity: 0.5; transform: translateY(-3px); }
+}
+
+/* 法杖能量纹路流动 */
+.energy-flow {
+  animation: energy-flow 1.5s linear infinite;
+}
+@keyframes energy-flow {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -14; }
+}
+
+/* 能量浮动环 */
+.hover-ring {
+  animation: hover-ring 2s ease-in-out infinite;
+}
+@keyframes hover-ring {
+  0%, 100% { opacity: 0.15; transform: translateY(0); }
+  50% { opacity: 0.4; transform: translateY(-2px); }
+}
+
+/* 能量核心呼吸 */
+.core-glow {
+  animation: core-glow 1.5s ease-in-out infinite;
+}
+@keyframes core-glow {
+  0%, 100% { opacity: 0.08; r: 4; }
+  50% { opacity: 0.25; r: 5; }
+}
+
+/* 核心脉冲高亮 */
+.core-pulse {
+  animation: core-pulse 1.2s ease-in-out infinite;
+}
+@keyframes core-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* 悬浮光点（三组节奏） */
+.orb-1 { animation: orb-float 4s ease-in-out infinite; }
+.orb-2 { animation: orb-float 3.5s ease-in-out infinite 1s; }
+.orb-3 { animation: orb-float 4.5s ease-in-out infinite 0.5s; }
+@keyframes orb-float {
+  0%, 100% { opacity: 0.15; transform: translateY(0); }
+  50% { opacity: 0.4; transform: translateY(-4px); }
+}
+
+/* 兔子上下蹦跳（相对 base 位置） */
+.rabbit-hop {
+  animation: rabbit-hop 1.8s ease-in-out infinite;
+}
+@keyframes rabbit-hop {
+  0%, 100% { transform: translateY(0); }
+  15% { transform: translateY(-4px); }
+  30% { transform: translateY(0); }
+  45% { transform: translateY(-2px); }
+  60% { transform: translateY(0); }
+}
+
+/* 松鼠左右跑动（相对 base 位置） */
+.squirrel-run {
+  animation: squirrel-run 4s ease-in-out infinite;
+}
+@keyframes squirrel-run {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(-14px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(2px); }
+}
+
+/* 松鼠尾巴摇摆 */
+.tail-sway {
+  animation: tail-sway 1.5s ease-in-out infinite;
+  transform-origin: top right;
+}
+@keyframes tail-sway {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(8deg); }
+}
+
+/* 小鸟飞过天空（外层 g 的 translate 是绝对路径飞行） */
+.bird-fly {
+  animation: bird-fly 6s ease-in-out infinite;
+}
+@keyframes bird-fly {
+  0% { transform: translate(-30px, 25px); }
+  100% { transform: translate(530px, 20px); }
+}
+
+/* 翅膀拍动 */
+.wing-flap {
+  animation: wing-flap 0.25s ease-in-out infinite;
+}
+@keyframes wing-flap {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+/* ── ② 记忆花园（带呼吸发光边框） ── */
+.garden-memory-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.garden-memory-flower {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(14,14,26,0.6);
+  border: 1px solid hsla(var(--flower-h, 200), 50%, 60%, 0.15);
+  border-radius: 8px;
+  transition: all 0.25s;
+}
+.garden-memory-flower:hover {
+  background: rgba(14,14,26,0.95);
+  border-color: hsla(var(--flower-h, 200), 70%, 65%, 0.5);
+  transform: translateX(4px);
+  box-shadow: 0 0 12px hsla(var(--flower-h, 200), 70%, 65%, 0.15);
+}
+.garden-memory-level {
+  font-size: 12px;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+.garden-memory-content {
+  flex: 1;
+  font-size: 13px;
+  color: #c9d1d9;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.garden-memory-weight {
+  font-size: 11px;
+  font-weight: 300;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.garden-empty-hint {
+  color: #555;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+/* ── ③ 成长年轮（计数器动画） ── */
+.garden-growth-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.garden-ring {
+  flex: 1;
+  min-width: 80px;
+  padding: 14px 10px;
+  text-align: center;
+  background: rgba(14,14,26,0.6);
+  border: 1px solid hsla(var(--hue, 200), 50%, 50%, 0.2);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+.garden-ring:hover {
+  background: rgba(14,14,26,0.9);
+  border-color: hsla(var(--hue, 200), 60%, 60%, 0.4);
+  transform: translateY(-1px);
+}
+.garden-ring-value {
+  font-size: 28px;
+  font-weight: 300;
+  color: hsl(var(--hue, 200), 70%, 65%);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.garden-ring-label {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+  letter-spacing: 2px;
+}
+
+/* ── ④ 时间线 ═══ */
+.garden-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.garden-milestone {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  position: relative;
+  padding: 4px 0;
+}
+.garden-milestone-line {
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(107,158,255,0.3), rgba(179,136,255,0.3));
+  margin: 0 9px;
+  flex-shrink: 0;
+}
+.garden-milestone:first-child .garden-milestone-line {
+  background: linear-gradient(to bottom, transparent, rgba(107,158,255,0.3));
+}
+.garden-milestone:last-child .garden-milestone-line {
+  background: linear-gradient(to bottom, rgba(107,158,255,0.3), transparent);
+}
+.garden-milestone-dot {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+.garden-milestone-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 8px;
+  margin-left: 22px;
+}
+.garden-milestone-date {
+  font-size: 11px;
+  color: #555;
+}
+.garden-milestone-text {
+  font-size: 13px;
+  color: #c9d1d9;
+  line-height: 1.5;
+}
+
+/* ── ⑤ 内在风景 ── */
+.garden-inner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.garden-inner-card {
+  padding: 16px 12px;
+  text-align: center;
+  background: rgba(14,14,26,0.6);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+.garden-inner-card:hover {
+  background: rgba(14,14,26,0.9);
+  border-color: rgba(107,158,255,0.2);
+  transform: translateY(-1px);
+}
+.garden-inner-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.garden-inner-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+.garden-inner-stat {
+  font-size: 18px;
+  font-weight: 300;
+  color: #6b9eff;
+}
+
+/* ── 加载状态 ── */
+.garden-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.garden-loading-text {
+  font-size: 14px;
+  color: #888;
+  letter-spacing: 2px;
+  animation: garden-pulse 2s ease-in-out infinite;
+}
+.garden-loading-bar {
+  width: 120px;
+  height: 2px;
+  background: #1a1a2e;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.garden-loading-fill {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, #6b9eff, transparent);
+  border-radius: 2px;
+  animation: garden-slide 1.5s ease-in-out infinite;
+}
+@keyframes garden-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+@keyframes garden-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ── 空状态 ── */
+.garden-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 底部 ── */
+.garden-footer {
+  text-align: center;
+  padding: 20px 0;
+}
+.garden-updated {
+  font-size: 11px;
+  color: #444;
+  letter-spacing: 4px;
 }

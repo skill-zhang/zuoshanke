@@ -158,6 +158,29 @@ def init_db():
     finally:
         db.close()
 
+    # 种子数据：默认类别的元数据
+    db = SessionLocal()
+    try:
+        from models import CategoryMeta
+        existing = db.query(CategoryMeta).first()
+        if not existing:
+            default_categories = [
+                ("life", "生活", "🌿", 0),
+                ("ecommerce", "电商", "🛒", 1),
+                ("work", "工作", "💼", 2),
+                ("learn", "学习", "📚", 3),
+                ("create", "创作", "🎨", 4),
+                ("finance", "金融", "📈", 5),
+                ("media", "自媒体", "💬", 6),
+                ("other", "其他", "📦", 99),
+            ]
+            for name, label, icon, order in default_categories:
+                db.add(CategoryMeta(name=name, label=label, icon=icon, sort_order=order))
+            db.commit()
+            print("✅ 默认类别元数据已创建")
+    finally:
+        db.close()
+
     # 种子数据：默认系统设置（单行）
     db = SessionLocal()
     try:

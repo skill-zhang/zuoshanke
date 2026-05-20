@@ -1,8 +1,10 @@
 """场景 + Thinking Map CRUD + 场景流式 + 场景广场/工坊/发布/导入导出"""
 import difflib
 import json
+import os
 import re
 import uuid
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db, SessionLocal
-from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset, PriorityQueue
+from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset, PriorityQueue, ProjectOutput
 from schemas import (
     SceneCreate, SceneOut, SceneUpdate, ScenePublishRequest,
     SceneExportOut, SceneImportIn,
@@ -92,6 +94,26 @@ ICON_RULES = [
     (["日历", "时间", "提醒", "日程"], "📅"),
     # 测试放最后（仅当无其他匹配时生效）
     (["测试", "实验", "验证", "试用"], "🧪"),
+
+    # ── 2026-05-20 新增 ──
+    (["项目", "工程", "工程项目", "项目管理"], "🏗️"),
+    (["科研", "研究", "学术", "论文", "专利", "实验室", "研发"], "🔬"),
+    (["历史", "史学", "考古", "古籍"], "📜"),
+    (["地理", "地图", "区域", "国土"], "🌍"),
+    (["法律", "法规", "合同", "合规", "诉讼"], "⚖️"),
+    (["招聘", "求职", "简历", "面试", "HR", "人力"], "🤝"),
+    (["装修", "设计", "室内", "家装", "工装"], "🏠"),
+    (["买房", "购房", "租房", "楼盘", "房产", "房价", "中介"], "🏡"),
+    (["宠物", "养宠", "猫", "狗", "动物"], "🐾"),
+    (["游戏", "电竞", "游玩", "娱乐", "Steam"], "🎮"),
+    (["摄影", "相机", "拍照", "修图"], "📷"),
+    (["音乐", "乐器", "唱歌"], "🎵"),
+    (["运动", "体育", "跑步", "健身", "游泳", "瑜伽"], "⚽"),
+    (["家居", "家具", "家电", "收纳", "生活"], "🪴"),
+    (["手工艺", "手工", "DIY", "制作"], "✂️"),
+    (["个人成长", "自我提升", "习惯", "冥想", "心理学"], "🌱"),
+    (["投资", "创业", "商业", "商业模式", "融资"], "🚀"),
+    (["供应链", "采购", "仓储", "库存", "物流"], "📦"),
 ]
 
 
@@ -1391,6 +1413,41 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                             created_at=ai_msg.created_at.isoformat(),
                             changes=[], model=model_name)
 
+            # 🆕 检测 AI 回复中的 HTML 代码块 → 自动保存为产出成果
+            try:
+                html_match = re.search(
+                    r'```html\s*\n(.*?)```',
+                    full_reply, re.DOTALL
+                )
+                if html_match:
+                    html_content = html_match.group(1).strip()
+                    if len(html_content) > 50:  # 至少 50 字符才算有效 HTML
+                        safe_name = re.sub(r'[^\w\u4e00-\u9fff_-]', '', scene.name or '产出')[:20]
+                        out_dir = Path(__file__).resolve().parent.parent.parent / "outputs" / scene_id
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        out_path = out_dir / f"{ai_msg_id}.html"
+                        out_path.write_text(html_content, encoding="utf-8")
+
+                        out_rec = ProjectOutput(
+                            id=make_id("out"),
+                            scene_id=scene_id,
+                            title=f"{safe_name} - HTML 页面",
+                            description="从对话中自动提取的 HTML 页面",
+                            type="html",
+                            file_path=f"{scene_id}/{ai_msg_id}.html",
+                        )
+                        new_db.add(out_rec)
+                        new_db.commit()
+
+                        yield sse_event("output:created",
+                            output_id=out_rec.id,
+                            title=out_rec.title,
+                            file_path=out_rec.file_path,
+                        )
+                        print(f"[output] 自动产出 HTML: {out_rec.file_path}")
+            except Exception as e:
+                print(f"[output] 自动提取 HTML 失败: {e}")
+
             # 🆕 Schema v0.8: 本体观察 — 分身完成
             try:
                 _zhu.observe_fenshen_event("fenshen:done", scene.name)
@@ -1574,53 +1631,123 @@ def list_scene_sessions(scene_id: str, db: Session = Depends(get_db)):
 
 # ═══ 类别管理 ═══
 
-CATEGORY_ICONS = {
-    "life": "🌿", "ecommerce": "🛒", "work": "💼", "learn": "📚",
-    "create": "🎨", "finance": "📈", "media": "💬", "other": "📦",
-}
-
-CATEGORY_LABELS = {
-    "life": "生活", "ecommerce": "电商", "work": "工作", "learn": "学习",
-    "create": "创作", "finance": "金融", "media": "自媒体", "other": "其他",
-}
-
-
 @router.get("/api/categories")
 def list_categories(db: Session = Depends(get_db)):
-    """返回所有类别及其场景数量、图标、中文名"""
+    """返回所有类别及其场景数量、图标、中文名 — 合并 DB 元数据 + 场景实际数据"""
     from sqlalchemy import func
-    rows = (
-        db.query(Scene.category, func.count(Scene.id))
-        .group_by(Scene.category)
-        .all()
-    )
+    from models import CategoryMeta
+
+    # 1. 获取场景中实际使用的类别及其计数
+    scene_counts: dict[str, int] = {}
+    for cat_name, count in db.query(Scene.category, func.count(Scene.id)).group_by(Scene.category).all():
+        scene_counts[cat_name] = count
+
+    # 2. 从 DB 读取类别元数据（预定义+用户创建）
+    metas = db.query(CategoryMeta).order_by(CategoryMeta.sort_order).all()
+    meta_map = {m.name: m for m in metas}
+
+    # 3. 合并：所有元数据中的类别 + 场景中用到的但元数据缺失的
+    all_keys: set[str] = set(meta_map.keys()) | set(scene_counts.keys())
     categories = []
-    for cat_name, count in rows:
+    for key in all_keys:
+        m = meta_map.get(key)
         categories.append({
-            "name": cat_name,
-            "label": CATEGORY_LABELS.get(cat_name, cat_name),
-            "icon": CATEGORY_ICONS.get(cat_name, "📦"),
-            "count": count,
+            "name": key,
+            "label": m.label if m else key,
+            "icon": m.icon if m else "📦",
+            "count": scene_counts.get(key, 0),
         })
-    # 按预定义顺序排序
-    order = list(CATEGORY_ICONS.keys())
-    categories.sort(key=lambda c: order.index(c["name"]) if c["name"] in order else 999)
+
+    # 4. 排序：有 sort_order 的按 sort_order，没有的排末尾
+    categories.sort(key=lambda c: (
+        meta_map[c["name"]].sort_order if c["name"] in meta_map else 999,
+        c["name"],
+    ))
     return categories
+
+
+@router.post("/api/categories")
+def create_category(data: dict, db: Session = Depends(get_db)):
+    """创建新类别"""
+    from models import CategoryMeta
+    from sqlalchemy import func
+    name = data.get("name", "").strip().lower()
+    label = data.get("label", "").strip()
+    icon = data.get("icon", "").strip()
+
+    if not name:
+        raise HTTPException(400, "类别英文名不能为空")
+    if not label:
+        label = name  # 用 name 作为 label
+
+    # 图标自动匹配：未指定时用 label 智能匹配
+    if not icon:
+        icon = auto_detect_icon(label) or "📁"
+
+    # 检查是否已存在
+    existing = db.query(CategoryMeta).filter(CategoryMeta.name == name).first()
+    if existing:
+        raise HTTPException(409, f"类别「{name}」已存在")
+
+    # 找最大 sort_order
+    max_order = db.query(func.max(CategoryMeta.sort_order)).scalar() or 0
+
+    cat = CategoryMeta(
+        name=name,
+        label=label,
+        icon=icon or "📁",
+        sort_order=max_order + 1,
+    )
+    db.add(cat)
+    db.commit()
+    db.refresh(cat)
+
+    return {
+        "ok": True,
+        "category": {
+            "name": cat.name,
+            "label": cat.label,
+            "icon": cat.icon,
+            "count": 0,
+        },
+    }
+
+
+@router.delete("/api/categories/{name}")
+def delete_category(name: str, db: Session = Depends(get_db)):
+    """删除类别元数据（不删除场景，仅清除元数据记录）"""
+    from models import CategoryMeta
+    cat = db.query(CategoryMeta).filter(CategoryMeta.name == name).first()
+    if not cat:
+        raise HTTPException(404, f"类别「{name}」不存在")
+
+    db.delete(cat)
+    db.commit()
+    return {"ok": True, "deleted": name}
 
 
 @router.put("/api/categories/{name}")
 def rename_category(name: str, data: dict, db: Session = Depends(get_db)):
-    """重命名类别（更新该类别下所有场景的 category 字段）"""
-    new_name = data.get("new_name", "").strip()
+    """重命名类别（更新 CategoryMeta 元数据 + 该类别下所有场景的 category 字段）"""
+    from models import CategoryMeta
+    new_name = data.get("new_name", "").strip().lower()
     if not new_name:
         raise HTTPException(400, "新类别名不能为空")
     if new_name == name:
         raise HTTPException(400, "新旧名称相同")
 
+    # 更新场景的 category 字段
     count = db.query(Scene).filter(Scene.category == name).update(
         {"category": new_name}, synchronize_session=False
     )
     db.commit()
+
+    # 更新元数据表中的 name（如果存在）
+    meta = db.query(CategoryMeta).filter(CategoryMeta.name == name).first()
+    if meta:
+        meta.name = new_name
+        db.commit()
+
     return {"ok": True, "updated": count, "old_name": name, "new_name": new_name}
 
 
