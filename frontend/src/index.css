@@ -1932,7 +1932,11 @@ body {
 .memory-level-title { font-size:11px; color:#8b949e; }
 
 /* 详情弹窗 */
-.mem-detail-modal { width:480px; }
+.mem-detail-modal {
+  width:480px;
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:101;
+}
 .mem-detail-modal .modal-header { display:flex; align-items:center; justify-content:space-between; font-size:16px; font-weight:600; margin-bottom:20px; }
 .mem-detail-modal .modal-body { display:flex; flex-direction:column; gap:16px; }
 .mem-detail-modal .modal-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid #21262d; }

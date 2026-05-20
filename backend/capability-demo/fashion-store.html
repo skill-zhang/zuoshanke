@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清泉服饰 · 女装 & 童装</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #faf8f6;
+            color: #2d2d2d;
+            line-height: 1.6;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1ece8; }
+        ::-webkit-scrollbar-thumb { background: #c9b9a8; border-radius: 3px; }
+
+        /* ===== 颜色变量 ===== */
+        :root {
+            --gold: #c9a96e;
+            --gold-dark: #b8944f;
+            --gold-light: #e8d5b7;
+            --bg-warm: #faf8f6;
+            --bg-card: #ffffff;
+            --text: #2d2d2d;
+            --text-light: #8a8a8a;
+            --border: #e8ddd4;
+            --shadow: 0 4px 20px rgba(0,0,0,0.06);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
+            /* 女装色系 — 玫瑰粉棕 */
+            --rose: #c48b7d;
+            --rose-light: #e8c4ba;
+            --rose-dark: #a86b5e;
+            --rose-bg: #fdf8f6;
+            --rose-accent: #f5e6e0;
+            --rose-tag: #f0d9d2;
+            --rose-tag-text: #8b5e52;
+            /* 童装色系 — 清新薄荷 */
+            --mint: #7ab8a8;
+            --mint-light: #c5e3db;
+            --mint-dark: #5a9e8e;
+            --mint-bg: #f5faf8;
+            --mint-accent: #dceee8;
+        }
+
+        .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+        /* ===== Header ===== */
+        .header {
+            background: linear-gradient(135deg, #f8f0eb 0%, #f0e4db 100%);
+            padding: 18px 0;
+            border-bottom: 1px solid #e8ddd4;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-inner {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 26px;
+            font-weight: 700;
+            color: #5a4a3a;
+            letter-spacing: 2px;
+        }
+        .logo span { color: var(--gold); }
+        .nav { display: flex; gap: 32px; }
+        .nav a {
+            text-decoration: none;
+            color: #5a4a3a;
+            font-size: 15px;
+            font-weight: 500;
+            transition: var(--transition);
+            position: relative;
+        }
+        .nav a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gold);
+            transition: var(--transition);
+        }
+        .nav a:hover::after { width: 100%; }
+        .nav a:hover { color: var(--gold-dark); }
+        .nav a.active { color: var(--gold-dark); }
+        .nav a.active::after { width: 100%; }
+        .header-actions { display: flex; gap: 18px; align-items: center; }
+        .header-actions svg {
+            width: 22px; height: 22px;
+            fill: none; stroke: #5a4a3a; stroke-width: 1.8;
+            cursor: pointer; transition: var(--transition);
+        }
+        .header-actions svg:hover { stroke: var(--gold); }
+
+        /* ===== Hero ===== */
+        .hero {
+            background: linear-gradient(135deg, #f5ede6 0%, #ede0d6 50%, #f0e4db 100%);
+            padding: 80px 0 60px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle at 30% 40%, rgba(201,169,110,0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 60%, rgba(196,139,125,0.06) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .hero h1 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 48px;
+            font-weight: 700;
+            color: #4a3a2a;
+            letter-spacing: 4px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+        .hero h1 span { color: var(--gold); }
+        .hero p {
+            font-size: 18px;
+            color: #7a6a5a;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 48px;
+        }
+        .hero-categories {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            position: relative;
+        }
+        .hero-cat {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: var(--radius);
+            padding: 20px 32px;
+            min-width: 160px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .hero-cat:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            background: rgba(255,255,255,0.9);
+        }
+        .hero-cat .icon { font-size: 28px; margin-bottom: 8px; }
+        .hero-cat .name { font-size: 15px; font-weight: 500; color: #4a3a2a; }
+        .hero-cat .count { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+
+        /* ===== 通用 Section ===== */
+        .section { padding: 64px 0; }
+        .section-title {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        .section-title h2 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 32px;
+            font-weight: 700;
+            color: #4a3a2a;
+            letter-spacing: 2px;
+        }
+        .section-title p {
+            color: var(--text-light);
+            font-size: 14px;
+            margin-top: 8px;
+            letter-spacing: 1px;
+        }
+
+        /* ===== 女装专区 ===== */
+        .womens-section {
+            background: var(--rose-bg);
+        }
+        .womens-section .section-title h2 { color: var(--rose-dark); }
+        .womens-section .section-title h2::before {
+            content: '✦ ';
+            color: var(--rose);
+        }
+        .womens-section .section-title h2::after {
+            content: ' ✦';
+            color: var(--rose);
+        }
+
+        .filter-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 36px;
+            flex-wrap: wrap;
+        }
+        .filter-tab {
+            padding: 8px 24px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: transparent;
+            font-size: 14px;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+        .filter-tab:hover { border-color: var(--rose); color: var(--rose-dark); }
+        .filter-tab.active {
+            background: var(--rose);
+            color: #fff;
+            border-color: var(--rose);
+        }
+
+        /* ===== 商品网格 ===== */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        @media (max-width: 1024px) { .product-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .product-grid { grid-template-columns: 1fr; } }
+
+        .product-card {
+            background: #fff;
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        }
+        .product-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.1);
+        }
+        .product-card .img-wrap {
+            position: relative;
+            overflow: hidden;
+            aspect-ratio: 3/4;
+            background: #f5f0ec;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .product-card .img-wrap .placeholder-icon {
+            font-size: 48px;
+            opacity: 0.3;
+        }
+        .product-card .img-wrap .badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .badge-new { background: var(--gold); color: #fff; }
+        .badge-hot { background: #e85a5a; color: #fff; }
+        .badge-sale { background: var(--rose); color: #fff; }
+
+        .product-card .quick-add {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            opacity: 0;
+            padding: 10px 28px;
+            border-radius: 25px;
+            border: none;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .womens-section .quick-add { background: var(--rose); color: #fff; }
+        .womens-section .quick-add:hover { background: var(--rose-dark); }
+        .product-card:hover .quick-add {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .product-card .info {
+            padding: 16px 18px 20px;
+        }
+        .product-card .info .name {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .product-card .info .desc {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-bottom: 10px;
+        }
+        .product-card .info .price-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .product-card .info .price {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .womens-section .price { color: var(--rose-dark); }
+        .product-card .info .price-old {
+            font-size: 13px;
+            color: var(--text-light);
+            text-decoration: line-through;
+        }
+        .product-card .info .rating {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 6px;
+        }
+        .product-card .info .rating .stars { color: #f0b84d; }
+
+        /* ===== 童装色系覆盖 ===== */
+        .kids-section {
+            background: var(--mint-bg);
+        }
+        .kids-section .section-title h2 { color: var(--mint-dark); }
+        .kids-section .section-title h2::before {
+            content: '✦ ';
+            color: var(--mint);
+        }
+        .kids-section .section-title h2::after {
+            content: ' ✦';
+            color: var(--mint);
+        }
+        .kids-section .filter-tab:hover { border-color: var(--mint); color: var(--mint-dark); }
+        .kids-section .filter-tab.active {
+            background: var(--mint);
+            color: #fff;
+            border-color: var(--mint);
+        }
+        .kids-section .quick-add { background: var(--mint); color: #fff; }
+        .kids-section .quick-add:hover { background: var(--mint-dark); }
+        .kids-section .price { color: var(--mint-dark); }
+        .kids-section .badge-new { background: var(--mint); color: #fff; }
+
+        /* ===== 亲子 Banner ===== */
+        .family-banner {
+            background: linear-gradient(135deg, #f5ede6 0%, #ede0d6 100%);
+            padding: 60px 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .family-banner::before {
+            content: '👨‍👩‍👧‍👦';
+            position: absolute;
+            font-size: 120px;
+            opacity: 0.06;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .family-banner h2 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 28px;
+            color: #4a3a2a;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        .family-banner p {
+            color: #7a6a5a;
+            font-size: 15px;
+            margin-bottom: 24px;
+            position: relative;
+        }
+        .family-banner .btn {
+            display: inline-block;
+            padding: 12px 36px;
+            background: var(--gold);
+            color: #fff;
+            border-radius: 30px;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: var(--transition);
+            position: relative;
+        }
+        .family-banner .btn:hover {
+            background: var(--gold-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(201,169,110,0.3);
+        }
+
+        /* ===== Footer ===== */
+        .footer {
+            background: #3a2a1a;
+            color: #c8b8a8;
+            padding: 48px 0 32px;
+        }
+        .footer-grid {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+        }
+        @media (max-width: 768px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 480px) { .footer-grid { grid-template-columns: 1fr; } }
+        .footer h3 {
+            font-family: 'Noto Serif SC', serif;
+            color: #e8ddd4;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+        .footer p, .footer a {
+            font-size: 13px;
+            color: #a89888;
+            line-height: 2;
+            text-decoration: none;
+            display: block;
+        }
+        .footer a:hover { color: var(--gold); }
+        .footer .brand-desc {
+            font-size: 14px;
+            line-height: 1.8;
+            margin-top: 8px;
+        }
+        .footer .logo-foot {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: #e8ddd4;
+        }
+        .footer .logo-foot span { color: var(--gold); }
+        .footer-bottom {
+            max-width: 1280px;
+            margin: 32px auto 0;
+            padding: 20px 24px 0;
+            border-top: 1px solid rgba(200,184,168,0.15);
+            text-align: center;
+            font-size: 12px;
+            color: #887868;
+        }
+
+        /* ===== 响应式微调 ===== */
+        @media (max-width: 768px) {
+            .nav { display: none; }
+            .hero h1 { font-size: 32px; }
+            .hero p { font-size: 15px; }
+            .section-title h2 { font-size: 26px; }
+            .hero-cat { min-width: 120px; padding: 16px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header class="header">
+    <div class="header-inner">
+        <div class="logo">清泉<span>·</span>服饰</div>
+        <nav class="nav">
+            <a href="#" class="active">首页</a>
+            <a href="#">女装</a>
+            <a href="#">童装</a>
+            <a href="#">新品</a>
+            <a href="#">关于我们</a>
+        </nav>
+        <div class="header-actions">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        </div>
+    </div>
+</header>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+    <div class="container">
+        <h1>温柔 <span>·</span> 自在 <span>·</span> 美好</h1>
+        <p>为每一位妈妈和孩子，找到属于他们的舒适与风格</p>
+        <div class="hero-categories">
+            <div class="hero-cat">
+                <div class="icon">👗</div>
+                <div class="name">连衣裙</div>
+                <div class="count">36 款</div>
+            </div>
+            <div class="hero-cat">
+                <div class="icon">🧥</div>
+                <div class="name">外套</div>
+                <div class="count">28 款</div>
+            </div>
+            <div class="hero-cat">
+                <div class="icon">👕</div>
+                <div class="name">童装套装</div>
+                <div class="count">42 款</div>
+            </div>
+            <div class="hero-cat">
+                <div class="icon">👨‍👩‍👧‍👦</div>
+                <div class="name">亲子装</div>
+                <div class="count">18 款</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== 女装专区 ===== -->
+<section class="section womens-section">
+    <div class="container">
+        <div class="section-title">
+            <h2>女装 · 玫瑰季</h2>
+            <p>玫瑰粉棕调 · 温柔如你</p>
+        </div>
+        <div class="filter-tabs">
+            <button class="filter-tab active">全部</button>
+            <button class="filter-tab">连衣裙</button>
+            <button class="filter-tab">上衣</button>
+            <button class="filter-tab">下装</button>
+            <button class="filter-tab">外套</button>
+        </div>
+        <div class="product-grid">
+            <!-- 商品 1 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #f5e6e0 0%, #e8c4ba 100%);">
+                    <span class="placeholder-icon">🌸</span>
+                    <span class="badge badge-new">新品</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">法式碎花连衣裙</div>
+                    <div class="desc">玫瑰粉棕 · 收腰A字版</div>
+                    <div class="price-row">
+                        <span class="price">¥329</span>
+                        <span class="price-old">¥459</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★★</span> 128评价</div>
+                </div>
+            </div>
+            <!-- 商品 2 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #f0e4db 0%, #dcc8bd 100%);">
+                    <span class="placeholder-icon">🧶</span>
+                    <span class="badge badge-hot">热卖</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">针织开衫</div>
+                    <div class="desc">驼色 · 软糯羊毛混纺</div>
+                    <div class="price-row">
+                        <span class="price">¥259</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★☆</span> 96评价</div>
+                </div>
+            </div>
+            <!-- 商品 3 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #ede0d6 0%, #d9c8b8 100%);">
+                    <span class="placeholder-icon">👖</span>
+                    <span class="badge badge-sale">折扣</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">阔腿西裤</div>
+                    <div class="desc">燕麦色 · 垂感面料</div>
+                    <div class="price-row">
+                        <span class="price">¥289</span>
+                        <span class="price-old">¥389</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★★</span> 73评价</div>
+                </div>
+            </div>
+            <!-- 商品 4 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #f0e4db 0%, #e0cec0 100%);">
+                    <span class="placeholder-icon">🧥</span>
+                    <span class="badge badge-new">新品</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">羊毛大衣</div>
+                    <div class="desc">浅驼色 · 双面呢工艺</div>
+                    <div class="price-row">
+                        <span class="price">¥899</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★★</span> 52评价</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== 亲子 Banner ===== -->
+<section class="family-banner">
+    <div class="container">
+        <h2>👨‍👩‍👧‍👦 亲子系列 · 爱是穿在身上的默契</h2>
+        <p>同款不同尺，妈妈和宝贝一起美</p>
+        <a href="#" class="btn">探索亲子装 →</a>
+    </div>
+</section>
+
+<!-- ===== 童装专区 ===== -->
+<section class="section kids-section">
+    <div class="container">
+        <div class="section-title">
+            <h2>童装 · 薄荷季</h2>
+            <p>清新薄荷调 · 自在如风</p>
+        </div>
+        <div class="filter-tabs">
+            <button class="filter-tab active">全部</button>
+            <button class="filter-tab">套装</button>
+            <button class="filter-tab">上衣</button>
+            <button class="filter-tab">裙装</button>
+            <button class="filter-tab">裤装</button>
+        </div>
+        <div class="product-grid">
+            <!-- 商品 1 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #dceee8 0%, #c5e3db 100%);">
+                    <span class="placeholder-icon">👕</span>
+                    <span class="badge badge-new">新品</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">儿童卫衣套装</div>
+                    <div class="desc">薄荷绿 · 纯棉亲肤</div>
+                    <div class="price-row">
+                        <span class="price">¥199</span>
+                        <span class="price-old">¥269</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★★</span> 215评价</div>
+                </div>
+            </div>
+            <!-- 商品 2 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #f0e8e4 0%, #e8ddd4 100%);">
+                    <span class="placeholder-icon">🎀</span>
+                    <span class="badge badge-hot">热卖</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">泡泡袖连衣裙</div>
+                    <div class="desc">奶油白 · 蕾丝花边</div>
+                    <div class="price-row">
+                        <span class="price">¥179</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★★</span> 168评价</div>
+                </div>
+            </div>
+            <!-- 商品 3 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #e0eee8 0%, #c5ddd4 100%);">
+                    <span class="placeholder-icon">👚</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">T恤三件装</div>
+                    <div class="desc">浅绿/米白/浅灰 · 有机棉</div>
+                    <div class="price-row">
+                        <span class="price">¥149</span>
+                        <span class="price-old">¥199</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★☆</span> 342评价</div>
+                </div>
+            </div>
+            <!-- 商品 4 -->
+            <div class="product-card">
+                <div class="img-wrap" style="background: linear-gradient(135deg, #e8e0dc 0%, #d8d0c8 100%);">
+                    <span class="placeholder-icon">👖</span>
+                    <button class="quick-add">快速加购</button>
+                </div>
+                <div class="info">
+                    <div class="name">儿童运动裤</div>
+                    <div class="desc">浅灰色 · 弹力束脚</div>
+                    <div class="price-row">
+                        <span class="price">¥129</span>
+                    </div>
+                    <div class="rating"><span class="stars">★★★★★</span> 97评价</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== Footer ===== -->
+<footer class="footer">
+    <div class="footer-grid">
+        <div>
+            <div class="logo-foot">清泉<span>·</span>服饰</div>
+            <p class="brand-desc">
+                专注为妈妈和孩子提供高品质、有温度的日常服饰。<br>
+                每一件衣服，都承载着我们对舒适与美的理解。
+            </p>
+        </div>
+        <div>
+            <h3>购物指南</h3>
+            <a href="#">尺码指南</a>
+            <a href="#">配送说明</a>
+            <a href="#">退换政策</a>
+            <a href="#">常见问题</a>
+        </div>
+        <div>
+            <h3>关于我们</h3>
+            <a href="#">品牌故事</a>
+            <a href="#">门店查询</a>
+            <a href="#">加入我们</a>
+            <a href="#">联系客服</a>
+        </div>
+        <div>
+            <h3>关注我们</h3>
+            <a href="#">微信公众号</a>
+            <a href="#">小红书</a>
+            <a href="#">抖音</a>
+            <a href="#">微博</a>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        © 2025 清泉服饰 · 用心做好每一件衣服
+    </div>
+</footer>
+
+</body>
+</html>

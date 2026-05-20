@@ -366,7 +366,7 @@ class MemoryManager:
         mem = self.get(key)
         if not mem:
             return False
-        mem.explicit_boost = (mem.explicit_boost or 0) + int(boost)
+        mem.explicit_boost = int(max(mem.explicit_boost or 1, 1) * boost)
         mem.last_reinforced_at = datetime.now(timezone.utc)
         mem.priority_level = self.auto_level(mem)
         self.db.commit()
