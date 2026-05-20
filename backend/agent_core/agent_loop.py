@@ -258,6 +258,55 @@ def call_llm_with_tools(
         return None
 
 
+def _safe_parse_tool_args(raw: str) -> dict:
+    """带容错的 JSON 参数解析 — 处理 LLM 常见 JSON 格式错误"""
+    import re as _re
+    if not raw or raw == "{}":
+        return {}
+    # 第一次尝试：直接解析
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    # 第二次尝试：替换单引号为双引号（LLM 常用单引号）
+    try:
+        return json.loads(raw.replace("'", '"'))
+    except json.JSONDecodeError:
+        pass
+    # 第三次尝试：补全未闭合的引号（去尾+逐个字符扫描）
+    try:
+        fixed = raw.rstrip()
+        if fixed.endswith('"'):
+            pass  # 正常闭合
+        elif fixed.endswith('}'):
+            # 末尾可能是 \"code\": \"... 少了闭合引号
+            # 从右向左找最后一个未匹配的双引号
+            quote_count = 0
+            in_string = False
+            for ch in fixed:
+                if ch == '"' and not in_string:
+                    in_string = True
+                elif ch == '"' and in_string:
+                    if ch != '\\':
+                        in_string = False
+            if in_string:
+                # 字符串未闭合，加闭合引号
+                fixed += '"}'
+                return json.loads(fixed)
+    except (json.JSONDecodeError, Exception):
+        pass
+    # 第四次尝试：用正则提取最基本的结构
+    try:
+        m = _re.search(r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}', raw, _re.DOTALL)
+        if m:
+            candidate = m.group(0)
+            return json.loads(candidate)
+    except (json.JSONDecodeError, Exception):
+        pass
+    # 全部失败，原样抛出
+    return json.loads(raw)
+
+
 def run_agent_loop(
     task: str = "",
     memory_context: str = "",
@@ -394,9 +443,9 @@ def run_agent_loop(
                 tool_name = func.get("name", "")
                 raw_args = func.get("arguments", "{}")
 
-                # 解析参数
+                # 解析参数（带 JSON 容错修复）
                 if isinstance(raw_args, str):
-                    args = json.loads(raw_args)
+                    args = _safe_parse_tool_args(raw_args)
                 else:
                     args = raw_args
 
@@ -458,10 +507,13 @@ def run_agent_loop(
                     }
 
             except json.JSONDecodeError as e:
+                err_msg = f"参数解析失败: {e}"
+                if tool_name == "run_code":
+                    err_msg += "。请用 code_b64 传参（base64编码），不要直接在 code 参数里放含引号/换行的代码"
                 yield {
                     "type": "tool_error",
                     "tool": tool_name if 'tool_name' in locals() else "?",
-                    "error": f"参数解析失败: {e}",
+                    "error": err_msg,
                 }
             except Exception as e:
                 yield {

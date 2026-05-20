@@ -6,10 +6,7 @@ import { ChatView } from './components/ChatView';
 import { PlazaView } from './components/PlazaView';
 import { WorkshopView } from './components/WorkshopView';
 import { ToolsView } from './components/ToolsView';
-import { ThinkingMapDrawer } from './components/ThinkingMapDrawer';
-import { ActionMapDrawer } from './components/ActionMapDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
-import { MemoryDrawer } from './components/MemoryDrawer';
 import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
 import { CapabilityVerify } from './components/CapabilityVerify';
@@ -302,10 +299,7 @@ export default function App() {
         <span>|</span> API: http://localhost:8000
       </div>
 
-      <ThinkingMapDrawer />
-      <ActionMapDrawer />
       <SettingsDrawer />
-      <MemoryDrawer />
 
       {/* ═══ 创建场景弹窗 ═══ */}
       <div className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`} onClick={handleCloseCreate}>

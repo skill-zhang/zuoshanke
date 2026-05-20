@@ -303,7 +303,7 @@ body {
 /* ═══ 消息区 ═══ */
 .chat-messages {
   flex:1;
-  overflow-y:auto;
+  overflow: hidden auto;
   padding:20px 24px;
   display:flex;
   flex-direction:column;
@@ -400,6 +400,8 @@ body {
   padding: 14px 16px;
   overflow-x: auto;
   margin: 8px 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .chat-msg-content pre code {
   background: none;

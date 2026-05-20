@@ -145,18 +145,8 @@ interface AppState {
   createSceneModalOpen: boolean;
   setCreateSceneModalOpen: (v: boolean) => void;
 
-  // ═══ 记忆系统抽屉 🆕 ═══
-  memoryDrawerOpen: boolean;
-  openMemoryDrawer: () => void;
-  closeMemoryDrawer: () => void;
-
   // ═══ 上下文压缩 ═══
   compressChannel: (channelId: string) => Promise<string | null>;
-
-  // ═══ 技能系统抽屉 🆕 ═══
-  skillsDrawerOpen: boolean;
-  openSkillsDrawer: () => void;
-  closeSkillsDrawer: () => void;
 
   // ═══ AI 角色动画 ═══
   agentStatus: AgentStatus;
@@ -897,14 +887,6 @@ export const useStore = create<AppState>((set, get) => ({
   openSettingsDrawer: () => set({ settingsDrawerOpen: true }),
 
   closeSettingsDrawer: () => set({ settingsDrawerOpen: false }),
-
-  memoryDrawerOpen: false,
-  openMemoryDrawer: () => set({ memoryDrawerOpen: true, skillsDrawerOpen: false }),
-  closeMemoryDrawer: () => set({ memoryDrawerOpen: false }),
-
-  skillsDrawerOpen: false,
-  openSkillsDrawer: () => set({ skillsDrawerOpen: true, memoryDrawerOpen: false }),
-  closeSkillsDrawer: () => set({ skillsDrawerOpen: false }),
 
   loadSettings: async () => {
     set({ settingsLoading: true });
