@@ -303,8 +303,93 @@ def _safe_parse_tool_args(raw: str) -> dict:
             return json.loads(candidate)
     except (json.JSONDecodeError, Exception):
         pass
+    # 第五次尝试：手动状态机解析（处理 code 参数内含未转义引号）
+    try:
+        return _manual_json_parse(raw)
+    except (json.JSONDecodeError, Exception):
+        pass
     # 全部失败，原样抛出
     return json.loads(raw)
+
+
+def _manual_json_parse(raw: str) -> dict:
+    """手动状态机解析 JSON object — 容忍字符串值内含未转义的双引号"""
+    import re as _re
+    raw = raw.strip()
+    if not raw.startswith('{') or not raw.endswith('}'):
+        raise json.JSONDecodeError("not an object", raw, 0)
+    result = {}
+    # 去掉首尾 {}
+    inner = raw[1:].rstrip('}').lstrip('{').strip()
+    if not inner:
+        return result
+    # 按逗号分割顶层键值对（注意字符串内的逗号不被分割）
+    pairs = _split_top_level(inner)
+    for pair in pairs:
+        pair = pair.strip()
+        if ':' not in pair:
+            continue
+        # 分割 key 和 value
+        colon_idx = pair.index(':')
+        key_raw = pair[:colon_idx].strip()
+        val_raw = pair[colon_idx + 1:].strip()
+        # 解析 key（去掉引号）
+        key = key_raw.strip('"').strip("'")
+        # 解析 value：可能是字符串、数字、布尔值
+        if val_raw.startswith('"') or val_raw.startswith("'"):
+            # 字符串值 — 找最后一个闭合引号
+            quote = val_raw[0]
+            # 从右往左找第一个匹配的未转义引号
+            end = len(val_raw) - 1
+            while end >= 0:
+                if val_raw[end] == quote and (end == 0 or val_raw[end-1] != '\\'):
+                    val = val_raw[1:end]
+                    result[key] = val
+                    break
+                end -= 1
+            # 没找到闭合引号，整个作为值
+            if key not in result:
+                result[key] = val_raw[1:] if val_raw else ''
+        elif val_raw == 'true':
+            result[key] = True
+        elif val_raw == 'false':
+            result[key] = False
+        elif val_raw == 'null':
+            result[key] = None
+        else:
+            try:
+                if '.' in val_raw:
+                    result[key] = float(val_raw)
+                else:
+                    result[key] = int(val_raw)
+            except ValueError:
+                result[key] = val_raw
+    return result
+
+
+def _split_top_level(text: str) -> list[str]:
+    """按顶层逗号分割字符串，忽略字符串内的逗号"""
+    parts = []
+    depth = 0
+    in_string = False
+    quote_char = None
+    start = 0
+    for i, ch in enumerate(text):
+        if ch in '"\'' and not in_string:
+            in_string = True
+            quote_char = ch
+        elif ch == quote_char and in_string:
+            in_string = False
+            quote_char = None
+        elif ch in '[{' and not in_string:
+            depth += 1
+        elif ch in ']}' and not in_string:
+            depth -= 1
+        elif ch == ',' and not in_string and depth == 0:
+            parts.append(text[start:i])
+            start = i + 1
+    parts.append(text[start:])
+    return [p for p in parts if p.strip()]
 
 
 def run_agent_loop(
