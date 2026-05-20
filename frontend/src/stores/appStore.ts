@@ -22,7 +22,7 @@ import {
   getDashboardQueue, getDashboardReflect, getDashboardStatus,  // 🆕 Schema v0.7
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard';
+export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs';
 
 interface AppState {
   view: ViewPage;

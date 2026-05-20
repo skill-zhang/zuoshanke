@@ -393,6 +393,11 @@ export function Sidebar() {
           <span>技能管理</span>
           <span className="badge">{skillsCount}</span>
         </div>
+
+        <div className="sidebar-nav" onClick={() => { setView('outputs'); useStore.getState().setCurrentScene(null); }}>
+          <span className="nav-icon">📦</span>
+          <span>产出成果</span>
+        </div>
       </div>
 
       {/* ═══ 类别管理弹窗 ═══ */}

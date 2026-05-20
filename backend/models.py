@@ -469,3 +469,18 @@ class SceneAsset(Base):
     content = Column(Text, default="")
     format = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=utcnow)
+
+
+# ═══ 产出成果 — 分身生成的独立 HTML/入口 ═══
+class ProjectOutput(Base):
+    """分身生成的独立产出（HTML 页面、系统入口等），可在新标签页打开"""
+    __tablename__ = "project_outputs"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, default="")
+    type = Column(String(20), nullable=False, default="html")  # html / link
+    file_path = Column(String(500), nullable=True)              # 相对 outputs/ 的路径
+    url = Column(String(500), nullable=True)                    # 外部链接
+    created_at = Column(DateTime, default=utcnow)

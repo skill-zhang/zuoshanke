@@ -107,7 +107,6 @@ def _build_tm_status_block(db, scene_id: str) -> str:
         lines = ["## 🧠 已有思维节点（当前思维导图）"]
         lines.append("以下是本轮对话前已记录的需求维度，供你参考。")
         lines.append("如果你发现用户提到了新的维度，可以用 diverge 工具添加新节点；")
-        lines.append("如果对话已经足够充分，输出 [CONVERGE: ready] 触发收敛。")
         lines.append("")
         for n in nodes:
             icon = "📌" if n.type == "domain" else "  •"

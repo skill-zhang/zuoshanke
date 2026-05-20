@@ -14,6 +14,7 @@ import { MemoryDrawer } from './components/MemoryDrawer';
 import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
 import { CapabilityVerify } from './components/CapabilityVerify';
+import { OutputGalleryView } from './components/OutputGalleryView';
 import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
 import { Scene, createScene, listProjects } from './api/client';
@@ -302,6 +303,8 @@ export default function App() {
           <AgentLoopDashboard />
         ) : view === 'memory' ? (
           <MemoryView />
+        ) : view === 'outputs' ? (
+          <OutputGalleryView />
         ) : (
           <ChatView />
         )}

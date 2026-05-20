@@ -16,6 +16,7 @@ from router.gateway import router as gateway_router     # 🆕 多平台网关
 from router.gateway_config import router as gateway_config_router  # 🆕 网关配置
 from router.dashboard import router as dashboard_router           # 🆕 Schema v0.7 仪表盘
 from router.zhu_agent import router as zhu_agent_router           # 🆕 Schema v0.8 本体
+from router.outputs import router as outputs_router                # 🆕 产出成果
 
 
 def register_all_routers(app: FastAPI):
@@ -35,3 +36,4 @@ def register_all_routers(app: FastAPI):
     app.include_router(gateway_config_router)  # 🆕 网关配置
     app.include_router(dashboard_router)   # 🆕 Schema v0.7 仪表盘
     app.include_router(zhu_agent_router)   # 🆕 Schema v0.8 本体
+    app.include_router(outputs_router)     # 🆕 产出成果

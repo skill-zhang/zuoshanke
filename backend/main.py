@@ -31,6 +31,12 @@ app.add_middleware(
 
 register_all_routers(app)
 
+# 🆕 产出成果静态文件服务
+_outputs_dir = Path(__file__).resolve().parent.parent / "outputs"
+_outputs_dir.mkdir(exist_ok=True)
+from fastapi.staticfiles import StaticFiles
+app.mount("/outputs", StaticFiles(directory=str(_outputs_dir)), name="outputs")
+
 if __name__ == "__main__":
     import uvicorn
     from logger import configure_logger
