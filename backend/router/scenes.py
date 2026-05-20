@@ -138,13 +138,12 @@ def auto_detect_icon(name: str) -> str:
 
 @router.post("/api/scenes", response_model=SceneOut)
 def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
-    _get_project_or_404(db, data.project_id)
     # 新建场景默认填入 SCENE_SYSTEM_PROMPT 作为背景设定
     from agent_core.context_builder import SCENE_SYSTEM_PROMPT
     default_prompt = SCENE_SYSTEM_PROMPT
     scene = Scene(
         id=make_id("scene"),
-        project_id=data.project_id,
+        project_id="",
         name=data.name,
         description=data.description or "",
         category=data.category or "other",
@@ -172,10 +171,8 @@ def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/api/scenes", response_model=List[SceneOut])
-def list_scenes(project_id: str = None, db: Session = Depends(get_db)):
+def list_scenes(db: Session = Depends(get_db)):
     q = db.query(Scene)
-    if project_id:
-        q = q.filter(Scene.project_id == project_id)
     return q.order_by(Scene.pinned.desc(), Scene.updated_at.desc()).all()
 
 
@@ -220,11 +217,10 @@ def list_workshop_scenes(
 @router.post("/api/scenes/import", response_model=SceneOut)
 def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
     """从 JSON 导入场景"""
-    _get_project_or_404(db, data.project_id)
     s = data.scene
     scene = Scene(
         id=make_id("scene"),
-        project_id=data.project_id,
+        project_id="",
         name=s.name,
         description=s.description or "",
         category=s.category or "other",
@@ -1846,14 +1842,6 @@ def stream_agent_loop(data: AgentLoopRequest, db: Session = Depends(get_db)):
 
 
 # ═══ 辅助函数 ═══
-
-def _get_project_or_404(db: Session, project_id: str):
-    from models import Project
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(404, "项目不存在")
-    return project
-
 
 def _get_scene_or_404(db: Session, scene_id: str):
     scene = db.query(Scene).filter(Scene.id == scene_id).first()

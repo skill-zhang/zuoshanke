@@ -13,17 +13,6 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// ═══ 项目 ═══
-export interface Project {
-  id: string; name: string; description: string;
-  status: string; created_at: string; updated_at: string;
-}
-export const listProjects = () => request<Project[]>('/projects');
-export const createProject = (name: string, desc: string = '') =>
-  request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, description: desc }) });
-export const deleteProject = (id: string) =>
-  request('/projects/' + id, { method: 'DELETE' });
-
 // ═══ 场景 ═══
 export interface Scene {
   id: string; project_id: string; name: string; pinned: boolean;
@@ -43,8 +32,8 @@ export interface Scene {
 }
 export const listScenes = (projectId?: string) =>
   request<Scene[]>(`/scenes${projectId ? '?project_id=' + projectId : ''}`);
-export const createScene = (projectId: string, name: string, opts?: { icon?: string; description?: string; category?: string; user_context?: string }) =>
-  request<Scene>('/scenes', { method: 'POST', body: JSON.stringify({ project_id: projectId, name, ...opts }) });
+export const createScene = (name: string, opts?: { icon?: string; description?: string; category?: string; user_context?: string }) =>
+  request<Scene>('/scenes', { method: 'POST', body: JSON.stringify({ name, ...opts }) });
 export const updateScene = (sceneId: string, data: {
   name?: string; pinned?: boolean; user_context?: string | null;
   icon?: string | null; description?: string; category?: string; guide_text?: string | null;

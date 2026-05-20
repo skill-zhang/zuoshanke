@@ -1,7 +1,6 @@
 /** 全局状态管理 — Zustand */
 import { create } from 'zustand';
 import {
-  listProjects, createProject, deleteProject,
   listScenes, createScene, updateScene, deleteScene,
   listPlazaScenes, listWorkshopScenes, publishScene, exportScene, importScene,
   getThinkingMap, addNode, updateNode, deleteNode, convergeMap, prioritizeMap, getQueue, getFocusQueue, reflectNode,
@@ -14,7 +13,7 @@ import {
   sendChannelMessage, listChannelMessages, sendChannelMessageStream,
   compressChannelHistory,
   listActionMaps, getActionMap, createActionMap, updateActionMapStatus, deleteActionMap, generateActionMap, generateActionMapStream,
-  Project, Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent, ToolCard,
+  Scene, ThinkingMap, ThinkNode, Message, Channel, StreamEvent, ToolCard,
   ActionMap as ActionMapType, ActionMapStreamEvent, ToolLog,
   getSettings, updateSettings, getServiceStatus,
   SettingsData, ServiceStatus, RouteConfig,
@@ -22,19 +21,12 @@ import {
   getDashboardQueue, getDashboardReflect, getDashboardStatus,  // 🆕 Schema v0.7
 } from '../api/client';
 
-export type ViewPage = 'projects' | 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'secret-garden';
+export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'secret-garden';
 
 interface AppState {
   view: ViewPage;
   setView: (v: ViewPage) => void;
 
-  // ═══ 项目 ═══
-  projects: Project[];
-  loadProjects: () => Promise<void>;
-  createProjectAndReload: (name: string, desc?: string) => Promise<Project>;
-
-  currentProject: Project | null;
-  setCurrentProject: (p: Project | null) => void;
   currentScene: Scene | null;
   setCurrentScene: (s: Scene | null) => void;
 
@@ -210,24 +202,6 @@ export const useStore = create<AppState>((set, get) => ({
   setAgentHidden: (h) => set({ agentHidden: h }),
   toggleAgentHidden: () => set((s) => ({ agentHidden: !s.agentHidden })),
 
-  // ═══ 项目 ═══
-  projects: [],
-  loadProjects: async () => {
-    try {
-      const projects = await listProjects();
-      set({ projects });
-    } catch (e) {
-      console.error('[store] loadProjects failed:', e);
-    }
-  },
-  createProjectAndReload: async (name, desc = '') => {
-    const p = await createProject(name, desc);
-    await get().loadProjects();
-    return p;
-  },
-
-  currentProject: null,
-  setCurrentProject: (p) => set({ currentProject: p, currentScene: null, messages: [], contextUsage: null, capacityWarning: null }),
   currentScene: null,
   setCurrentScene: (s) => {
     const prev = get().currentScene;
