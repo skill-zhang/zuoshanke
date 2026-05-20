@@ -24,10 +24,107 @@ function LoopDiagram() {
   const phase = useStore(s => s.dashboardPhase);
   const idx = PHASES.findIndex(p => p.key === phase);
   const highlightArrow = (i: number) => i < idx ? '#a78bfa' : '#3a3a4a';
+  const currentScene = useStore(s => s.currentScene);
+  const [showParams, setShowParams] = useState(false);
+  const [threshold, setThreshold] = useState(currentScene?.converge_threshold ?? 2.0);
+  const [rounds, setRounds] = useState(currentScene?.diverge_min_rounds ?? 2);
+  const [enabled, setEnabled] = useState(currentScene?.converge_enabled ?? true);
+
+  const saveParams = async () => {
+    if (!currentScene) return;
+    try {
+      await fetch(`/api/scenes/${currentScene.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          converge_threshold: threshold,
+          diverge_min_rounds: rounds,
+          converge_enabled: enabled,
+        }),
+      });
+      setShowParams(false);
+    } catch (e) {
+      console.error('保存参数失败', e);
+    }
+  };
 
   return (
     <div className="loop-diagram">
-      <h2>阶段循环</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2>阶段循环</h2>
+        <button
+          className="param-btn"
+          onClick={() => { setShowParams(v => !v); }}
+          title="调整收敛参数"
+          style={{
+            background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)',
+            color: '#a78bfa', padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+            fontSize: 12, display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          ⚙ 调整参数
+        </button>
+      </div>
+
+      {showParams && (
+        <div style={{
+          background: '#1a1a2e', border: '1px solid #333', borderRadius: 8,
+          padding: '14px 16px', marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#c084fc', marginBottom: 10 }}>收敛参数</div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 4 }}>
+              发散建树轮数: <strong style={{ color: '#e6edf3' }}>{rounds}</strong>
+            </div>
+            <input type="range" min={1} max={10} step={1} value={rounds}
+              onChange={e => setRounds(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#a78bfa' }} />
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 4 }}>
+              收敛阈值: <strong style={{ color: '#e6edf3' }}>{threshold.toFixed(1)}×</strong>
+            </div>
+            <input type="range" min={1.0} max={5.0} step={0.1} value={threshold}
+              onChange={e => setThreshold(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#a78bfa' }} />
+            <div style={{ fontSize: 10, color: '#484f58', display: 'flex', justifyContent: 'space-between' }}>
+              <span>敏感 1.0</span><span>适中 2.0</span><span>谨慎 5.0</span>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: '#8b949e' }}>自动收敛</span>
+            <label style={{ position: 'relative', display: 'inline-block', width: 36, height: 20 }}>
+              <input type="checkbox" checked={enabled}
+                onChange={e => setEnabled(e.target.checked)}
+                style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{
+                position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                background: enabled ? '#a78bfa' : '#333', borderRadius: 10, transition: '.3s',
+              }}>
+                <span style={{
+                  position: 'absolute', height: 16, width: 16, left: enabled ? 18 : 2, top: 2,
+                  background: '#fff', borderRadius: '50%', transition: '.3s',
+                }} />
+              </span>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowParams(false)}
+              style={{ background: 'transparent', border: '1px solid #444', color: '#999', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              取消
+            </button>
+            <button onClick={saveParams}
+              style={{ background: '#7c3aed', border: 'none', color: '#fff', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              保存
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="loop-flow">
         {PHASES.map((p, i) => (
           <span key={p.key} style={{ display: 'flex', alignItems: 'center' }}>

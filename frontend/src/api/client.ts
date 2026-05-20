@@ -25,10 +25,12 @@ export interface Scene {
   guide_text: string | null;
   category: string;
   version: string;
-  source: string;
-  changelog: string | null;
-  published_at: string | null;
-  created_at: string; updated_at: string;
+  created_at: string;
+  updated_at: string;
+  // Schema v0.81: 收敛/发散参数
+  converge_threshold: number;
+  converge_enabled: boolean;
+  diverge_min_rounds: number;
 }
 export const listScenes = (projectId?: string) =>
   request<Scene[]>(`/scenes${projectId ? '?project_id=' + projectId : ''}`);
