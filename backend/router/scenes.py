@@ -144,9 +144,9 @@ def auto_detect_icon(name: str) -> str:
 
 @router.post("/api/scenes", response_model=SceneOut)
 def create_scene(data: SceneCreate, db: Session = Depends(get_db)):
-    # 新建场景默认填入 SCENE_SYSTEM_PROMPT 作为背景设定
-    from agent_core.context_builder import SCENE_SYSTEM_PROMPT
-    default_prompt = SCENE_SYSTEM_PROMPT
+    # 新建场景默认填入系统人设作为背景设定
+    from models import DEFAULT_SYSTEM_PROMPTS
+    default_prompt = DEFAULT_SYSTEM_PROMPTS["scene"]
     scene = Scene(
         id=make_id("scene"),
         project_id="",
@@ -261,6 +261,9 @@ def import_scene(data: SceneImportIn, db: Session = Depends(get_db)):
 
 @router.get("/api/scenes/{scene_id}", response_model=SceneOut)
 def get_scene(scene_id: str, db: Session = Depends(get_db)):
+    # 点进场景 → 按需加载分身记忆到缓存
+    from agent_core.memory_cache import MemoryCache
+    MemoryCache.get_instance().load_scope(db, "scene", scene_id)
     return _get_scene_or_404(db, scene_id)
 
 
@@ -279,9 +282,9 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
     if 'user_context' in data.model_dump(exclude_unset=True):
         val = data.user_context
         if val is None or not val.strip():
-            # 显式传 null/空 → 恢复为默认 prompt
-            from agent_core.context_builder import SCENE_SYSTEM_PROMPT
-            scene.user_context = SCENE_SYSTEM_PROMPT
+            # 显式传 null/空 → 恢复为默认人设
+            from models import DEFAULT_SYSTEM_PROMPTS
+            scene.user_context = DEFAULT_SYSTEM_PROMPTS["scene"]
         else:
             scene.user_context = val.strip()
     if data.icon is not None:

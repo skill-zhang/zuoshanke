@@ -2041,6 +2041,24 @@ body {
 .memory-source { font-size:11px; }
 .memory-level-title { font-size:11px; color:#8b949e; }
 
+/* 批量操作工具栏 */
+.mem-batch-toolbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 24px; flex-shrink:0;
+}
+.mem-batch-left { display:flex; align-items:center; gap:4px; }
+.mem-batch-right { display:flex; align-items:center; gap:4px; }
+
+/* 选中态卡片 */
+.memory-card.selected {
+  border-color:#58a6ff; background:#1c2541; box-shadow:0 0 0 1px #58a6ff44;
+}
+.memory-card-check {
+  font-size:16px; cursor:pointer; user-select:none;
+  color:#8b949e; flex-shrink:0; line-height:1;
+}
+.memory-card-check:hover { color:#58a6ff; }
+
 /* 详情弹窗 */
 .mem-detail-modal {
   width:480px;

@@ -521,6 +521,10 @@ export const getMemory = (key: string) =>
   request<{ success: boolean; data: AgentMemory }>('/memory/' + encodeURIComponent(key));
 export const deleteMemory = (key: string) =>
   request<{ success: boolean }>('/memory/' + encodeURIComponent(key), { method: 'DELETE' });
+export const batchDeleteMemories = (keys: string[]) =>
+  request<{ success: boolean; deleted: number; total: number }>('/memory/batch-delete', { method: 'POST', body: JSON.stringify({ keys }) });
+export const clearScopeMemories = (scope: string, contextId: string) =>
+  request<{ success: boolean; deleted: number }>('/memory/scope/' + encodeURIComponent(scope) + '/' + encodeURIComponent(contextId), { method: 'DELETE' });
 export const reinforceMemory = (key: string) =>
   request<{ success: boolean }>('/memory/' + encodeURIComponent(key) + '/reinforce', { method: 'POST' });
 export const pinMemory = (key: string) =>

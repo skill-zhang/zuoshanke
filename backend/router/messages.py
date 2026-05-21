@@ -201,7 +201,7 @@ def regenerate_message(message_id: str, db: Session = Depends(get_db)):
     else:
         channel = db.query(Channel).filter(Channel.id == msg.channel_id).first()
         history = _get_channel_history(db, msg.channel_id)
-        ai_response = ai_channel_chat(history, is_default=channel.is_default if channel else False)
+        ai_response = ai_channel_chat(history, is_default=channel.is_default if channel else False, db=db)
         ai_msg = Message(
             id=make_id("msg"), channel_id=msg.channel_id,
             role="ai", content=ai_response, model="Qwen3.5 本地",

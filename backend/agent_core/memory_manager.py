@@ -30,27 +30,16 @@ from config.constants import (
     MEMORY_EXPLICIT_BOOST as EXPLICIT_BOOST,
 )
 
+
+def _get_cache():
+    """惰性导入避免循环引用"""
+    from agent_core.memory_cache import MemoryCache
+    return MemoryCache.get_instance()
+
 # ── 权重常量 ──
 P0_THRESHOLD = 8.0
 P1_THRESHOLD = 4.0
 P2_THRESHOLD = 2.0
-
-# ── 话题检测关键词（用于当前查询的话题匹配） ──
-TOPIC_KEYWORDS = {
-    "entertainment": ["电影", "电视剧", "综艺", "小说", "动漫", "音乐",
-                      "游戏", "好看", "好玩", "追剧", "推荐", "影视"],
-    "food": ["吃", "饭", "菜", "美食", "餐厅", "好吃", "点餐", "外卖"],
-    "travel": ["旅游", "旅行", "景点", "出行", "酒店", "机票", "去玩"],
-    "work": ["工作", "项目", "任务", "需求", "代码", "开发", "部署", "需求"],
-    "tech": ["技术", "编程", "配置", "安装", "调试", "工具", "API"],
-    "shopping": ["买", "购物", "价格", "多少钱", "贵"],
-    "health": ["健康", "运动", "减肥", "健身", "锻炼", "体检"],
-    "education": ["学习", "学", "课程", "教学", "培训", "考试"],
-    "habit": ["习惯", "通常", "一般", "经常", "每天", "每次"],
-    "personal_info": ["我叫", "我是", "我住", "我的名字"],
-    "preference": ["喜欢", "偏爱", "偏好", "爱", "讨厌", "不喜欢"],
-    "social": ["朋友", "社交", "聚会", "认识"],
-}
 
 
 def _fmt_time(dt=None):
@@ -165,6 +154,8 @@ class MemoryManager:
         w = self.calc_weight(mem)
         mem.priority_level = self.auto_level(mem)
         self.db.commit()
+        # ── 写穿透 ──
+        _get_cache().on_memory_created(mem)
         return mem
 
     def get(self, key: str) -> Optional[AgentMemory]:
@@ -185,6 +176,8 @@ class MemoryManager:
         # 重新计算等级
         mem.priority_level = self.auto_level(mem)
         self.db.commit()
+        # ── 写穿透 ──
+        _get_cache().on_memory_updated(mem)
         return mem
 
     def delete(self, key: str) -> bool:
@@ -194,6 +187,8 @@ class MemoryManager:
             return False
         self.db.delete(mem)
         self.db.commit()
+        # ── 写穿透 ──
+        _get_cache().on_memory_deleted(mem.id)
         return True
 
     def list_all(self, category: Optional[str] = None,
@@ -238,126 +233,34 @@ class MemoryManager:
             result.append(d)
         return result
 
-    # ── 话题检测 ────────────────────────────────
-
-    def _detect_topic(self, query: str) -> str:
-        """根据用户查询关键词推断当前话题域
-
-        返回匹配得分最高的话题，如果没有匹配则返回 "general"
-        """
-        if not query:
-            return "general"
-        tokens = self._tokenize(query)
-        query_lower = query.lower()
-
-        scores = {}
-        for topic, keywords in TOPIC_KEYWORDS.items():
-            score = 0
-            for kw in keywords:
-                if kw in query_lower or kw in query:
-                    score += 1
-            if score > 0:
-                scores[topic] = score
-
-        if not scores:
-            return "general"
-
-        # 返回得分最高的话题
-        best = max(scores, key=scores.get)
-        return best
-
-    # ── 相关性匹配（用于 context 注入） ────────────
+    # ── 相关性匹配（用于 context 注入 — 回退用） ─────
 
     def get_top_for_context(self, query: str = "",
                             max_count: int = MAX_INJECT_COUNT,
-                            scope: Optional[str] = None,          # 🆕
-                            context_id: Optional[str] = None,     # 🆕
+                            scope: Optional[str] = None,
+                            context_id: Optional[str] = None,
                             ) -> list[dict]:
-        """获取应注入到上下文的 Top-N 条记忆
+        """按 weight 取 Top-N（回退方案，无缓存时使用）。
 
-        三层筛选:
-          0. 作用域过滤（新增）— 按 scope + context_id 隔离
-          1. 话题匹配 — 检测当前查询的话题，只取 topic 匹配的记忆
-             （P0 级别的个人信息仍然注入）
-          2. 按 weight 排序
-          3. 取 Top-N
-
-        P0 特殊: 始终保留 1 个名额（但 personal_info 类 P0 只在查询
-                 话题相关或没有话题匹配时注入）
+        当前 context_composer 已改用 MemoryCache，
+        此方法保留为回退，也供管理端调用。
         """
         mems = self.db.query(AgentMemory).all()
         if not mems:
             return []
 
-        # 🆕 作用域过滤
+        # 作用域过滤（兼容旧逻辑：scene 返回 zhu+scene）
         if scope == "zhu":
             mems = [m for m in mems if m.scope == "zhu"]
         elif scope in ("scene", "channel") and context_id:
             mems = [m for m in mems
                     if m.scope == "zhu" or
                        (m.scope == scope and m.context_id == context_id)]
-        # scope=None: 返回全部（向后兼容）
 
-        # 检测当前查询的话题
-        current_topic = self._detect_topic(query)
-
-        # 计算分数
-        query_keywords = set(self._tokenize(query))
-        scored = []
-        for m in mems:
-            w = self.calc_weight(m)
-
-            # 获取记忆的话题（tags[0] 是 topic）
-            mem_topic = (m.tags or ["general"])[0]
-            # 向后兼容：旧记忆的 tags=["自动提取"] → 视为 general
-            if mem_topic not in TOPIC_KEYWORDS:
-                mem_topic = "general"
-
-            # ── 话题匹配过滤 ──
-            topic_match = False
-            if current_topic == "general":
-                # 当前没有明确话题 → 只注入 personal_info（身份信息）
-                topic_match = (mem_topic == "personal_info")
-            else:
-                # 有明确话题 → 只注入话题匹配 + personal_info 兜底
-                topic_match = (mem_topic == current_topic
-                               or mem_topic == "personal_info")
-
-            # 如果是 P0 且未匹配，也保留（P0 是最重要的）
-            is_p0 = (m.priority_level == "P0")
-
-            if not topic_match and not is_p0:
-                continue  # 既不是当前话题又不是 P0，跳过
-
-            # 相关性加分（保留原有的 tag 匹配和内容匹配）
-            relevance = 1.0
-            if query_keywords and m.tags:
-                tag_match = len(query_keywords & set(m.tags))
-                if tag_match > 0:
-                    relevance += 0.5 * tag_match
-            # 内容关键词匹配
-            if query_keywords:
-                content_kw = set(self._tokenize(m.content))
-                match = len(query_keywords & content_kw)
-                if match > 0:
-                    relevance += 0.3 * match
-
-            scored.append((w * relevance, w, m))
-
-        if not scored:
-            # 没有任何记忆匹配，返回空
-            return []
-
+        # 按 weight 排序取 Top-N
+        scored = [(self.calc_weight(m), m) for m in mems]
         scored.sort(key=lambda x: -x[0])
-
-        # 选取 Top-N
-        selected = []
-        for _, _, m in scored:
-            if m in selected:
-                continue
-            selected.append(m)
-            if len(selected) >= max_count:
-                break
+        selected = [m for _, m in scored[:max_count]]
 
         # 记录访问
         for m in selected:
@@ -380,6 +283,8 @@ class MemoryManager:
         mem.last_reinforced_at = datetime.now(timezone.utc)
         mem.priority_level = self.auto_level(mem)
         self.db.commit()
+        # ── 写穿透 ──
+        _get_cache().on_memory_updated(mem)
         return True
 
     def mark_explicit(self, key: str) -> bool:
@@ -415,6 +320,8 @@ class MemoryManager:
             mem.is_immortal = True
         mem.priority_level = self.auto_level(mem)
         self.db.commit()
+        # ── 写穿透 ──
+        _get_cache().on_memory_updated(mem)
         return True
 
     def prune(self, max_count: int = 500):

@@ -553,35 +553,19 @@ export function ChatView() {
     return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
   }, []);
 
-  // 首次加载后自动滚动到底部
-  useEffect(() => {
-    if (displayMessages.length > 0 && prevMessageLenRef.current === 0) {
-      // 初始加载 — 延迟等渲染完，instant 滚动
-      setTimeout(() => scrollToBottom(false), 50);
-    }
-    prevMessageLenRef.current = displayMessages.length;
-  }, [displayMessages.length, scrollToBottom]);
-
-  // 新消息（SSE 追加）时：如果在底部则自动滚动，否则增加未读计数
-  // 同时监听最后一条消息的 content，确保 token 流式追加时也滚动
-  const prevLenRef = useRef(displayMessages.length);
-  const lastMsgKey = displayMessages.length > 0
-    ? displayMessages[displayMessages.length - 1].id + '|' + displayMessages[displayMessages.length - 1].content.length
-    : 'empty';
+  // ═══ 自动滚动 — 消息变化时如果处于底部则自动滚到最新 ═══
+  const prevLenRef = useRef(0);
   useEffect(() => {
     if (displayMessages.length === 0) return;
-    const lenIncreased = displayMessages.length > prevLenRef.current;
-    prevLenRef.current = displayMessages.length;
-
     if (isAtBottom()) {
-      scrollToBottom(true);
-    } else if (lenIncreased) {
+      scrollToBottom(false);
+    } else if (displayMessages.length > prevLenRef.current) {
       // 有新增消息且不在底部 → 显示浮标
       setShowBackToBottom(true);
       setUnreadCount(prev => prev + 1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayMessages.length, lastMsgKey]);
+    prevLenRef.current = displayMessages.length;
+  }, [displayMessages, isAtBottom, scrollToBottom]);
 
   // 滚动监听：检测是否滚动到顶部（加载更早）或到底部（隐藏浮标）
   const handleScroll = useCallback(() => {
@@ -1000,6 +984,8 @@ export function ChatView() {
                     scene_config: { ...((currentScene as any).scene_config || {}), temperature: tempValue },
                   });
                   useStore.setState({ currentScene: updated as any });
+                  // 刷新侧边栏场景列表，防止切回时读到旧缓存
+                  useStore.getState().loadWorkshopScenes();
                   setTempModalOpen(false);
                 }}>应用</button>
               </div>

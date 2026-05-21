@@ -193,7 +193,7 @@ def gateway_chat(data: GatewayChatRequest, db: Session = Depends(get_db)):
     # 加上当前消息做历史
     history.append({"role": "user", "content": data.content})
 
-    reply = ai_channel_chat(history, is_default=True)
+    reply = ai_channel_chat(history, is_default=True, db=db)
     if reply is None:
         reply = "抱歉，AI 引擎暂时响应缓慢，请稍候重试。"
 

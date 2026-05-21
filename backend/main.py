@@ -48,6 +48,17 @@ if __name__ == "__main__":
     init_db()
     log.info("✅ 数据库已初始化")
 
+    # 🆕 MemoryCache 预热：启动时加载本体记忆
+    try:
+        from database import SessionLocal as _DL
+        from agent_core.memory_cache import MemoryCache
+        _db = _DL()
+        MemoryCache.get_instance().initialize(_db)
+        _db.close()
+        log.info("✅ MemoryCache 已加载本体记忆")
+    except Exception as e:
+        log.warning(f"MemoryCache 初始化跳过: {e}")
+
     # 🆕 Schema v0.8: 初始化坐山客本体（如无则创建）
     try:
         from database import SessionLocal

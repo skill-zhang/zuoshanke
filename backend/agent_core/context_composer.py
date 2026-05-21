@@ -121,7 +121,7 @@ def _build_prompt_layer(
     fenshen_config: Optional[dict] = None,
 ) -> str:
     """Prompt Layer — 本体 prompt + 分身 prompt + 工具列表 + 使用说明"""
-    from agent_core.context_builder import SCENE_SYSTEM_PROMPT, _build_tm_status_block
+    from agent_core.context_builder import _build_tm_status_block
     from agent_core.tool_registry import match_tools, format_tools_for_prompt
     from agent_core.agent_loop import _EXCLUDED_TOOLS as _AGENT_EXCLUDED
 
@@ -228,21 +228,23 @@ def _build_prompt_layer(
 
 
 def _build_memory_layer(db, user_content: str, scene_id: str) -> str:
-    """Memory Layer — 按场景 scope 检索持久记忆"""
+    """Memory Layer — 从缓存按 scope 检索持久记忆"""
     if db is None:
         return ""
-    from agent_core.memory_manager import MemoryManager
+    from agent_core.memory_cache import MemoryCache
 
     scope = "scene" if scene_id else "zhu"
-    mm = MemoryManager(db)
-    memories = mm.get_top_for_context(
-        user_content, max_count=5,
+    cache = MemoryCache.get_instance()
+    memories = cache.get_top_for_context(
+        query=user_content,
         scope=scope, context_id=scene_id,
     )
     if not memories:
         return ""
+    # context composer 自行截取 Top-5（按 weight 已预排序）
+    selected = memories[:5]
     lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
-    for mem in memories:
+    for mem in selected:
         level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
         icon = level_icon.get(mem.get("priority_level", ""), "📝")
         lines.append(f"- {icon} {mem.get('key', '')}: {mem.get('content', '')}")

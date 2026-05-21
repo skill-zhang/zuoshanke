@@ -10,6 +10,8 @@
     POST   /api/memory/{key}/reinforce  — 强化记忆（用户强调）
     POST   /api/memory/{key}/pin       — 标记 P0（永不过期）
     POST   /api/memory/auto-extract    — 从对话中自动提取记忆
+    GET    /api/memory/cache/status    — 缓存状态
+    POST   /api/memory/cache/refresh   — 全量重建缓存
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -58,6 +60,21 @@ def _resolve_group_name(db: Session, scope: str, context_id: str | None) -> tupl
 
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
+
+
+@router.get("/cache/status")
+def cache_status():
+    """返回 MemoryCache 当前状态"""
+    from agent_core.memory_cache import MemoryCache
+    return MemoryCache.get_instance().get_status()
+
+
+@router.post("/cache/refresh")
+def cache_refresh(db: Session = Depends(get_db)):
+    """全量重建 MemoryCache"""
+    from agent_core.memory_cache import MemoryCache
+    MemoryCache.get_instance().rebuild_all(db)
+    return {"ok": True, "message": "缓存已全量重建"}
 
 
 @router.get("/groups")
@@ -235,6 +252,44 @@ def delete_memory(key: str, db: Session = Depends(get_db)):
     if not ok:
         raise HTTPException(status_code=404, detail=f"记忆 '{key}' 不存在")
     return {"success": True, "message": f"记忆 '{key}' 已删除"}
+
+
+class BatchDeleteRequest(BaseModel):
+    keys: list[str] = Field(..., min_length=1, description="要删除的记忆 key 列表")
+
+
+@router.post("/batch-delete")
+def batch_delete_memories(body: BatchDeleteRequest, db: Session = Depends(get_db)):
+    """批量删除记忆"""
+    mm = MemoryManager(db)
+    deleted = 0
+    for key in body.keys:
+        try:
+            if mm.delete(key):
+                deleted += 1
+        except Exception:
+            pass
+    return {"success": True, "deleted": deleted, "total": len(body.keys)}
+
+
+@router.delete("/scope/{scope}/{context_id}")
+def clear_scope_memories(scope: str, context_id: str, db: Session = Depends(get_db)):
+    """清空指定 scope 的所有记忆（如 scene:xxx 或 channel:xxx）"""
+    from models import AgentMemory
+    mems = db.query(AgentMemory).filter(
+        AgentMemory.scope == scope,
+        AgentMemory.context_id == context_id,
+    ).all()
+    count = len(mems)
+    for m in mems:
+        db.delete(m)
+    db.commit()
+    # 写穿透：逐个通知缓存
+    from agent_core.memory_cache import MemoryCache
+    cache = MemoryCache.get_instance()
+    for m in mems:
+        cache.on_memory_deleted(m.id)
+    return {"success": True, "deleted": count, "scope": scope, "context_id": context_id}
 
 
 @router.post("/{key}/reinforce")

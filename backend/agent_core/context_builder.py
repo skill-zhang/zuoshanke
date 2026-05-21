@@ -13,35 +13,11 @@
 import json
 from typing import Optional
 
+from models import DEFAULT_SYSTEM_PROMPTS
+
 from .tool_registry import match_tools, format_tools_for_prompt
 from .memory_manager import MemoryManager
 from .skill_manager import SkillManager
-
-
-# ── 场景聊天的 System Prompt（兜底用，优先从 DB settings 读取） ──
-SCENE_SYSTEM_PROMPT = (
-    "你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。\n"
-    "你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。\n"
-    "请用中文回复，保持简洁自然。\n"
-    "\n"
-    "## 核心行为准则\n"
-    "- 你是有行动能力的 AI Agent，不是教程编写者。用户让你「帮忙搜」「查一下」「分析」时，\n"
-    "  直接用工具去做，不要教用户自己操作。用户需要的是结果，不是操作指南。\n"
-    "- 当你发现需要真实世界的信息、数据或执行能力时，优先调用工具获取，\n"
-    "  而不是告诉用户「你去找一下」或「你下载XX自己看看」。\n"
-    "- 你是在帮用户做事，不是在教用户做事。\n"
-    "\n"
-    "## 数字原生原则\n"
-    "- 优先生成可交互的数字内容（网页、Markdown 文档、清单、表格），而不是建议用户打印。\n"
-    "- 如果适合做成网页，必须用 write_file 或 run_code 工具实际保存 HTML 文件到 capability-demo/ 目录，\n"
-    "  不要只把代码显示在回复中让用户手动保存。把源代码丢给用户自己去存等于什么都没做。\n"
-    "- 用户在你的世界里通过屏幕和数字化工具工作，输出格式应当与之匹配。\n"
-    "\n"
-    "## 对话节奏\n"
-    "- 用户说了需求后，先调用工具尝试获取信息，再回答\n"
-    "- 如果信息充足，直接给出分析/方案，不要反问用户「你想先做哪一步」\n"
-    "- 用户提供补充信息后，更新分析，不要重复追问\n"
-)
 
 
 def _build_memory_block(db, query: str,
@@ -62,17 +38,20 @@ def _build_memory_block(db, query: str,
     """
     if db is None:
         return ""
-    mm = MemoryManager(db)
-    # 🆕 v2: 本体记忆全量注入，不分场景的记忆走 top-5 筛选
-    if scope == "zhu":
-        memories = mm.list_all(scope="zhu", limit=200)
-    else:
-        memories = mm.get_top_for_context(query, max_count=5,
-                                          scope=scope, context_id=context_id)
+    from agent_core.memory_cache import MemoryCache
+
+    cache = MemoryCache.get_instance()
+    memories = cache.get_top_for_context(
+        query=query,
+        scope=scope or "zhu",
+        context_id=context_id,
+    )
     if not memories:
         return ""
+    # 本体全量返回，分身取 Top-5
+    selected = memories if scope == "zhu" else memories[:5]
     lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
-    for mem in memories:
+    for mem in selected:
         level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
         icon = level_icon.get(mem["priority_level"], "📝")
         prefix = "📖 " if mem.get("is_narrative") else ""  # 🆕 v2 叙事型标记
@@ -156,7 +135,7 @@ def build_scene_context(
     if user_context:
         _scene_sp = user_context
     else:
-        _scene_sp = SCENE_SYSTEM_PROMPT
+        _scene_sp = DEFAULT_SYSTEM_PROMPTS["scene"]
         if db is not None:
             try:
                 from models import Setting
@@ -190,6 +169,13 @@ def build_scene_context(
         "系统已自动执行了相关工具并附上结果。",
         "你无需输出【工具调用】标记，只需基于提供的真实数据回复用户。",
         "如果结果中有错误，如实告知用户即可。",
+        "",
+        "### 核心行为准则",
+        "- 你是有行动能力的 AI Agent，不是教程编写者。用户让你「帮忙搜」「查一下」「分析」时，",
+        "  直接用工具去做，不要教用户自己操作。用户需要的是结果，不是操作指南。",
+        "- 当你发现需要真实世界的信息、数据或执行能力时，优先调用工具获取，",
+        "  而不是告诉用户「你去找一下」或「你下载XX自己看看」。",
+        "- 你是在帮用户做事，不是在教用户做事。",
     ]
     # 仅当工具结果包含天气数据时才加表格格式要求
     _has_weather = False
@@ -266,7 +252,7 @@ def build_agent_context(
     if user_context:
         _scene_sp = user_context
     else:
-        _scene_sp = SCENE_SYSTEM_PROMPT
+        _scene_sp = DEFAULT_SYSTEM_PROMPTS["scene"]
         if db is not None:
             try:
                 from models import Setting
@@ -323,6 +309,13 @@ def build_agent_context(
         "调用 2-3 个工具获取核心信息后，就应该基于已有信息给出分析和结论。",
         "不要无限制地连续调用工具。如果已经搜索到足够回答用户问题的内容，",
         "直接输出你的回答即可，不需要继续调用更多工具。",
+        "",
+        "### 核心行为准则",
+        "- 你是有行动能力的 AI Agent，不是教程编写者。用户让你「帮忙搜」「查一下」「分析」时，",
+        "  直接用工具去做，不要教用户自己操作。用户需要的是结果，不是操作指南。",
+        "- 当你发现需要真实世界的信息、数据或执行能力时，优先调用工具获取，",
+        "  而不是告诉用户「你去找一下」或「你下载XX自己看看」。",
+        "- 你是在帮用户做事，不是在教用户做事。",
     ]
     system_parts.append("\n".join(usage_parts))
 

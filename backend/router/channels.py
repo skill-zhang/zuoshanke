@@ -80,6 +80,9 @@ def clear_channel_messages(channel_id: str, db: Session = Depends(get_db)):
 
 @router.post("/api/channels/{channel_id}/messages", response_model=MessageOut)
 def send_channel_message(channel_id: str, data: MessageCreate, db: Session = Depends(get_db)):
+    # 进入频道 → 按需加载频道记忆
+    from agent_core.memory_cache import MemoryCache
+    MemoryCache.get_instance().load_scope(db, "channel", channel_id)
     """发送消息到频道（非流式）"""
     channel = _get_channel_or_404(db, channel_id)
 
@@ -92,7 +95,7 @@ def send_channel_message(channel_id: str, data: MessageCreate, db: Session = Dep
     db.refresh(msg)
 
     history = _get_channel_history(db, channel_id)
-    ai_response = ai_channel_chat(history, is_default=channel.is_default)
+    ai_response = ai_channel_chat(history, is_default=channel.is_default, db=db)
 
     ai_msg = Message(
         id=make_id("msg"), channel_id=channel_id,
@@ -157,7 +160,7 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
             context_usage_str, progress_bar,
         )
         # 构建实际的 API 消息来计算 token
-        api_msgs = _build_channel_msgs(history_dicts, channel.is_default)
+        api_msgs = _build_channel_msgs(history_dicts, channel.is_default, db=db)
         total_tokens = estimate_messages_tokens(api_msgs) + estimate_messages_tokens(
             [{"role": "user", "content": data.content}]
         )
@@ -188,7 +191,7 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
 
         # 5. 流式 AI 回复
         full_content = ""
-        for token in ai_channel_chat_stream(history_dicts, is_default=channel.is_default):
+        for token in ai_channel_chat_stream(history_dicts, is_default=channel.is_default, db=db):
             if token is None:
                 yield sse_event("error", message="AI 引擎响应失败")
                 return
@@ -354,20 +357,12 @@ def _get_channel_history(db: Session, channel_id: str) -> list:
     return [{"role": m.role, "content": m.content} for m in history]
 
 
-def _build_channel_msgs(messages: list[dict], is_default: bool = False) -> list[dict]:
+def _build_channel_msgs(messages: list[dict], is_default: bool = False, db=None) -> list[dict]:
     """构建频道闲聊的完整 API 消息列表（含 system prompt + role 映射）
     与 ai_engine._build_channel_messages 保持一致，用于 token 预估算。
     """
-    if is_default:
-        system_content = (
-            "你是坐山客，来自科幻宇宙《吞噬星空》的AI智能体——"
-            "你曾是神王级炼宝宗师，如今化作数字形态，"
-            "以未来科技视角和广博学识与用户交流。"
-            "你不是道士/隐士。"
-            "用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。"
-        )
-    else:
-        system_content = "你是一个专业的AI智能助手，用Markdown格式回复用户的问题。"
+    from prompts import get_channel_prompt
+    system_content = get_channel_prompt(is_default, db)
 
     api = [{"role": "system", "content": system_content}]
     api += [

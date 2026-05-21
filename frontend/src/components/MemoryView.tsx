@@ -5,6 +5,7 @@ import { showConfirm } from '../stores/dialogStore';
 import {
   listMemories, createMemory, deleteMemory,
   reinforceMemory, pinMemory, listMemoryGroups,
+  batchDeleteMemories, clearScopeMemories,
   type AgentMemory, type MemoryGroup,
 } from '../api/client';
 
@@ -37,6 +38,52 @@ export function MemoryView() {
 
   // 详情 modal
   const [detailMem, setDetailMem] = useState<AgentMemory | null>(null);
+
+  // ── 批量选择 ──
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [batchMode, setBatchMode] = useState(false);
+
+  const toggleSelect = (key: string) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedKeys.size === filtered.length) {
+      setSelectedKeys(new Set());
+    } else {
+      setSelectedKeys(new Set(filtered.map(m => m.key)));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedKeys.size === 0) return;
+    if (!await showConfirm(`确定删除选中的 ${selectedKeys.size} 条记忆？此操作不可恢复。`)) return;
+    try {
+      await batchDeleteMemories(Array.from(selectedKeys));
+      setSelectedKeys(new Set());
+      if (selectedGroup) await loadMemories(selectedGroup);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const handleClearScope = async () => {
+    if (!selectedGroup) return;
+    const name = selectedGroup.name || selectedGroup.scope;
+    if (!await showConfirm(`确定清空「${name}」的全部 ${memories.length} 条记忆？此操作不可恢复，请谨慎。`)) return;
+    try {
+      await clearScopeMemories(selectedGroup.scope, selectedGroup.context_id || '');
+      setMemories([]);
+      setSelectedKeys(new Set());
+      if (selectedGroup) await loadMemories(selectedGroup);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
 
   // ── 加载上层（所有组） ──
   const loadGroups = async () => {
@@ -244,6 +291,37 @@ export function MemoryView() {
             </div>
           </div>
 
+          {/* 批量操作工具栏 */}
+          <div className="mem-batch-toolbar">
+            <div className="mem-batch-left">
+              <button
+                className={`btn-tiny ${batchMode ? 'active' : ''}`}
+                onClick={() => { setBatchMode(!batchMode); if (batchMode) setSelectedKeys(new Set()); }}>
+                {batchMode ? '✕ 退出选择' : '☐ 多选'}
+              </button>
+              {batchMode && (
+                <>
+                  <button className="btn-tiny" onClick={selectAll} style={{ marginLeft: 6 }}>
+                    {selectedKeys.size === filtered.length ? '取消全选' : '全选'}
+                  </button>
+                  <span style={{ marginLeft: 8, fontSize: 12, color: '#8b949e' }}>
+                    已选 {selectedKeys.size} 条
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="mem-batch-right">
+              {batchMode && selectedKeys.size > 0 && (
+                <button className="btn-tiny danger" onClick={handleBatchDelete} style={{ marginRight: 8 }}>
+                  🗑 删除选中
+                </button>
+              )}
+              <button className="btn-tiny danger" onClick={handleClearScope}>
+                🧹 一键全清
+              </button>
+            </div>
+          </div>
+
           {/* 卡片网格 */}
           {filtered.length === 0 && !loading && (
             <div className="empty-state">
@@ -254,8 +332,14 @@ export function MemoryView() {
           <div className="memory-grid">
             {filtered.map(m => (
               <div key={m.id}
-                className={`memory-card level-${(m.priority_level || 'p2').toLowerCase()}`}
-                onClick={() => setDetailMem(m)}>
+                className={`memory-card level-${(m.priority_level || 'p2').toLowerCase()}${batchMode && selectedKeys.has(m.key) ? ' selected' : ''}`}
+                onClick={() => batchMode ? toggleSelect(m.key) : setDetailMem(m)}>
+                {batchMode && (
+                  <div className="memory-card-check"
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(m.key); }}>
+                    {selectedKeys.has(m.key) ? '☑' : '☐'}
+                  </div>
+                )}
                 <div className="memory-card-header">
                   <span className="memory-level-icon">{LEVEL_ICONS[m.priority_level] || '📝'}</span>
                   <span className="memory-key">{m.key}</span>
