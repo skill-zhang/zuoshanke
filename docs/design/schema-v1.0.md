@@ -16,11 +16,12 @@
 5. [两层滑动窗口](#5-两层滑动窗口)
 6. [权重优先级系统](#6-权重优先级系统)
 7. [Diff 独立提取机制](#7-diff-独立提取机制)
-8. [配置与技能的分离](#8-配置与技能的分离)
-9. [场景文档声明机制](#9-场景文档声明机制)
-10. [Scene Config 参数扩展](#10-scene-config-参数扩展)
-11. [后端实现策略](#11-后端实现策略)
-12. [与 Schema v0.81 的兼容与迁移](#12-与-schema-v081-的兼容与迁移)
+8. [Memory Extraction Layer](#48-memory-extraction-layer-新增)
+9. [配置与技能的分离](#8-配置与技能的分离)
+10. [场景文档声明机制](#9-场景文档声明机制)
+11. [Scene Config 参数扩展](#10-scene-config-参数扩展)
+12. [后端实现策略](#11-后端实现策略)
+13. [与 Schema v0.81 的兼容与迁移](#12-与-schema-v081-的兼容与迁移)
 
 ---
 
@@ -253,7 +254,7 @@ scene "code_review":
 **内容：** 当前 session 的完整聊天记录
 
 **规则：**
-- 保留**全部**聊天内容（用户说的、分身回复的）
+- 保留当前 session 会话有效期内的全部聊天内容，不做截断处理
 - 每条消息标记权重：`high` / `normal` / `low`
 - 输出按权重排序组装
 - token 预算：按 scene 配置（纯聊天场景可给更多，编码场景可压缩）
@@ -291,6 +292,68 @@ scene "code_review":
 
 ---
 
+## 4.8 Memory Extraction Layer 【新增】
+
+**职责：** 将聊天记录（messages）转化为持久记忆（agent_memory）——从 History Layer 到 Memory Layer 的单向沉淀通道
+
+**说明：** 本层不参与每次 context 组装，而是在后台异步运行，产出由 Memory Layer (4.2) 消费。
+
+### 4.8.1 数据流
+
+```
+对话进行中
+  │
+  ├── messages 表写入（每轮对话）
+  │     priority: high/normal/low
+  │     memory_extracted: false（默认）
+  │
+  ▼
+触发条件
+  ├── 页面关闭：visibilitychange → POST /api/scenes/{id}/extract-memory
+  └── 兜底：见 schema-v1.1 记忆提取兜底策略
+  
+  ▼
+LLM 提取（只处理 memory_extracted=false 的消息）
+  │
+  ├── 成功 → save_extracted_memories() 写入 agent_memory（scope=scene, context_id=当前场景）
+  │         → 标记所有输入消息为 memory_extracted=true
+  │
+  └── 失败或无值得提取的内容 → 仍然标记为 memory_extracted=true
+                              （防止反复尝试同一批消息）
+```
+
+### 4.8.2 触发规则
+
+| 规则 | 说明 |
+|------|------|
+| 只提一次 | 每条消息的 `memory_extracted` 标记防止重复提取 |
+| 批量处理 | 每次取最多 30 条未提取消息送 LLM |
+| 最小要求 | 至少 2 条消息（user + ai）才触发 |
+| 场景专属 | 只提取当前场景的消息，存入同 scope+context_id |
+| 前端触发 | 页面关闭时触发，切场景不触发（避免冗余） |
+| 兜底 | 见 schema-v1.1 — session 状态驱动的记忆提取兜底 |
+
+### 4.8.3 去重策略
+
+内容级去重，防止相同信息反复存多条：
+
+- **算法：** Jaccard 相似度（中文单字 + 英文单词 + 数字）
+- **阈值：** 0.50（50%）
+- **范围：** 同 scope + context_id 内
+- **命中：** 不创建新记忆，改为 reinforce 已有记忆（权重 +1）
+- **未命中：** 创建新记忆，base_weight=3
+
+### 4.8.4 与各层的关系
+
+| 相关层 | 关系 |
+|--------|------|
+| History Layer (4.6) | 消费 messages 的未标记记录，提取后标记 memory_extracted=true，消息本身不受影响 |
+| Memory Layer (4.2) | 产出写入 agent_memory，是 Memory Layer 的数据来源 |
+| Memory Cache | 通过写穿透（on_memory_created）同步至缓存 |
+| Schema v1.1 (Session) | 兜底策略依赖 session 状态：不活跃 session + 未提取消息 → 触发提取 |
+
+---
+
 ## 5. 两层滑动窗口
 
 核心设计：聊天历史和干活输出使用**两个独立的滑动窗口**。
@@ -298,11 +361,11 @@ scene "code_review":
 ### 5.1 聊天历史窗口
 
 | 属性 | 值 |
-|---|---|
+|------|------|
 | 窗口范围 | 当前 session 全部聊天内容 |
-| 保留策略 | 全部保留，按权重压缩 |
+| 保留策略 | 全部保留，按 priority 排序组装 |
 | 权重分布 | high/normal/low 三级 |
-| 截断策略 | 永不截断（用户全部对话都重要） |
+| 截断策略 | 不做截断（见 4.6） |
 | 参数 | 无 |
 
 ### 5.2 干活输出窗口
@@ -685,4 +748,5 @@ def compose_context(user_input, scene, fenshen, session):
 | v0.8 | 2026-05-19 | 本我/分身身份体系定型 |
 | v0.81 | 2026-05-20 | converge/diverge 机制 |
 | v0.9 | 2026-05-19 | (中间版本) |
-| **v1.0** | **2026-05-21** | **Context 组合架构—彻底重构上下文管理** |
+| **v1.0** | **2026-05-21** | **Context 组合架构 — 彻底重构上下文管理** |
+| **v1.0+** | **2026-05-21** | **Memory Extraction Layer 补丁 — 定义消息→记忆的沉淀通道** |

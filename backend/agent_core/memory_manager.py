@@ -108,9 +108,10 @@ class MemoryManager:
             base_weight: int = DEFAULT_BASE_WEIGHT,
             source: str = "auto",
             explicit_boost: int = 1,
-            scope: str = "zhu",             # 🆕 作用域
-            context_id: Optional[str] = None,  # 🆕 场景/频道ID
-            is_narrative: bool = False,       # 🆕 v2 叙事型记忆
+            scope: str = "zhu",
+            context_id: Optional[str] = None,
+            is_narrative: bool = False,
+            commit: bool = True,  # 🆕 控制是否立即提交，批量操作时传 False
             ) -> AgentMemory:
         """新建记忆
 
@@ -123,8 +124,9 @@ class MemoryManager:
             source: auto | llm | user
             explicit_boost: 用户强调倍率
             scope: zhu | scene | channel（2026-05-27: 记忆隔离）
-            context_id: 场景ID/频道ID（scope=zhu 时传 None）
+            context_id: 场景/频道ID（scope=zhu 时传 None）
             is_narrative: 🆕 v2 标记为叙事型关系记忆
+            commit: 🆕 False 时 caller 自行 db.commit()，配合批量操作
 
         Returns:
             新建的 AgentMemory 实例
@@ -153,8 +155,9 @@ class MemoryManager:
         # 初始等级推算
         w = self.calc_weight(mem)
         mem.priority_level = self.auto_level(mem)
-        self.db.commit()
-        # ── 写穿透 ──
+        if commit:
+            self.db.commit()
+        # ── 写穿透（不论是否 commit 都同步缓存） ──
         _get_cache().on_memory_created(mem)
         return mem
 
@@ -272,9 +275,10 @@ class MemoryManager:
 
     # ── 强化与衰减 ────────────────────────────────
 
-    def reinforce(self, key: str, boost: float = REINFORCE_BOOST) -> bool:
+    def reinforce(self, key: str, boost: float = REINFORCE_BOOST, commit: bool = True) -> bool:
         """强化记忆（用户反复提及同一话题时调用）
         boost: 权重乘数，默认 2x
+        commit: False 时 caller 自行 db.commit()
         """
         mem = self.get(key)
         if not mem:
@@ -282,8 +286,9 @@ class MemoryManager:
         mem.explicit_boost = (mem.explicit_boost or 0) + int(boost)
         mem.last_reinforced_at = datetime.now(timezone.utc)
         mem.priority_level = self.auto_level(mem)
-        self.db.commit()
-        # ── 写穿透 ──
+        if commit:
+            self.db.commit()
+        # ── 写穿透（不论是否 commit 都同步缓存） ──
         _get_cache().on_memory_updated(mem)
         return True
 

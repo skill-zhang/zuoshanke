@@ -239,8 +239,9 @@ def save_extracted_memories(
             threshold=0.50,
         )
         if existing:
-            # 已存在 → 强化权重（不创建副本）
-            mm.reinforce(existing.key)
+            # 已存在 → 强化权重（不创建副本，延迟提交）
+            mm.reinforce(existing.key, commit=False)
+            saved += 1  # 也计为 saved，强化了也算处理了一条
             continue
 
         # 生成 key
@@ -257,10 +258,14 @@ def save_extracted_memories(
                 base_weight=3,
                 scope="scene",
                 context_id=scene_id,
+                commit=False,  # 🆕 延迟提交，批量处理
             )
             saved += 1
         except Exception as e:
             logger.warning(f"[extractor] 保存失败 {key}: {e}")
+
+    # 🆕 全部处理完一次性提交
+    db.commit()
 
     logger.info(f"[extractor] {scene_name}: 提取并保存了 {saved}/{len(entries)} 条记忆")
     return saved
