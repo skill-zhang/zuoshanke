@@ -53,15 +53,19 @@ def compose_context(
     """
     messages = []
 
-    # 从 scene DB 读取 window size（如果未显式指定）
+    # 从 scene DB 读取 window size + document deps（如果未显式指定）
     resolved_window = work_output_window
+    resolved_doc_deps = None
     if db and scene_id and work_output_window == 3:
         try:
             from models import Scene
             sc = db.query(Scene).filter(Scene.id == scene_id).first()
             if sc and hasattr(sc, 'scene_config') and sc.scene_config:
-                if isinstance(sc.scene_config, dict) and 'work_output_window_size' in sc.scene_config:
-                    resolved_window = int(sc.scene_config['work_output_window_size'])
+                scfg = sc.scene_config if isinstance(sc.scene_config, dict) else {}
+                if 'work_output_window_size' in scfg:
+                    resolved_window = int(scfg['work_output_window_size'])
+                if 'document_deps' in scfg:
+                    resolved_doc_deps = scfg['document_deps']
         except Exception:
             pass
 
@@ -80,7 +84,7 @@ def compose_context(
         messages.append({"role": "user", "content": config_block})
 
     # ── 4. Document Layer (场景声明的文档摘要) ──
-    doc_block = _build_document_layer(scene_id, db)
+    doc_block = _build_document_layer(scene_id, db, resolved_doc_deps)
     if doc_block:
         messages.append({"role": "user", "content": doc_block})
 
@@ -287,13 +291,45 @@ def _build_config_layer(
     return "\n\n".join(parts) if parts else ""
 
 
-def _build_document_layer(scene_id: str, db) -> str:
-    """Document Layer — 场景声明的文档摘要"""
+def _build_document_layer(scene_id: str, db, doc_deps: Optional[list] = None) -> str:
+    """Document Layer — 场景声明的文档摘要
+
+    从 scene.scene_config.document_deps 读取依赖的文档列表，
+    从 document_summaries 表或文件系统读取对应级别的摘要。
+    """
     if not scene_id or not db:
         return ""
-    # TODO: 从 document_summaries 表按 scene 声明的 document_deps 检索
-    # 当前为占位，预留接口
-    return ""
+
+    deps = doc_deps
+    if not deps and db:
+        # 尝试从 DB 读取 scene config
+        try:
+            from models import Scene
+            sc = db.query(Scene).filter(Scene.id == scene_id).first()
+            if sc and hasattr(sc, 'scene_config') and sc.scene_config:
+                scfg = sc.scene_config if isinstance(sc.scene_config, dict) else {}
+                deps = scfg.get('document_deps')
+        except Exception:
+            pass
+
+    if not deps:
+        return ""
+
+    from agent_core.document_summarizer import get_document as get_doc_summary
+
+    lines = ["## 参考文档"]
+    for dep in deps:
+        doc_name = dep.get("doc", "") if isinstance(dep, dict) else str(dep)
+        level = dep.get("level", "brief") if isinstance(dep, dict) else "brief"
+        if not doc_name:
+            continue
+        summary = get_doc_summary(doc_name, level, db)
+        if summary and summary != doc_name:
+            lines.append(f"- {doc_name}: {summary}")
+        else:
+            lines.append(f"- {doc_name}")
+
+    return "\n".join(lines) if len(lines) > 1 else ""
 
 
 def _build_skill_layer(user_content: str) -> str:

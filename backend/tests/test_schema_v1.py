@@ -246,6 +246,23 @@ class TestContextComposer(unittest.TestCase):
         if high_idx is not None and normal_idx is not None:
             self.assertLess(high_idx, normal_idx, "high 应在 normal 之前")
 
+    def test_document_layer_with_deps(self):
+        """Document Layer — 传入 deps 时返回摘要"""
+        from agent_core.context_composer import _build_document_layer
+        db = self._make_mock_db()
+        deps = [{"doc": "test-doc", "level": "brief"}]
+        # mock 掉 document_summarizer.get_document 返回空时，应返回 doc name
+        result = _build_document_layer("scene_001", db, deps)
+        # 有 deps 时，即使摘要为空也应返回文档列表
+        self.assertIn("参考文档", result)
+        self.assertIn("test-doc", result)
+
+    def test_document_layer_no_deps(self):
+        """Document Layer — 无 deps 时返回空"""
+        from agent_core.context_composer import _build_document_layer
+        result = _build_document_layer("scene_001", self._make_mock_db(), None)
+        self.assertEqual(result, "")
+
 
 class TestConfigInjector(unittest.TestCase):
     """config_injector.py 单元测试"""

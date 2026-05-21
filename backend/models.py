@@ -41,6 +41,9 @@ class Scene(Base):
     converge_enabled = Column(Boolean, default=True)        # 自动收敛开关
     diverge_min_rounds = Column(Integer, default=2)         # 发散所需最少 AI 回复轮数
 
+    # ── Schema v1.0: 场景扩展配置 ──
+    scene_config = Column(JSON, default=dict)                # {work_output_window_size, document_deps, ...}
+
 
     thinking_maps = relationship("ThinkingMap", back_populates="scene", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="scene", cascade="all, delete-orphan")

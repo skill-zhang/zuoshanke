@@ -166,6 +166,53 @@ class TestScenarioV1(unittest.TestCase):
                     self.assertIn(row[0], ["high", "normal", "low"])
                 break
 
+    def test_05_scene_config_document_deps(self):
+        """scene_config 的 document_deps 正确存储和读取"""
+        import sqlite3
+        import json
+
+        # 写入 scene_config
+        config = {
+            "work_output_window_size": 5,
+            "document_deps": [
+                {"doc": "schema-v1.0.md", "level": "single_line"},
+                {"doc": "schema-v0.81.md", "level": "brief"},
+            ]
+        }
+        db_path = os.path.expanduser("~/zuoshanke/backend/zuoshanke.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "UPDATE scenes SET scene_config = ? WHERE id = ?",
+            (json.dumps(config, ensure_ascii=False), self.scene_id)
+        )
+        conn.commit()
+
+        # 读取验证
+        cursor = conn.execute(
+            "SELECT scene_config FROM scenes WHERE id = ?",
+            (self.scene_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        self.assertIsNotNone(row, "scene_config 不应为空")
+        saved = json.loads(row[0])
+        self.assertEqual(saved["work_output_window_size"], 5)
+        self.assertEqual(len(saved["document_deps"]), 2)
+        self.assertEqual(saved["document_deps"][0]["doc"], "schema-v1.0.md")
+
+        # 验证通过 composer 能正常加载
+        from agent_core.context_composer import _build_document_layer
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            result = _build_document_layer(self.scene_id, db)
+            # 有 deps 时应显示文档列表
+            self.assertIn("schema-v1.0.md", result)
+            self.assertIn("schema-v0.81.md", result)
+        finally:
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
