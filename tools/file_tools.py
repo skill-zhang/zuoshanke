@@ -143,6 +143,8 @@ def write_file(path: str, content: str) -> dict:
             f.write(content)
 
         size = os.path.getsize(resolved)
+        # Schema v1.0: 记录文件快照
+        _record_snapshot(resolved, content)
         return {
             "success": True,
             "path": resolved,
@@ -283,6 +285,9 @@ def patch(path: str, old_string: str, new_string: str = "",
         with open(resolved, "w", encoding="utf-8") as f:
             f.write(new_content)
 
+        # Schema v1.0: 记录文件快照
+        _record_snapshot(resolved, new_content)
+
         # 生成 diff
         diff = list(difflib.unified_diff(
             content.splitlines(keepends=True),
@@ -301,6 +306,26 @@ def patch(path: str, old_string: str, new_string: str = "",
         return {"error": f"权限不足: {e}"}
     except Exception as e:
         return {"error": f"替换失败: {e}"}
+
+
+# ── Schema v1.0: 文件快照记录 ──
+
+
+def _record_snapshot(file_path: str, content: str) -> None:
+    """记录文件快照供 diff 提取（静默失败，不中断主流程）"""
+    try:
+        from agent_core.snapshot_manager import record as snap_record
+        try:
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                snap_record(file_path, content, db=db)
+            finally:
+                db.close()
+        except Exception:
+            snap_record(file_path, content)
+    except Exception:
+        pass  # 静默失败，不影响主流程
 
 
 # ── search_files ──────────────────────────────────────────────────────────────

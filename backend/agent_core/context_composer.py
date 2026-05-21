@@ -53,6 +53,18 @@ def compose_context(
     """
     messages = []
 
+    # 从 scene DB 读取 window size（如果未显式指定）
+    resolved_window = work_output_window
+    if db and scene_id and work_output_window == 3:
+        try:
+            from models import Scene
+            sc = db.query(Scene).filter(Scene.id == scene_id).first()
+            if sc and hasattr(sc, 'scene_config') and sc.scene_config:
+                if isinstance(sc.scene_config, dict) and 'work_output_window_size' in sc.scene_config:
+                    resolved_window = int(sc.scene_config['work_output_window_size'])
+        except Exception:
+            pass
+
     # ── 1. Prompt Layer (不可压缩) ──
     prompt_block = _build_prompt_layer(scene_name, scene_id, db, fenshen_config)
     messages.append({"role": "system", "content": prompt_block})
@@ -84,7 +96,7 @@ def compose_context(
             messages.append({"role": role, "content": m["content"]})
 
     # ── 7. Work Output Layer (最近 N 轮关键帧 + diff) ──
-    work_block = _build_work_output_layer(scene_id, db, work_output_window)
+    work_block = _build_work_output_layer(scene_id, db, resolved_window)
     if work_block:
         messages.append({"role": "user", "content": work_block})
 
@@ -155,6 +167,7 @@ def _build_prompt_layer(
     parts.append(usage)
 
     # 记忆能力说明
+    from agent_core.priority_assigner import PRIORITY_GUIDE
     parts.append(
         "## 📝 记忆能力\n"
         "你有长期记忆系统，用于跨会话持久化信息。\n"
@@ -172,6 +185,9 @@ def _build_prompt_layer(
         "  传 scope='zhu' 参数存为本体级记忆，届时会在所有场景生效。\n"
         "- memory(read) 可以查看本体级记忆和你当前场景的记忆。"
     )
+
+    # 优先级标记说明
+    parts.append(PRIORITY_GUIDE)
 
     # 收敛能力说明
     converge_parts = ["## 🔀 发散与收敛（思维导图工作流）"]

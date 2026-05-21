@@ -1598,6 +1598,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             yield sse_event("tool_cards", cards=tool_cards)
         tool_results = agent_tool_results or None
 
+        # 4.5 从 full_reply 解析优先级标记
+        from agent_core.priority_assigner import extract_priority
+        clean_reply, msg_priority = extract_priority(full_reply)
+        full_reply = clean_reply
+
         # 5. 保存 AI 消息（独立 DB session）
         ai_msg_id = make_id("msg")
         new_db = SessionLocal()
@@ -1606,6 +1611,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                 id=ai_msg_id, scene_id=scene_id,
                 role="ai", content=full_reply,
                 session_id=data.session_id, model=model_name,
+                priority=msg_priority,
             )
             new_db.add(ai_msg)
             new_db.commit()
