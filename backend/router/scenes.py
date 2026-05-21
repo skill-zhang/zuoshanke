@@ -1010,51 +1010,6 @@ def get_priority_queue(map_id: str, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/thinking-maps/{map_id}/focus-queue")
-def get_focus_queue(map_id: str, limit: int = Query(5, ge=1, le=20), db: Session = Depends(get_db)):
-    """
-    获取聚焦队列（WIP 限制版）：
-    返回 Priority Queue 顶部 N 个节点，附带关联的 Action Map 信息。
-    """
-    from models import ActionMap
-
-    tmap = db.query(ThinkingMap).filter(ThinkingMap.id == map_id).first()
-    if not tmap:
-        raise HTTPException(404, "Thinking Map 不存在")
-
-    refined = db.query(ThinkNode).filter(
-        ThinkNode.map_id == map_id,
-        ThinkNode.status == "refined",
-    ).order_by(ThinkNode.queue_order).limit(limit).all()
-
-    items = []
-    for n in refined:
-        # 查找已有关联的 Action Map
-        am = db.query(ActionMap).filter(
-            ActionMap.think_node_id == n.id
-        ).order_by(ActionMap.created_at.desc()).first()
-
-        items.append({
-            "id": n.id,
-            "label": n.label,
-            "queue_order": n.queue_order,
-            "priority": n.priority,
-            "depends_on": n.depends_on or [],
-            "action_map": {
-                "id": am.id if am else None,
-                "status": am.status if am else None,
-                "title": am.title if am else None,
-            } if am else None,
-        })
-
-    return {
-        "map_id": map_id,
-        "items": items,
-        "item_count": len(items),
-        "limit": limit,
-    }
-
-
 # ═══ Agent Loop: Reflect（反馈注入）═══
 
 class ReflectRequest(BaseModel):
