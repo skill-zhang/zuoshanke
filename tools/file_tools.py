@@ -13,6 +13,7 @@
     result = search_files("pattern", path="~/project", file_glob="*.py")
 """
 
+import base64
 import json
 import os
 import re
@@ -121,18 +122,26 @@ def read_file(path: str, offset: int = 1, limit: int = 500) -> dict:
 
 # ── write_file ────────────────────────────────────────────────────────────────
 
-def write_file(path: str, content: str) -> dict:
+def write_file(path: str, content: str = "", content_b64: str = None) -> dict:
     """写入文件（覆盖写入），自动创建父目录。
 
     Args:
         path: 文件路径（支持 ~）
         content: 文件内容
+        content_b64: base64 编码的文件内容（替代 content 传参，避免大字符串 JSON 转义问题）
 
     Returns:
         {"success": True, "path": "..."} 或 {"error": "错误描述"}
     """
     try:
         resolved = _resolve_path(path)
+
+        # 若提供 content_b64，解码后作为实际内容
+        if content_b64 is not None:
+            try:
+                content = base64.b64decode(content_b64).decode("utf-8")
+            except Exception as e:
+                return {"error": f"content_b64 解码失败: {e}"}
 
         # 创建父目录
         parent = os.path.dirname(resolved)

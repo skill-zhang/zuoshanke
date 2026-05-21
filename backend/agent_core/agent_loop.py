@@ -513,7 +513,8 @@ def run_agent_loop(
         yield {"type": "status", "message": f"第 {step + 1} 步：思考中...（可用工具: {len(tools)} 个）"}
 
         # 🆕 死循环检测：连续工具超过阈值 → 提醒 LLM 收手出结论
-        if consecutive_tool_only >= 8 and consecutive_tool_only % 4 == 0:
+        # 从第 6 步开始提醒，每 3 步提醒一次（相比旧版 ≥8/4 更早更频繁）
+        if consecutive_tool_only >= 6 and consecutive_tool_only % 3 == 0:
             messages.append({
                 "role": "user",
                 "content": f"[系统提示：你已经连续调用了 {consecutive_tool_only} 次工具。"
