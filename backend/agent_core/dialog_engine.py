@@ -1,10 +1,12 @@
 """对话阶段引擎 — 管理场景对话的引导进度。
 
 核心职责：
-  1. 阶段状态机：idle → explore → focus → finalize → execute
+  1. 阶段状态机：idle → explore → focus → decompose → challenge → finalize → execute
   2. 提供一行阶段提示注入到 LLM system prompt
   3. 检测阶段转移信号（从 LLM 回复中解析）
   4. 持久化 / 恢复阶段状态（跨会话）
+  5. 允许跳阶段（向前），不允许回退
+  6. decompose 是 execute 的前置条件，不能跳过
 
 使用方式：
     engine = DialogEngine(db, scene_id)
@@ -27,13 +29,15 @@ from models import DialogState
 logger = logging.getLogger(__name__)
 
 # ── 阶段定义 ──
-PHASES = ["idle", "explore", "focus", "finalize", "execute"]
+PHASES = ["idle", "explore", "focus", "decompose", "challenge", "finalize", "execute"]
 PHASE_ORDER = {p: i for i, p in enumerate(PHASES)}
 
 PHASE_DESCRIPTIONS = {
     "idle": "等待中",
     "explore": "探索需求中——开放式提问，每次聚焦一个关键问题",
     "focus": "聚焦目标中——确认核心需求和约束",
+    "decompose": "任务分解中——将复杂目标拆解为可执行的子任务",
+    "challenge": "挑战验证中——对已有方案提出质疑和假设检验",
     "finalize": "方案定稿中——总结确定的方案和约束清单",
     "execute": "执行中——按方案逐步推进",
 }
@@ -42,6 +46,8 @@ PHASE_ROLES = {
     "idle": "助手",
     "explore": "引导师",
     "focus": "分析师",
+    "decompose": "架构师",
+    "challenge": "评审官",
     "finalize": "记录员",
     "execute": "执行引擎",
 }
@@ -49,7 +55,9 @@ PHASE_ROLES = {
 PHASE_NEXT = {
     "idle": "explore",
     "explore": "focus",
-    "focus": "finalize",
+    "focus": "decompose",
+    "decompose": "challenge",
+    "challenge": "finalize",
     "finalize": "execute",
     "execute": None,
 }
@@ -130,18 +138,24 @@ class DialogEngine:
         return (
             "当你觉得当前阶段目标已达成、可以进入下一阶段时，"
             "在回复末尾加上 [PHASE:下一阶段名] 标记。"
-            "例如：[PHASE:focus]。可用的阶段: explore, focus, finalize, execute。"
-            "注意不要跳过中间阶段。"
+            "例如：[PHASE:decompose]。可用的阶段: explore, focus, decompose, challenge, finalize, execute。"
+            "可以跳过中间阶段向前，但不要回退。"
         )
 
     def detect_transition(self, llm_content: str) -> Optional[str]:
         """检测 LLM 回复中是否包含阶段转移信号。
 
+        规则:
+          - 只能向前，不能回退
+          - 允许跳阶段（如 explore → challenge）
+          - decompose 是 execute 的前置条件，
+            未经过 decompose 不能进入 execute
+
         Args:
             llm_content: LLM 回复的文本内容
 
         Returns:
-            目标阶段名，如果没有信号则返回 None
+            目标阶段名，如果没有信号或信号无效则返回 None
         """
         if not llm_content:
             return None
@@ -154,22 +168,26 @@ class DialogEngine:
         current_idx = PHASE_ORDER.get(self._state.phase, 0)
         target_idx = PHASE_ORDER.get(target, -1)
 
-        # 验证：只能前进不能后退，不能跳阶段
+        # 验证阶段名有效
         if target_idx < 0:
             logger.warning(f"[DialogEngine] 无效阶段名: {target}")
             return None
+
+        # 不能回退
         if target_idx <= current_idx:
             logger.warning(
                 f"[DialogEngine] 不能回退阶段: {self._state.phase} → {target}"
             )
             return None
-        expected_next = PHASE_NEXT.get(self._state.phase)
-        if target != expected_next:
-            logger.warning(
-                f"[DialogEngine] 跳阶段: {self._state.phase} → {target} "
-                f"(期望: {expected_next})"
-            )
-            return None
+
+        # decompose 是 execute 的前置条件
+        if target == "execute":
+            context = self._state.context or {}
+            if not context.get("decompose_completed", False):
+                logger.warning(
+                    f"[DialogEngine] 不能跳过 decompose 进入 execute"
+                )
+                return None
 
         return target
 
@@ -197,6 +215,13 @@ class DialogEngine:
 
         now = datetime.now(timezone.utc)
         self._state.phase = phase
+
+        # 标记 decompose 已完成（用于 execute 前置条件检查）
+        if phase == "decompose":
+            ctx = dict(self._state.context or {})
+            ctx["decompose_completed"] = True
+            self._state.context = ctx
+
         if summary:
             self._state.summary = summary
         if decisions is not None:

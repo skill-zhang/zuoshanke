@@ -64,7 +64,6 @@ class ThinkingMap(Base):
 
     scene = relationship("Scene", back_populates="thinking_maps")
     nodes = relationship("ThinkNode", back_populates="map", cascade="all, delete-orphan")
-    cross_refs = relationship("CrossRef", back_populates="map", cascade="all, delete-orphan")
 
 
 # ═══ Thinking Map 节点 ═══
@@ -133,20 +132,6 @@ class ThinkNode(Base):
         return d
 
 
-# ═══ Thinking Map 跨分支引用 ═══
-class CrossRef(Base):
-    __tablename__ = "cross_refs"
-
-    id = Column(String, primary_key=True)
-    map_id = Column(String, ForeignKey("thinking_maps.id"), nullable=False)
-    from_node_id = Column(String, ForeignKey("think_nodes.id"), nullable=False)
-    to_node_id = Column(String, ForeignKey("think_nodes.id"), nullable=False)
-    label = Column(String, nullable=True)
-    context_ref = Column(String, nullable=True)
-
-    map = relationship("ThinkingMap", back_populates="cross_refs")
-
-
 # ═══ 闲聊频道 ═══
 class Channel(Base):
     __tablename__ = "channels"
@@ -211,86 +196,6 @@ class Setting(Base):
     system_prompts = Column(JSON, nullable=False, default=lambda: DEFAULT_SYSTEM_PROMPTS.copy())
     features = Column(JSON, nullable=False, default=lambda: {"pdf_as_image": False, "vision_enabled": False})
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-# ═══ Action Map ═══
-class ActionMap(Base):
-    __tablename__ = "action_maps"
-
-    id = Column(String, primary_key=True)
-    think_map_id = Column(String, ForeignKey("thinking_maps.id"), nullable=False)
-    think_node_id = Column(String, ForeignKey("think_nodes.id"), nullable=False)
-    title = Column(String, nullable=False)
-    status = Column(String, default="draft")  # draft | ready | running | paused | completed | failed
-    version = Column(Integer, default=1)
-    replan_count = Column(Integer, default=0)
-    dynamic_nodes = Column(JSON, default=list)  # [node_id] 执行中动态追加的节点
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-    nodes = relationship("ActionNode", back_populates="map", cascade="all, delete-orphan",
-                         order_by="ActionNode.order_index")
-    edges = relationship("ActionEdge", back_populates="map", cascade="all, delete-orphan")
-
-
-class ActionNode(Base):
-    __tablename__ = "action_nodes"
-
-    id = Column(String, primary_key=True)
-    map_id = Column(String, ForeignKey("action_maps.id"), nullable=False)
-    type = Column(String, nullable=False)  # start | exec | decision | milestone | end
-    label = Column(String, nullable=False)
-    status = Column(String, default="pending")
-    # status enum: pending | verifying | verified | failed_verify | running |
-    #              completed | failed | timeout | retrying | awaiting_approval | approved | denied
-    requires_approval = Column(Boolean, default=False)
-    timeout = Column(Integer, default=300)
-    retry = Column(Integer, default=0)
-    retry_count = Column(Integer, default=0)
-    verification = Column(JSON, nullable=True)  # {status, checks: [{type, target, result, passed}]}
-    fallback_node = Column(String, nullable=True)  # 验证失败后备选节点 ID
-    origin = Column(String, default="original")  # "original" | "fallback_from_{node_id}"
-    result_summary = Column(Text, nullable=True)
-    artifacts = Column(JSON, default=list)  # [path]
-    context_ref = Column(String, nullable=True)  # 关联对话消息 ID
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    order_index = Column(Integer, default=0)  # 节点在 map 中的显示顺序
-    # React Flow 布局坐标
-    position_x = Column(Integer, nullable=True)
-    position_y = Column(Integer, nullable=True)
-
-    map = relationship("ActionMap", back_populates="nodes")
-
-
-class ActionEdge(Base):
-    __tablename__ = "action_edges"
-
-    id = Column(String, primary_key=True)
-    map_id = Column(String, ForeignKey("action_maps.id"), nullable=False)
-    from_node_id = Column(String, ForeignKey("action_nodes.id"), nullable=False)
-    to_node_id = Column(String, ForeignKey("action_nodes.id"), nullable=False)
-    type = Column(String, default="flow")  # flow | decision | fallback
-    label = Column(String, nullable=True)  # 边标签（如 "<100", "✓"）
-    condition = Column(String, nullable=True)  # 条件表达式
-
-    map = relationship("ActionMap", back_populates="edges")
-
-
-# ═══ Action Map 执行日志 ═══
-class ActionExecutionLog(Base):
-    __tablename__ = "action_execution_logs"
-
-    id = Column(String, primary_key=True)
-    map_id = Column(String, ForeignKey("action_maps.id"), nullable=False)
-    node_id = Column(String, nullable=True)
-    node_label = Column(String, nullable=True)
-    event_type = Column(String, nullable=False)
-    line = Column(Text, nullable=True)
-    status = Column(String, nullable=True)
-    result = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=utcnow)
 
 
 # ═══ Schema v0.7 — Agent Loop 仪表盘 ═══
@@ -427,7 +332,7 @@ class DialogState(Base):
 
     scene_id = Column(String, ForeignKey("scenes.id"), primary_key=True)
     phase = Column(String, nullable=False, default="idle")
-    # phase: idle | explore | focus | finalize | execute
+    # phase: idle | explore | focus | decompose | challenge | finalize | execute
     summary = Column(Text, default="")         # 当前阶段讨论摘要
     decisions = Column(JSON, default=list)     # [string] 已确定的决策列表
     context = Column(JSON, default=dict)       # {key: value} 梳理出的关键上下文
@@ -544,3 +449,11 @@ class ConfigEntry(Base):
     content = Column(Text, default="")         # JSON/YAML 内容
     category = Column(String(20), default="system")  # system | model | service
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ═══ 已废弃的表（代码中已删除，DB 中保留供历史数据查询） ═══
+# - action_maps
+# - action_nodes
+# - action_edges
+# - action_execution_logs
+# - cross_refs
