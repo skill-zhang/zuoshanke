@@ -70,22 +70,28 @@ class MemoryManager:
     def calc_weight(self, mem: AgentMemory) -> float:
         """计算记忆的实时权重
 
+        v2: is_immortal 跳过 recency 衰减（本体记忆永久保留）
+
         公式:
             weight = base × recency × frequency × boost
 
         其中:
             recency   = 2^(-days_since_last_access / half_life)
+                        若 is_immortal=True 则 recency=1（不衰减）
             frequency = 1 + log₂(times_accessed + 1)
             boost     = explicit_boost (用户强调倍率)
         """
-        now = datetime.now(timezone.utc)
-
-        # recency: 按 last_accessed_at 衰减
-        last = mem.last_accessed_at or mem.created_at or now
-        if isinstance(last, datetime) and last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-        days_since = max(0, (now - last).total_seconds() / 86400.0)
-        recency = math.pow(2, -days_since / DECAY_HALF_LIFE)
+        # 🆕 v2: 不朽记忆不衰减
+        if mem.is_immortal:
+            recency = 1.0
+        else:
+            now = datetime.now(timezone.utc)
+            # recency: 按 last_accessed_at 衰减
+            last = mem.last_accessed_at or mem.created_at or now
+            if isinstance(last, datetime) and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            days_since = max(0, (now - last).total_seconds() / 86400.0)
+            recency = math.pow(2, -days_since / DECAY_HALF_LIFE)
 
         # frequency: 被访问次数越多，权重越高
         frequency = 1 + math.log2(max(mem.times_accessed, 0) + 1)
@@ -115,6 +121,7 @@ class MemoryManager:
             explicit_boost: int = 1,
             scope: str = "zhu",             # 🆕 作用域
             context_id: Optional[str] = None,  # 🆕 场景/频道ID
+            is_narrative: bool = False,       # 🆕 v2 叙事型记忆
             ) -> AgentMemory:
         """新建记忆
 
@@ -128,6 +135,7 @@ class MemoryManager:
             explicit_boost: 用户强调倍率
             scope: zhu | scene | channel（2026-05-27: 记忆隔离）
             context_id: 场景ID/频道ID（scope=zhu 时传 None）
+            is_narrative: 🆕 v2 标记为叙事型关系记忆
 
         Returns:
             新建的 AgentMemory 实例
@@ -144,6 +152,8 @@ class MemoryManager:
             source=source,
             scope=scope,           # 🆕
             context_id=context_id, # 🆕
+            is_narrative=is_narrative,  # 🆕 v2
+            is_immortal=(scope == "zhu"),  # 🆕 v2: scope=zhu 自动不朽
         )
         # 初始等级推算
         w = self.calc_weight(mem)
@@ -376,17 +386,53 @@ class MemoryManager:
         """标记为"用户明确要求记住"（×3 倍率）"""
         return self.reinforce(key, boost=EXPLICIT_BOOST)
 
+    # ── 🆕 v2: 修正轨迹 ──────────────────────────
+
+    def record_correction(self, key: str, new_content: str, reason: str = "") -> bool:
+        """记录修正轨迹 — 用户纠正记忆内容时的标准化操作
+
+        1. 保存旧内容到 correction_trail
+        2. 更新为 new_content
+        3. explicit_boost += 2（修正即强化）
+        4. 自动标记 is_immortal 如果 scope=zhu
+        """
+        import json
+        mem = self.get(key)
+        if not mem:
+            return False
+        trail = json.loads(mem.correction_trail or "[]")
+        trail.append({
+            "old": (mem.content or "")[:300],
+            "new": (new_content or "")[:300],
+            "reason": reason,
+            "timestamp": str(datetime.now(timezone.utc)),
+        })
+        mem.correction_trail = json.dumps(trail, ensure_ascii=False)
+        mem.content = new_content
+        mem.explicit_boost = (mem.explicit_boost or 0) + 2  # 修正即强化
+        # 本体记忆自动不朽
+        if mem.scope == "zhu" and not mem.is_immortal:
+            mem.is_immortal = True
+        mem.priority_level = self.auto_level(mem)
+        self.db.commit()
+        return True
+
     def prune(self, max_count: int = 500):
-        """淘汰低权重记忆 — 超过 max_count 时清理 P3"""
+        """淘汰低权重记忆 — 超过 max_count 时清理 P3
+        🆕 v2: 跳过 is_immortal 记忆（本体记忆永不清理）
+        """
         mems = self.db.query(AgentMemory).all()
-        if len(mems) <= max_count:
+        # 排除 immortal 记忆后再判断是否超量
+        mortal_count = sum(1 for m in mems if not m.is_immortal)
+        if mortal_count <= max_count:
             return 0
 
-        scored = [(self.calc_weight(m), m) for m in mems]
-        scored.sort(key=lambda x: x[0])  # 升序，最差放前面
+        # 只排序 mortal 记忆，immortal 不动
+        mortal = [(self.calc_weight(m), m) for m in mems if not m.is_immortal]
+        mortal.sort(key=lambda x: x[0])  # 升序，最差放前面
         to_delete = []
         kept_count = 0
-        for w, m in scored:
+        for w, m in mortal:
             if kept_count >= max_count:
                 to_delete.append(m.id)
             else:
@@ -620,6 +666,9 @@ class MemoryManager:
             "source": m.source,
             "scope": m.scope,
             "context_id": m.context_id,
+            "is_narrative": m.is_narrative,         # 🆕 v2
+            "is_immortal": m.is_immortal,            # 🆕 v2
+            "correction_trail": json.loads(m.correction_trail or "[]"),  # 🆕 v2
             "last_accessed_at": m.last_accessed_at.isoformat() if m.last_accessed_at else None,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }

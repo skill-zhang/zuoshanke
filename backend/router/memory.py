@@ -117,6 +117,7 @@ class MemoryCreate(BaseModel):
     tags: list[str] = Field(default_factory=list)
     base_weight: int = Field(default=2, ge=1, le=10)
     source: str = Field(default="user", description="auto | llm | user")
+    is_narrative: bool = Field(default=False, description="🆕 v2 叙事型关系记忆（历程/决策/迭代故事）")
 
 
 class MemoryUpdate(BaseModel):
@@ -187,6 +188,7 @@ def create_memory(body: MemoryCreate, db: Session = Depends(get_db)):
         tags=body.tags,
         base_weight=body.base_weight,
         source=body.source,
+        is_narrative=body.is_narrative,
     )
     return {"success": True, "data": {"id": mem.id, "key": mem.key}}
 

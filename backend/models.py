@@ -291,6 +291,10 @@ class AgentMemory(Base):
     # ── 作用域（2026-05-27: 记忆隔离） ──
     scope = Column(String, default="zhu", nullable=False)  # zhu | scene | channel
     context_id = Column(String, nullable=True, index=True)  # 场景ID/频道ID
+    # ── 🆕 v2 双重记忆池: 叙事型／不朽记忆 ──
+    is_narrative = Column(Boolean, default=False)     # 叙事型关系记忆（历程/决策/迭代故事）
+    is_immortal = Column(Boolean, default=False)      # 不衰减不清理（scope=zhu 自动 True）
+    correction_trail = Column(Text, default="[]")     # JSON: [{old, new, reason, timestamp}]
     # ── 元数据 ──
     source = Column(String, nullable=True)  # 记忆来源（auto | llm | user）
     created_at = Column(DateTime, default=utcnow)
