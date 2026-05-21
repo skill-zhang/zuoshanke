@@ -202,11 +202,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   currentScene: null,
   setCurrentScene: (s) => {
-    const prev = get().currentScene;
-    if (prev && prev.id !== (s?.id)) {
-      // 异步提取上一个场景的记忆（fire-and-forget）
-      fetch(`/api/scenes/${prev.id}/extract-memory`, { method: 'POST' }).catch(() => {});
-    }
+    // 切场景时不触发记忆提取，只保留页面关闭（visibilitychange）触发
     set({ currentScene: s, messages: [], messageTotalCount: 0, hasOlderMessages: false, contextUsage: null, capacityWarning: null });
     if (s) get().loadUserContext(s.id);
   },
