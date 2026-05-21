@@ -425,7 +425,7 @@
     },
     {
       "name": "memory",
-      "description": "管理长期记忆——add 存新信息、reinforce 强化已有记忆、read 查看、replace 更新、remove 删除。存入前先用 read 检查是否已存在。用户强调「很重要」或用纠正语气时，用 reinforce 强化已存记忆。作用域(scope)：默认为当前上下文绑定（场景记忆仅限当前场景），仅当你判断此信息是用户的通用偏好/身份信息且应在所有场景中知晓时，显式传 scope='zhu'。",
+      "description": "管理长期记忆——add 存新信息、read 查看、replace 更新、remove 删除、reinforce 强化。注意：记忆存储的是用户个人偏好/身份信息/过往讨论结论。对于通用知识问答题（如历史、科学、技术介绍、文学等），用户只是想要事实性回答，不需要查记忆，直接回答即可。",
       "file": "tools/memory_tool.py",
       "function": "memory_tool",
       "parameters": {

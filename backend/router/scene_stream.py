@@ -110,24 +110,27 @@ def _build_tool_cards(tool_results: list[dict]) -> list[dict]:
 def extract_scene_memory(scene_id: str, db: Session = Depends(get_db)):
     """从场景的最新对话中提取关键信息，存为场景级记忆
 
-    由前端在用户切走场景 / 页面关闭时触发。
-    不阻塞前端（快速返回），在后台完成 LLM 提取 + 写入。
+    修复：只处理未提取过的消息（memory_extracted=False），处理后打标。
+    避免同一批消息被反复提取 → 记忆只增不减 + 权重暴涨。
     """
     scene = db.query(Scene).filter(Scene.id == scene_id).first()
     if not scene:
         raise HTTPException(404, "场景不存在")
 
-    # 读取最近的消息
+    # 读取未提取过的消息
     msgs = (
         db.query(Message)
-        .filter(Message.scene_id == scene_id, Message.role.in_(["user", "ai"]))
-        .order_by(Message.created_at.desc())
+        .filter(
+            Message.scene_id == scene_id,
+            Message.role.in_(["user", "ai"]),
+            Message.memory_extracted == False,
+        )
+        .order_by(Message.created_at.asc())
         .limit(30)
         .all()
     )
-    msgs.reverse()
     if len(msgs) < 2:
-        return {"ok": True, "extracted": 0, "reason": "对话太短，无需提取"}
+        return {"ok": True, "extracted": 0, "reason": "无未提取的消息"}
 
     messages_dict = [{"role": m.role, "content": m.content} for m in msgs]
 
@@ -135,10 +138,13 @@ def extract_scene_memory(scene_id: str, db: Session = Depends(get_db)):
     from agent_core.memory_extractor import extract_from_conversation, save_extracted_memories
 
     entries = extract_from_conversation(messages_dict, scene_name=scene.name)
-    if not entries:
-        return {"ok": True, "extracted": 0, "reason": "无值得记忆的内容"}
+    saved = 0
+    if entries:
+        saved = save_extracted_memories(db, entries, scene_id, scene_name=scene.name)
 
-    saved = save_extracted_memories(db, entries, scene_id, scene_name=scene.name)
+    # 标记所有已处理的消息为「已提取」
+    for m in msgs:
+        m.memory_extracted = True
     db.commit()
 
     return {"ok": True, "extracted": saved, "total_candidates": len(entries)}
@@ -778,8 +784,32 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                     yield sse_event("thinking_map:diverged",
                                                     node_count=new_count)
 
-                                    # Schema v0.81+改动: 发散后由 _async_converge_worker 异步检查收敛阈值
-                                    # 同时支持 LLM 自主调 converge 工具（用户确认后触发）
+                                    # 🆕 发散后同步检查收敛阈值，达标则收敛+发队列事件
+                                    try:
+                                        from agent_core.converge_engine import (
+                                            check_converge_threshold as _check_threshold,
+                                            auto_converge_and_prioritize as _do_converge,
+                                        )
+                                        # 重新查节点（含刚创建的）
+                                        _all_nodes = db.query(ThinkNode).filter(
+                                            ThinkNode.map_id == tmap.id,
+                                            ThinkNode.type != "root",
+                                        ).all()
+                                        _threshold = scene.converge_threshold or 2.0
+                                        if _check_threshold(_all_nodes, _threshold):
+                                            print(f"[converge] 同步触发收敛: scene={scene_id}, threshold={_threshold}")
+                                            _result = _do_converge(db, scene_id, tmap)
+                                            _pq = _result.get("pq_items", [])
+                                            yield sse_event("dashboard:converge",
+                                                merge_count=_result.get("merged", 0),
+                                                queue_count=len(_pq))
+                                            if _pq:
+                                                yield sse_event("dashboard:queue_update",
+                                                    items=_pq)
+                                    except Exception as _ce:
+                                        print(f"[converge] 同步收敛失败（回退异步）: {_ce}")
+                                        # 回退到异步收敛
+                                        start_async_converge_check(scene_id)
             except Exception as e:
                 print(f"[diverge] auto-diverge error: {e}")
 

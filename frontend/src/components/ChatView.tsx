@@ -567,6 +567,16 @@ export function ChatView() {
     prevLenRef.current = displayMessages.length;
   }, [displayMessages, isAtBottom, scrollToBottom]);
 
+  // ═══ 发送消息时强制滚底 — 用户自己发的消息必须能看到 ═══
+  const prevGeneratingRef = useRef(false);
+  useEffect(() => {
+    if (entityGenerating && !prevGeneratingRef.current) {
+      // isGenerating 从 false → true：刚发送消息，强制滚到底
+      scrollToBottom(false);
+    }
+    prevGeneratingRef.current = entityGenerating;
+  }, [entityGenerating, scrollToBottom]);
+
   // 滚动监听：检测是否滚动到顶部（加载更早）或到底部（隐藏浮标）
   const handleScroll = useCallback(() => {
     const container = messagesContainerRef.current;

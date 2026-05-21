@@ -2085,8 +2085,15 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 0 10px 8px;
-  flex: 1;
+  flex-shrink: 0;
   overflow-y: auto;
+  max-height: 45%;
+}
+
+/* 全屏仪表盘模式（直接作为 .main 的子元素）— 填满可用空间，不受 45% 限制 */
+.main > .agent-loop-dashboard {
+  flex: 1;
+  max-height: none;
 }
 
 /* 所有面板统一 padding 14px，圆角 10px */

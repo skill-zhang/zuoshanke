@@ -71,28 +71,33 @@ def _scan_and_extract():
 
         for scene in idle_scenes:
             try:
-                # 读最近的消息
+                # 只读未提取过的消息
                 msgs = (
                     db.query(Message)
                     .filter(
                         Message.scene_id == scene.id,
                         Message.role.in_(["user", "ai"]),
+                        Message.memory_extracted == False,
                     )
-                    .order_by(Message.created_at.desc())
+                    .order_by(Message.created_at.asc())
                     .limit(30)
                     .all()
                 )
                 if len(msgs) < 2:
+                    # 没有未提取的消息，跳过
                     continue
 
-                msgs.reverse()
                 messages_dict = [{"role": m.role, "content": m.content} for m in msgs]
 
                 entries = extract_from_conversation(messages_dict, scene_name=scene.name)
                 if entries:
                     saved = save_extracted_memories(db, entries, scene.id, scene_name=scene.name)
-                    db.commit()
                     logger.info(f"[idle-extract] {scene.name}: 提取了 {saved} 条记忆")
+
+                # 标记已处理的消息
+                for m in msgs:
+                    m.memory_extracted = True
+                db.commit()
             except Exception as e:
                 logger.warning(f"[idle-extract] {scene.name} 提取失败: {e}")
                 db.rollback()

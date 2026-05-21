@@ -162,6 +162,7 @@ class Message(Base):
     display = Column(Boolean, default=True)     # Schema v0.7: False=系统内部记录,前端不渲染
     priority = Column(String(10), default="normal")  # Schema v1.0: high | normal | low
     created_at = Column(DateTime, default=utcnow)
+    memory_extracted = Column(Boolean, default=False)  # 是否已提取为记忆
 
     scene = relationship("Scene", back_populates="messages")
     channel = relationship("Channel", back_populates="messages")

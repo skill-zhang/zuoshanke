@@ -81,12 +81,13 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"FTS5 索引预热跳过: {e}")
 
-    # 空闲场景记忆提取调度（后台线程）
-    try:
-        from agent_core.idle_extractor import start_idle_extraction_scheduler
-        start_idle_extraction_scheduler()
-    except Exception as e:
-        log.warning(f"空闲提取调度启动失败: {e}")
+    # 空闲场景记忆提取调度（后台线程）— 已关闭，每5分钟无差别提取太激进
+    # 需要时取消注释即可恢复
+    # try:
+    #     from agent_core.idle_extractor import start_idle_extraction_scheduler
+    #     start_idle_extraction_scheduler()
+    # except Exception as e:
+    #     log.warning(f"空闲提取调度启动失败: {e}")
 
     # 🆕 Schema v0.81: 数据库迁移
     try:
