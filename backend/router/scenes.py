@@ -1480,16 +1480,17 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # ── Agent Loop：LLM 自主决策调工具（替代预执行 + 规则路由） ──
         from agent_core.agent_loop import run_agent_loop
-        from agent_core.context_builder import build_agent_context
+        from agent_core.context_builder import build_agent_context_v1
 
-        # 用 build_agent_context 构建完整分层的初始消息（DB prompt + 记忆块 + skill + 工具列表）
-        agent_messages = build_agent_context(
+        # Schema v1.0: 使用 Context Composer 7 层精炼构建上下文
+        agent_messages = build_agent_context_v1(
             user_content=data.content,
             history_messages=history_messages,
             user_context=scene.user_context,
             db=db,
             scene_id=scene_id,
             scene_name=scene.name,
+            work_output_window=3,
         )
 
         # 🆕 Dialog Engine: 初始化/恢复阶段状态

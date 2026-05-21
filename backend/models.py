@@ -172,6 +172,7 @@ class Message(Base):
     map_ref = Column(String, nullable=True)     # 关联的 map node/drawer 操作
     model = Column(String, nullable=True)       # 生成该消息的模型名（如 Qwen3.5、DeepSeek Flash）
     display = Column(Boolean, default=True)     # Schema v0.7: False=系统内部记录,前端不渲染
+    priority = Column(String(10), default="normal")  # Schema v1.0: high | normal | low
     created_at = Column(DateTime, default=utcnow)
 
     scene = relationship("Scene", back_populates="messages")
@@ -504,3 +505,40 @@ class OutputProject(Base):
     created_at = Column(DateTime, default=utcnow)
 
     outputs = relationship("ProjectOutput", back_populates="project", cascade="all, delete-orphan")
+
+
+# ═══ Schema v1.0 — Context 组合架构 ═══
+class FileSnapshot(Base):
+    """文件快照 — 用于 diff 提取与文件版本跟踪"""
+    __tablename__ = "file_snapshots"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, nullable=False, index=True)
+    file_path = Column(String(500), nullable=False)
+    snapshot = Column(Text, nullable=False)           # 文件完整内容
+    diff_summary = Column(String(200), nullable=True) # 改动摘要（如"新增3行，删除1行"）
+    diff_content = Column(Text, nullable=True)        # 最近一次 diff 的 hunks 内容
+    created_at = Column(DateTime, default=utcnow)
+
+
+class DocumentSummary(Base):
+    """文档摘要 — 预生成的三级摘要（single_line / brief / full）"""
+    __tablename__ = "document_summaries"
+
+    id = Column(String, primary_key=True)
+    doc_name = Column(String(200), unique=True, nullable=False)
+    single_line = Column(String(200), default="")
+    brief = Column(Text, default="")
+    full = Column(Text, default="")
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ConfigEntry(Base):
+    """配置条目 — 与 skill 分离的配置存储"""
+    __tablename__ = "config_entries"
+
+    id = Column(String, primary_key=True)
+    config_name = Column(String(100), unique=True, nullable=False)
+    content = Column(Text, default="")         # JSON/YAML 内容
+    category = Column(String(20), default="system")  # system | model | service
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

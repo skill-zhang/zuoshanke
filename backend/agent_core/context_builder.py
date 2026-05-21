@@ -390,6 +390,41 @@ def build_agent_context(
     return messages
 
 
+def build_agent_context_v1(
+    user_content: str,
+    history_messages: Optional[list[dict]] = None,
+    user_context: Optional[str] = None,
+    db=None,
+    scene_id: str = "",
+    scene_name: str = "",
+    work_output_window: int = 3,
+    max_context_tokens: int = 32000,
+    fenshen_config: Optional[dict] = None,
+    session_config: Optional[dict] = None,
+) -> list[dict]:
+    """Schema v1.0: 使用 Context Composer 的 7 层精炼构建
+
+    替代 build_agent_context，用分层组合替代全量注入。
+    """
+    from agent_core.context_composer import compose_context
+
+    resolved_fenshen = fenshen_config or {}
+    if user_context and "custom_prompt" not in resolved_fenshen:
+        resolved_fenshen["custom_prompt"] = user_context
+
+    return compose_context(
+        user_content=user_content,
+        scene_id=scene_id,
+        scene_name=scene_name,
+        db=db,
+        history_messages=history_messages,
+        work_output_window=work_output_window,
+        max_context_tokens=max_context_tokens,
+        fenshen_config=resolved_fenshen,
+        session_config=session_config,
+    )
+
+
 def build_light_context(
     user_content: str,
     history_messages: Optional[list[dict]] = None,
