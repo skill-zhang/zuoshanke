@@ -196,7 +196,10 @@ def _async_converge_worker(scene_id: str):
     """后台异步收敛检查线程"""
     from database import SessionLocal
     from models import Scene, ThinkingMap, ThinkNode, Message
-    from agent_core.converge_engine import auto_converge_and_prioritize
+    from agent_core.converge_engine import (
+        auto_converge_and_prioritize,
+        check_converge_threshold,
+    )
 
     # 每个场景一把锁，防止并发
     with _CONVERGE_LOCK:
@@ -246,20 +249,19 @@ def _async_converge_worker(scene_id: str):
             if not nodes or len(nodes) <= 1:
                 return
 
-            # 计算叶子和分支
+            # 用 converge_engine 的统一阈值检查（消除重复逻辑）
+            threshold = scene.converge_threshold or 2.0
+            if not check_converge_threshold(nodes, threshold):
+                return
+
+            # 统计用于日志
             node_ids = set(n.id for n in nodes)
             children_map = {}
             for n in nodes:
                 if n.parent_id and n.parent_id in node_ids:
                     children_map.setdefault(n.parent_id, []).append(n.id)
-
             leaves = [n for n in nodes if n.id not in children_map]
             branches = [n for n in nodes if n.id in children_map]
-
-            # 阈值检查：leaf >= branch × threshold
-            threshold = scene.converge_threshold or 2.0
-            if len(leaves) < len(branches) * threshold:
-                return
 
             print(f"[converge] 自动触发收敛: scene={scene_id}, leaf={len(leaves)}, branch={len(branches)}, threshold={threshold}")
 
@@ -767,8 +769,8 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                                     yield sse_event("thinking_map:diverged",
                                                     node_count=new_count)
 
-                                    # Schema v0.7+改动: 只发散不收敛——收敛交给 LLM 自主调 converge 工具
-                                    # 用户讨论充分后，LLM 提议 → 用户确认 → converge 工具触发
+                                    # Schema v0.81+改动: 发散后由 _async_converge_worker 异步检查收敛阈值
+                                    # 同时支持 LLM 自主调 converge 工具（用户确认后触发）
             except Exception as e:
                 print(f"[diverge] auto-diverge error: {e}")
 
