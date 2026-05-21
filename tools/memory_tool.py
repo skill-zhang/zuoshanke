@@ -8,12 +8,14 @@ Agent Loop 通过此工具实现对记忆中"自主存取改查"的能力。
   - read:  查看当前所有记忆
   - replace: 更新已有记忆
   - remove: 删除记忆
+  - correct_memory: 🆕 v2 记录修正轨迹（保存旧值→更新→强化）
 
 用法:
     memory_tool(action="add", target="user", content="用户喜欢冷色系")
     memory_tool(action="read", target="memory")
     memory_tool(action="replace", target="memory", old_text="冷色", content="用户喜欢暖色系")
     memory_tool(action="remove", target="memory", old_text="旧内容")
+    memory_tool(action="correct_memory", key="user_work_style", content="正确内容", reason="用户纠正"
 """
 
 import json
@@ -68,7 +70,7 @@ def memory_tool(
     Returns:
         JSON 字符串，含操作结果
     """
-    if action not in ("add", "reinforce", "read", "replace", "remove"):
+    if action not in ("add", "reinforce", "read", "replace", "remove", "correct_memory"):
         return json.dumps({"success": False, "error": f"不支持的 action: {action}"}, ensure_ascii=False)
 
     if target not in ("memory", "user"):
@@ -118,6 +120,8 @@ def memory_tool(
             return _handle_replace(mm, target, old_text, content, key)
         elif action == "remove":
             return _handle_remove(mm, target, old_text)
+        elif action == "correct_memory":
+            return _handle_correct_memory(mm, key, content, old_text)
     finally:
         _cleanup(mm)
 
@@ -422,6 +426,44 @@ def _infer_topic(content: str) -> str:
 def _log_extraction(target: str, msg: str):
     """记录记忆操作日志"""
     print(f"[memory] {target}: {msg}")
+
+
+# ── 🆕 v2: 修正轨迹 ──────────────────────────
+
+
+def _handle_correct_memory(mm: MemoryManager, key: str, new_content: str, reason: str) -> str:
+    """处理修正轨迹记录
+
+    Args:
+        key: 要修正的记忆 key
+        new_content: 修正后的内容
+        reason: 修正原因说明
+    """
+    if not key:
+        return json.dumps({"success": False, "error": "correct_memory 需要指定 key 参数"},
+                          ensure_ascii=False)
+    if not new_content:
+        return json.dumps({"success": False, "error": "correct_memory 需要指定 content 参数（修正后的内容）"},
+                          ensure_ascii=False)
+    if not reason:
+        reason = "用户未说明修正原因"
+
+    ok = mm.record_correction(key, new_content, reason)
+    if not ok:
+        return json.dumps({"success": False, "error": f"记忆 '{key}' 不存在"},
+                          ensure_ascii=False)
+
+    # 返回修正后的记忆信息
+    mem = mm.get(key)
+    return json.dumps({
+        "success": True,
+        "action": "corrected",
+        "message": f"记忆 '{key}' 已修正（explicit_boost += 2，correction_trail 已追加）",
+        "key": key,
+        "content": mem.content[:200],
+        "explicit_boost": mem.explicit_boost,
+        "correction_count": len(json.loads(mem.correction_trail or "[]")),
+    }, ensure_ascii=False)
 
 
 # ── 确保 AgentMemory 在模块级可导入 ──

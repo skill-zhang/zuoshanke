@@ -257,6 +257,34 @@ def pin_memory(key: str, db: Session = Depends(get_db)):
     return {"success": True, "message": f"记忆 '{key}' 已标记为 P0（永不过期）"}
 
 
+# ── 🆕 v2: 修正轨迹 ──────────────────────────
+
+
+class MemoryCorrect(BaseModel):
+    new_content: str = Field(..., min_length=1, description="修正后的内容")
+    reason: str = Field(default="", description="修正原因")
+
+
+@router.post("/{key}/correct")
+def correct_memory(key: str, body: MemoryCorrect, db: Session = Depends(get_db)):
+    """🆕 v2 记录修正轨迹 — 用户纠正记忆内容时的标准化操作
+
+    1. 旧内容追加到 correction_trail
+    2. 更新为 new_content
+    3. explicit_boost += 2（修正即强化）
+    4. scope=zhu 自动标记 is_immortal
+    """
+    mm = MemoryManager(db)
+    ok = mm.record_correction(key, body.new_content, body.reason)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"记忆 '{key}' 不存在")
+    # 返回修正后的记忆详情
+    mem = mm.get(key)
+    d = mm._to_dict(mem)
+    d["weight"] = round(mm.calc_weight(mem), 2)
+    return {"success": True, "data": d}
+
+
 @router.post("/semantic-dedup")
 def semantic_dedup_memories(db: Session = Depends(get_db),
                              dry_run: bool = Query(False, description="模拟运行，不执行删除")):

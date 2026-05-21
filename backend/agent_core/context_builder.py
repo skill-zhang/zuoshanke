@@ -49,6 +49,9 @@ def _build_memory_block(db, query: str,
                         context_id: Optional[str] = None) -> str:
     """从记忆系统提取相关记忆，格式化为注入文本
 
+    v2: scope='zhu' 时全量注入本体记忆（不裁剪权重）；
+        其他scope保持top-5筛选。
+
     返回格式为「仅供参考」的 User Prompt 层内容，不再是 System Prompt 铁律。
 
     Args:
@@ -60,15 +63,20 @@ def _build_memory_block(db, query: str,
     if db is None:
         return ""
     mm = MemoryManager(db)
-    memories = mm.get_top_for_context(query, max_count=5,
-                                      scope=scope, context_id=context_id)
+    # 🆕 v2: 本体记忆全量注入，不分场景的记忆走 top-5 筛选
+    if scope == "zhu":
+        memories = mm.list_all(scope="zhu", limit=200)
+    else:
+        memories = mm.get_top_for_context(query, max_count=5,
+                                          scope=scope, context_id=context_id)
     if not memories:
         return ""
     lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
     for mem in memories:
         level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
         icon = level_icon.get(mem["priority_level"], "📝")
-        lines.append(f"- {icon} {mem['key']}: {mem['content']}")
+        prefix = "📖 " if mem.get("is_narrative") else ""  # 🆕 v2 叙事型标记
+        lines.append(f"- {prefix}{icon} {mem['key']}: {mem['content']}")
     return "\n".join(lines)
 
 

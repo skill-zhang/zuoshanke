@@ -60,6 +60,9 @@ def get_secret_garden(db: Session = Depends(get_db)):
             "key": m.get("key", ""),
             "weight": m.get("weight", 0) or 0,
             "level": m.get("level", 0) or 0,
+            "is_narrative": m.get("is_narrative", False),          # 🆕 v2
+            "is_immortal": m.get("is_immortal", False),             # 🆕 v2
+            "correction_count": len(m.get("correction_trail", []) or []),  # 🆕 v2
             "created_at": str(m.get("created_at", "")) if m.get("created_at") else None,
         }
         for m in top_memories
