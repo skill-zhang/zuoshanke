@@ -13,12 +13,16 @@ from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
 from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset, PriorityQueue, ProjectOutput, FileSnapshot
 from schemas import MessageOut, MessageCreate, SceneExportOut
-from ai_engine import call_deepseek_chat
+from ai_engine import call_deepseek_chat, extract_and_classify, get_settings
+from agent_core.token_counter import (
+    estimate_messages_tokens, get_context_length_from_route,
+    context_usage_str, progress_bar,
+)
 from agent_core.memory_manager import MemoryManager
 from agent_core.memory_extractor import MemoryExtractor
 from agent_core.context_builder import build_agent_context_v1
 from agent_core.priority_assigner import extract_priority
-from utils import make_id, utcnow
+from utils import make_id, utcnow, iso_utc
 from router.shared import sse_event, sse_response
 
 router = APIRouter(tags=["场景流式"])
@@ -109,7 +113,9 @@ def extract_scene_memory(scene_id: str, db: Session = Depends(get_db)):
     由前端在用户切走场景 / 页面关闭时触发。
     不阻塞前端（快速返回），在后台完成 LLM 提取 + 写入。
     """
-    scene = _get_scene_or_404(db, scene_id)
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(404, "场景不存在")
 
     # 读取最近的消息
     msgs = (
@@ -287,7 +293,9 @@ def start_async_converge_check(scene_id: str):
 @router.post("/api/scenes/{scene_id}/stream")
 def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depends(get_db)):
     """发送消息到场景 + 流式 SSE 返回 AI 回复"""
-    scene = _get_scene_or_404(db, scene_id)
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(404, "场景不存在")
 
     user_msg = Message(
         id=make_id("msg"), scene_id=scene_id,
@@ -301,7 +309,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         nonlocal scene
         # 1. 用户消息事件
         yield sse_event("user_msg", id=user_msg.id, role="user",
-                        content=user_msg.content, created_at=user_msg.created_at.isoformat())
+                        content=user_msg.content, created_at=iso_utc(user_msg.created_at))
 
         # 2. 历史消息（session 隔离）
         q = db.query(Message).filter(Message.scene_id == scene_id)
@@ -360,6 +368,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             max_steps=99,
             dialog_engine=dialog_engine,
             scene_id=scene_id,  # 🆕 Schema v0.7
+            scene_config=scene.scene_config or {},
         )
 
         model_name = "DeepSeek Flash"
@@ -470,7 +479,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             new_db.commit()
             new_db.refresh(ai_msg)
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_reply,
-                            created_at=ai_msg.created_at.isoformat(),
+                            created_at=iso_utc(ai_msg.created_at),
                             changes=[], model=model_name)
 
             # 🆕 检测 AI 回复中的 HTML 代码块 → 自动保存为产出成果

@@ -3,9 +3,10 @@ import { useStore } from '../stores/appStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { Message, ToolCard, ToolLog } from '../api/client';
-import { getActionMap } from '../api/client';
+import type { Message, ToolCard, ToolLog, Scene } from '../api/client';
+import { getActionMap, updateScene } from '../api/client';
 import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
+import { showConfirm, showAlert } from '../stores/dialogStore';
 
 // ══════════════════════════════════════════════════
 //  工具卡片组件
@@ -403,6 +404,10 @@ export function ChatView() {
     deleteMsg, regenerateMsg, newSceneSession,
     batchDeleteMsgs, clearSceneMsgs, clearChannelHistory,
     sessions, loadSceneSessions, loadSceneMessages, switchSceneSession,
+    loadOlderMessages, loadOlderChannelMessages,
+    hasOlderMessages, channelHasOlder,
+    messagesLoading, channelMessagesLoading,
+    messageTotalCount, channelMessageTotalCount,
     isGenerating,
     generatingEntityId,
     currentModelName,
@@ -435,6 +440,17 @@ export function ChatView() {
 
   // 输入区折叠状态
   const [inputCollapsed, setInputCollapsed] = useState(false);
+
+  // ═══ 分页加载状态 ═══
+  const [showBackToBottom, setShowBackToBottom] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageLenRef = useRef(0);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+
+  // ═══ 参数调测 ═══
+  const [tempModalOpen, setTempModalOpen] = useState(false);
+  const [tempValue, setTempValue] = useState(0.3);
 
   // ═══ 输入框拖拽调整高度 ═══
   const [inputHeight, setInputHeight] = useState(72);
@@ -521,10 +537,81 @@ export function ChatView() {
     }
   }, [currentScene?.id]);
 
-  // 自动滚动
+  // ═══ 自动滚动 — 初始化定位到底部，新消息来时仅在底部时自动滚动 ═══
+  const scrollToBottom = useCallback((smooth = true) => {
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+      setShowBackToBottom(false);
+      setUnreadCount(0);
+    }
+  }, []);
+  const isAtBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const threshold = 120; // px from bottom
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  }, []);
+
+  // 首次加载后自动滚动到底部
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [displayMessages]);
+    if (displayMessages.length > 0 && prevMessageLenRef.current === 0) {
+      // 初始加载 — 延迟等渲染完，instant 滚动
+      setTimeout(() => scrollToBottom(false), 50);
+    }
+    prevMessageLenRef.current = displayMessages.length;
+  }, [displayMessages.length, scrollToBottom]);
+
+  // 新消息（SSE 追加）时：如果在底部则自动滚动，否则增加未读计数
+  // 同时监听最后一条消息的 content，确保 token 流式追加时也滚动
+  const prevLenRef = useRef(displayMessages.length);
+  const lastMsgKey = displayMessages.length > 0
+    ? displayMessages[displayMessages.length - 1].id + '|' + displayMessages[displayMessages.length - 1].content.length
+    : 'empty';
+  useEffect(() => {
+    if (displayMessages.length === 0) return;
+    const lenIncreased = displayMessages.length > prevLenRef.current;
+    prevLenRef.current = displayMessages.length;
+
+    if (isAtBottom()) {
+      scrollToBottom(true);
+    } else if (lenIncreased) {
+      // 有新增消息且不在底部 → 显示浮标
+      setShowBackToBottom(true);
+      setUnreadCount(prev => prev + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayMessages.length, lastMsgKey]);
+
+  // 滚动监听：检测是否滚动到顶部（加载更早）或到底部（隐藏浮标）
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // 向上滚到顶部 → 加载更早消息
+    if (container.scrollTop < 80) {
+      const isLoading = isChannel ? channelMessagesLoading : messagesLoading;
+      const hasOlder = isChannel ? channelHasOlder : hasOlderMessages;
+      const entityId = currentScene?.id || currentChannel?.id;
+      if (!isLoading && hasOlder && entityId) {
+        // 记录当前高度，用于 prepend 后保持滚动位置
+        const oldScrollHeight = container.scrollHeight;
+        const loadFn = isChannel ? loadOlderChannelMessages : loadOlderMessages;
+        loadFn(entityId).then(() => {
+          // prepend 后恢复滚动位置：新内容在顶部撑开
+          const newScrollHeight = container.scrollHeight;
+          container.scrollTop = newScrollHeight - oldScrollHeight;
+        });
+      }
+    }
+
+    // 检测是否在底部 → 隐藏浮标
+    if (isAtBottom()) {
+      setShowBackToBottom(false);
+      setUnreadCount(0);
+    }
+  }, [isChannel, channelMessagesLoading, messagesLoading, channelHasOlder, hasOlderMessages,
+      currentScene, currentChannel, loadOlderChannelMessages, loadOlderMessages, isAtBottom]);
 
   // 自动调整 textarea 高度（仅当内容超出现有高度时，不覆盖手动拖拽）
   useEffect(() => {
@@ -646,18 +733,18 @@ export function ChatView() {
   };
 
   const handleDelete = async (msgId: string) => {
-    if (!confirm('确定删除这条消息？')) return;
+    if (!await showConfirm('确定删除这条消息？')) return;
     await deleteMsg(msgId);
   };
 
   const handleNewSession = async () => {
     if (isChannel && currentChannel) {
-      if (!confirm('开始新对话？当前聊天记录将清空。')) return;
+      if (!await showConfirm('开始新对话？当前聊天记录将清空。')) return;
       await clearChannelHistory(currentChannel.id);
       return;
     }
     if (!currentScene) return;
-    if (!confirm('开始新对话？之前的聊天记录将保留但不再显示。')) return;
+    if (!await showConfirm('开始新对话？之前的聊天记录将保留但不再显示。')) return;
     setShowSessionPanel(false);
     await newSceneSession(currentScene.id);
   };
@@ -702,7 +789,7 @@ export function ChatView() {
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定删除选中的 ${selectedIds.size} 条消息？`)) return;
+    if (!await showConfirm(`确定删除选中的 ${selectedIds.size} 条消息？`)) return;
     await batchDeleteMsgs(Array.from(selectedIds));
     exitSelectMode();
   };
@@ -714,7 +801,7 @@ export function ChatView() {
         return;
       }
       if (clearStep === 1) {
-        if (!confirm('⚠️ 此操作将永久删除该频道的所有聊天记录，不可恢复。确定继续？')) return;
+        if (!await showConfirm('⚠️ 此操作将永久删除该频道的所有聊天记录，不可恢复。确定继续？')) return;
         setClearStep(0);
         await clearChannelHistory(currentChannel.id);
       }
@@ -726,7 +813,7 @@ export function ChatView() {
       return;
     }
     if (clearStep === 1) {
-      if (!confirm('⚠️ 此操作将永久删除场景的所有聊天记录，不可恢复。确定继续？')) return;
+      if (!await showConfirm('⚠️ 此操作将永久删除场景的所有聊天记录，不可恢复。确定继续？')) return;
       setClearStep(0);
       await clearSceneMsgs(currentScene.id);
     }
@@ -743,7 +830,20 @@ export function ChatView() {
         {/* 上下文标签 */}
         {contextLabel && (
           <div className="chat-context-label">
-            <span>{contextLabel}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <span>{contextLabel}</span>
+              {currentScene && !isChannel && (
+                <span
+                  className="temp-tune-btn"
+                  onClick={() => {
+                    const cfg = (currentScene as any).scene_config || {};
+                    setTempValue(cfg.temperature ?? 0.3);
+                    setTempModalOpen(true);
+                  }}
+                  title="参数调测"
+                >⚙️ 参数</span>
+              )}
+            </span>
             <div className="chat-label-actions">
               <>
                 {!isChannel && currentScene && (
@@ -817,7 +917,14 @@ export function ChatView() {
         )}
 
         {/* 消息列表 */}
-        <div className="chat-messages">
+        <div className="chat-messages-wrapper">
+          <div className="chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
+          {/* 加载更早消息指示器 */}
+          {(messagesLoading || channelMessagesLoading) && (
+            <div style={{ textAlign: 'center', padding: '12px 0', color: '#8b949e', fontSize: 13 }}>
+              ⏳ 加载更早消息...
+            </div>
+          )}
           {displayMessages.length === 0 && <EmptyState isChannel={isChannel} />}
           {displayMessages.map((msg, idx) => (
             <MessageBubble
@@ -846,6 +953,59 @@ export function ChatView() {
           ))}
           <div ref={bottomRef} />
         </div>
+          {/* ═══ 回到最新消息浮标 ═══ */}
+          {showBackToBottom && (
+            <div className="back-to-bottom-btn" onClick={() => scrollToBottom(true)}>
+              <span>↓ 回到最新</span>
+              {unreadCount > 0 && <span className="back-to-bottom-badge">{unreadCount}</span>}
+            </div>
+          )}
+        </div> {/* ═══ end chat-messages-wrapper ═══ */}
+
+        {/* ═══ 参数调测弹窗 ═══ */}
+        {tempModalOpen && currentScene && (
+          <div className="modal-overlay show" onClick={() => setTempModalOpen(false)}>
+            <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+              <div className="modal-title">
+                <span>⚙️ 参数调测 · {currentScene.name}</span>
+                <button className="modal-close" onClick={() => setTempModalOpen(false)}>✕</button>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Temperature</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <input
+                    type="range" min="0.01" max="1" step="0.05"
+                    value={tempValue}
+                    onChange={e => setTempValue(parseFloat(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ minWidth: 36, textAlign: 'right', color: '#e6edf3', fontSize: 14, fontWeight: 600 }}>
+                    {tempValue.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span className="form-hint">保守 (0.1)</span>
+                  <span className="form-hint">默认 (0.3)</span>
+                  <span className="form-hint">创意 (0.7)</span>
+                  <span className="form-hint">自由 (1.0)</span>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn" onClick={() => {
+                  setTempValue((currentScene as any).scene_config?.temperature ?? 0.3);
+                  setTempModalOpen(false);
+                }}>取消</button>
+                <button className="btn btn-primary" onClick={async () => {
+                  const updated = await updateScene(currentScene.id, {
+                    scene_config: { ...((currentScene as any).scene_config || {}), temperature: tempValue },
+                  });
+                  useStore.setState({ currentScene: updated as any });
+                  setTempModalOpen(false);
+                }}>应用</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ═══ 用户输入背景设定 ═══ */}
         {!isChannel && currentScene && (
@@ -966,10 +1126,10 @@ export function ChatView() {
                     </button>
                     {uploadMenu && (
                       <div className="chat-upload-menu">
-                        <div className="chat-upload-item" onClick={() => { alert('文件上传功能即将支持'); setUploadMenu(false); }}>
+                        <div className="chat-upload-item" onClick={async () => { await showAlert('文件上传功能即将支持'); setUploadMenu(false); }}>
                           📄 上传文件
                         </div>
-                        <div className="chat-upload-item" onClick={() => { alert('图片上传功能即将支持'); setUploadMenu(false); }}>
+                        <div className="chat-upload-item" onClick={async () => { await showAlert('图片上传功能即将支持'); setUploadMenu(false); }}>
                           🖼 上传图片
                         </div>
                       </div>

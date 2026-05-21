@@ -1,7 +1,8 @@
 """Pydantic schemas — API 请求/响应"""
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+from utils import iso_utc
 
 
 # ═══ 项目 ═══
@@ -52,6 +53,8 @@ class SceneOut(BaseModel):
     converge_threshold: float = 2.0
     converge_enabled: bool = True
     diverge_min_rounds: int = 2
+    # ── Schema v1.0: 场景扩展配置 ──
+    scene_config: dict = {}
 
     class Config:
         from_attributes = True
@@ -68,6 +71,8 @@ class SceneUpdate(BaseModel):
     converge_threshold: Optional[float] = None
     converge_enabled: Optional[bool] = None
     diverge_min_rounds: Optional[int] = None
+    # ── Schema v1.0: 场景扩展配置 ──
+    scene_config: Optional[dict] = None
 
 class ScenePublishRequest(BaseModel):
     version: str
@@ -186,6 +191,11 @@ class MessageOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, v: datetime) -> str:
+        """序列化 datetime 时始终输出 UTC Z 格式"""
+        return iso_utc(v)
 
 class MessageUpdate(BaseModel):
     content: Optional[str] = None

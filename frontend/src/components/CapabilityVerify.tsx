@@ -1,5 +1,6 @@
 /** 🧪 能力验证 — 展示 Agent Loop 里程碑成就 */
 import { useEffect, useState, useRef } from 'react';
+import { showAlert } from '../stores/dialogStore';
 
 // ── 里程碑数据类型 ──
 export interface Milestone {
@@ -96,7 +97,7 @@ export function CapabilityVerify() {
   // ── 运行验证（触发 Agent Loop 重新验证） ──
   const runVerify = async (m: Milestone) => {
     // TODO: 后面调 Agent Loop API 来重新验证
-    alert(`🔄 重跑验证：${m.title}\n（Agent Loop 引擎还没打通前端调用，先展示已有的成果）`);
+    await showAlert(`🔄 重跑验证：${m.title}\n（Agent Loop 引擎还没打通前端调用，先展示已有的成果）`);
   };
 
   return (<>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
 import { Scene, updateScene, deleteScene, renameCategory, createCategory, deleteCategory, listCategories } from '../api/client';
+import { showAlert, showConfirm } from '../stores/dialogStore';
 
 // ── 分类配置 ──
 const CATEGORIES = [
@@ -149,7 +150,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
       setEditModal(null);
       loadWorkshopScenes();
     } catch (e: any) {
-      alert('保存失败: ' + (e.message || ''));
+      await showAlert('保存失败: ' + (e.message || ''));
     } finally {
       setEditing(false);
     }
@@ -174,10 +175,10 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
         setPublishVersion('');
         setPublishChangelog('');
       } else {
-        alert('发布失败，请检查版本号或重试');
+        await showAlert('发布失败，请检查版本号或重试');
       }
     } catch (e: any) {
-      alert(e.message || '发布失败');
+      await showAlert(e.message || '发布失败');
     } finally {
       setPublishing(false);
     }
@@ -197,7 +198,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error('导出失败:', e);
-      alert('导出失败');
+      await showAlert('导出失败');
     }
   };
 
@@ -210,7 +211,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
       setDeleteTarget(null);
       loadWorkshopScenes();
     } catch (e: any) {
-      alert('删除失败: ' + (e.message || ''));
+      await showAlert('删除失败: ' + (e.message || ''));
     } finally {
       setDeleting(false);
     }
@@ -566,12 +567,12 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
                   {c.count === 0 && (
                     <span style={{ fontSize: 13, cursor: 'pointer', color: '#f85149', padding: 4 }}
                       onClick={async () => {
-                        if (!confirm(`确定删除类别「${c.label}」？`)) return;
+                        if (!await showConfirm(`确定删除类别「${c.label}」？`)) return;
                         try {
                           await deleteCategory(c.name);
                           setCatManageOpen(false);
                         } catch (e: any) {
-                          alert('删除失败: ' + (e.message || ''));
+                          await showAlert('删除失败: ' + (e.message || ''));
                         }
                       }}
                       title="删除"
@@ -628,7 +629,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
                 setNewCatOpen(false);
                 setCatManageOpen(false);
               } catch (e: any) {
-                alert('创建失败: ' + (e.message || ''));
+                await showAlert('创建失败: ' + (e.message || ''));
               } finally {
                 setNewCatCreating(false);
               }
@@ -680,7 +681,7 @@ export function WorkshopView({ onEnterScene, onCreateScene }: WorkshopViewProps)
                 setCatManageOpen(false);
                 loadWorkshopScenes();
               } catch (e: any) {
-                alert('重命名失败: ' + (e.message || ''));
+                await showAlert('重命名失败: ' + (e.message || ''));
               } finally {
                 setRenameSaving(false);
               }

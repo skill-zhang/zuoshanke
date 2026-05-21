@@ -1,6 +1,7 @@
 /** 🛠️ 工具管理视图 — 全页卡片网格 + 详情弹窗 + 测试面板 */
 import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '../stores/appStore';
+import { showAlert } from '../stores/dialogStore';
 import {
   listTools, getTool, createTool, updateTool, deleteTool,
   updatePreexecute, putToolSkill, deleteToolSkill,
@@ -374,9 +375,9 @@ function DetailModal({ tool, onClose, onUnreg, onTest }: {
 
         {/* 操作按钮 */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid #21262d' }}>
-          <button className="btn btn-sm" onClick={() => alert('工具编辑功能待实现')} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>✏️ 编辑工具</button>
-          <button className="btn btn-sm" onClick={() => alert('预执行配置编辑待实现')} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>⚙️ 预执行</button>
-          <button className="btn btn-sm" onClick={() => alert('SKILL.md编辑待实现')} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>📄 编辑手册</button>
+          <button className="btn btn-sm" onClick={async () => { await showAlert('工具编辑功能待实现'); }} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>✏️ 编辑工具</button>
+          <button className="btn btn-sm" onClick={async () => { await showAlert('预执行配置编辑待实现'); }} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>⚙️ 预执行</button>
+          <button className="btn btn-sm" onClick={async () => { await showAlert('SKILL.md编辑待实现'); }} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}>📄 编辑手册</button>
           <button className="btn btn-sm" onClick={() => onUnreg(tool.name)}
             style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #f85149', background: 'transparent', color: '#f85149', cursor: 'pointer' }}>🗑 注销</button>
         </div>

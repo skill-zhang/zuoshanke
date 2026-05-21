@@ -12,6 +12,27 @@ from utils import make_id
 
 router = APIRouter(tags=["消息"])
 
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
+
+
+def _paginated_messages(
+    q, limit: int, before_id: Optional[str], db: Session
+) -> dict:
+    """通用分页查询：取 limit 条比 before_id 更旧的消息，返回 ASC 顺序"""
+    if before_id:
+        anchor = db.query(Message.created_at).filter(Message.id == before_id).scalar()
+        if anchor:
+            q = q.filter(Message.created_at < anchor)
+        # 如果 anchor 不存在，退化为全量（保险）
+    msgs = q.order_by(Message.created_at.desc()).limit(limit + 1).all()
+    has_more = len(msgs) > limit
+    if has_more:
+        msgs = msgs[:limit]
+    msgs.reverse()  # 转为 ASC 顺序（old → new）
+    total = q.count()  # 注意：这个 count 受 filter 影响，需要用无 filter 的
+    return {"messages": msgs, "has_more": has_more, "total": total}
+
 
 # ═══ 旧版非流式场景消息 ═══
 
@@ -40,15 +61,42 @@ def send_message(data: MessageCreate, db: Session = Depends(get_db)):
     return msg
 
 
-# ═══ 场景消息列表 / 清空 ═══
+# ═══ 场景消息列表（分页） ═══
 
-@router.get("/api/scenes/{scene_id}/messages", response_model=List[MessageOut])
-def list_scene_messages(scene_id: str, session_id: Optional[str] = Query(None),
-                         db: Session = Depends(get_db)):
+@router.get("/api/scenes/{scene_id}/messages")
+def list_scene_messages(
+    scene_id: str,
+    session_id: Optional[str] = Query(None),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    before_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """获取场景消息，分页返回。不传 before_id 取最新 limit 条"""
     q = db.query(Message).filter(Message.scene_id == scene_id)
     if session_id:
         q = q.filter(Message.session_id == session_id)
-    return q.order_by(Message.created_at.asc()).all()
+
+    total = q.count()
+
+    # 取消息（ASC 顺序）
+    if before_id:
+        anchor = db.query(Message.created_at).filter(
+            Message.id == before_id, Message.scene_id == scene_id
+        ).scalar()
+        if anchor:
+            q = q.filter(Message.created_at < anchor)
+
+    msgs = q.order_by(Message.created_at.desc()).limit(limit + 1).all()
+    has_more = len(msgs) > limit
+    if has_more:
+        msgs = msgs[:limit]
+    msgs.reverse()  # ASC 顺序
+
+    return {
+        "messages": [MessageOut.model_validate(m).model_dump() for m in msgs],
+        "has_more": has_more,
+        "total": total,
+    }
 
 
 @router.delete("/api/scenes/{scene_id}/messages")
@@ -68,16 +116,37 @@ def clear_scene_messages(scene_id: str, db: Session = Depends(get_db)):
     return {"ok": True, "deleted": deleted}
 
 
-# ═══ 频道消息列表 ═══
+# ═══ 频道消息列表（分页） ═══
 
-@router.get("/api/channels/{channel_id}/messages", response_model=List[MessageOut])
-def list_channel_messages(channel_id: str, db: Session = Depends(get_db)):
-    return (
-        db.query(Message)
-        .filter(Message.channel_id == channel_id)
-        .order_by(Message.created_at.asc())
-        .all()
-    )
+@router.get("/api/channels/{channel_id}/messages")
+def list_channel_messages(
+    channel_id: str,
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    before_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """获取频道消息，分页返回。不传 before_id 取最新 limit 条"""
+    q = db.query(Message).filter(Message.channel_id == channel_id)
+    total = q.count()
+
+    if before_id:
+        anchor = db.query(Message.created_at).filter(
+            Message.id == before_id, Message.channel_id == channel_id
+        ).scalar()
+        if anchor:
+            q = q.filter(Message.created_at < anchor)
+
+    msgs = q.order_by(Message.created_at.desc()).limit(limit + 1).all()
+    has_more = len(msgs) > limit
+    if has_more:
+        msgs = msgs[:limit]
+    msgs.reverse()
+
+    return {
+        "messages": [MessageOut.model_validate(m).model_dump() for m in msgs],
+        "has_more": has_more,
+        "total": total,
+    }
 
 
 # ═══ 单条消息删除 / 批量删除 ═══

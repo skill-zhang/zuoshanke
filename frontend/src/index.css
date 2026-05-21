@@ -338,6 +338,79 @@ body {
   gap:16px;
 }
 
+/* 消息列表外层容器 — 给浮标提供定位上下文 */
+.chat-messages-wrapper {
+  position:relative;
+  flex:1;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+
+/* 回到最新消息浮标 */
+.back-to-bottom-btn {
+  position:absolute;
+  bottom:24px;
+  right:24px;
+  z-index:50;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 16px;
+  background:#21262d;
+  border:1px solid #30363d;
+  border-radius:20px;
+  color:#e6edf3;
+  font-size:13px;
+  cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);
+  transition:background .15s,box-shadow .15s;
+  user-select:none;
+}
+.back-to-bottom-btn:hover {
+  background:#30363d;
+  box-shadow:0 4px 12px rgba(0,0,0,.4);
+}
+.back-to-bottom-badge {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  background:#f85149;
+  border-radius:10px;
+  color:#fff;
+  font-size:12px;
+  font-weight:600;
+  line-height:1;
+}
+
+/* 参数调测按钮 — 风格与「思考⏩行动」一致 */
+.temp-tune-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 12px;
+  background: linear-gradient(135deg, rgba(140,100,255,0.1) 0%, rgba(140,100,255,0.02) 50%, rgba(248,81,73,0.06) 100%) !important;
+  border: 1px solid rgba(140,100,255,0.2) !important;
+  border-right-color: rgba(248,81,73,0.2) !important;
+  color: #e6edf3 !important;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: all 0.25s ease;
+  line-height: 1;
+}
+.temp-tune-btn:hover {
+  background: linear-gradient(135deg, rgba(140,100,255,0.18) 0%, rgba(140,100,255,0.05) 50%, rgba(248,81,73,0.12) 100%) !important;
+  border-color: rgba(140,100,255,0.35) !important;
+  border-right-color: rgba(248,81,73,0.35) !important;
+  box-shadow: 0 0 12px rgba(140,100,255,0.1);
+}
+
 /* 空状态 */
 .chat-empty {
   flex:1;
@@ -3049,4 +3122,98 @@ body {
   font-size: 11px;
   color: #444;
   letter-spacing: 4px;
+}
+
+/* ── 🆕 起居室聊天 ── */
+.garden-chat-container {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.garden-chat-messages {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.garden-chat-empty {
+  text-align: center;
+  color: #555;
+  font-size: 12px;
+  padding: 30px 0;
+  line-height: 1.6;
+}
+.garden-chat-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.garden-chat-msg-user {
+  align-self: flex-end;
+  background: rgba(107,158,255,0.12);
+  border: 1px solid rgba(107,158,255,0.15);
+}
+.garden-chat-msg-assistant {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.garden-chat-msg-role {
+  font-size: 10px;
+  color: #777;
+  margin-bottom: 4px;
+}
+.garden-chat-msg-content {
+  color: #ccc;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.garden-chat-input-row {
+  display: flex;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 8px;
+  gap: 8px;
+}
+.garden-chat-input {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ccc;
+  font-size: 13px;
+  outline: none;
+}
+.garden-chat-input:focus {
+  border-color: rgba(107,158,255,0.4);
+}
+.garden-chat-input:disabled {
+  opacity: 0.5;
+}
+.garden-chat-send {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(107,158,255,0.3);
+  background: rgba(107,158,255,0.15);
+  color: #8ab4ff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.garden-chat-send:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.garden-chat-send:hover:not(:disabled) {
+  background: rgba(107,158,255,0.25);
 }

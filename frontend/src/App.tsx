@@ -14,7 +14,9 @@ import { OutputGalleryView } from './components/OutputGalleryView';
 import { SecretGarden } from './components/SecretGarden';
 import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
+import { Dialog } from './components/Dialog';
 import { Scene, createScene } from './api/client';
+import { showAlert } from './stores/dialogStore';
 
 // ═══ 稳定选择器（避免 useSyncExternalStore getSnapshot 引用变化）═══
 const selectAgentStatus = (s: any) => s.agentStatus;
@@ -211,9 +213,9 @@ export default function App() {
           loadPlazaScenes();
         }
         loadWorkshopScenes();
-        alert('场景导入成功！');
+        await showAlert('场景导入成功！');
       } catch (err: any) {
-        alert('导入失败: ' + (err.message || '文件格式错误'));
+        await showAlert('导入失败: ' + (err.message || '文件格式错误'));
       }
     };
     input.click();
@@ -233,7 +235,7 @@ export default function App() {
       // 自动进入新创建的场景
       handleEnterScene(scene);
     } catch (err: any) {
-      alert('创建失败: ' + (err.message || '未知错误'));
+      await showAlert('创建失败: ' + (err.message || '未知错误'));
     } finally {
       setCreating(false);
     }
@@ -300,6 +302,7 @@ export default function App() {
       </div>
 
       <SettingsDrawer />
+      <Dialog />
 
       {/* ═══ 创建场景弹窗 ═══ */}
       <div className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`} onClick={handleCloseCreate}>

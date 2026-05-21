@@ -1,5 +1,6 @@
 """坐山客 API — FastAPI 应用入口"""
 import logging
+import os
 from pathlib import Path
 
 # 加载环境变量（优先加载 hermes 的 .env，它含有 DEEPSEEK_API_KEY 等）
@@ -79,7 +80,7 @@ if __name__ == "__main__":
     # 🆕 Schema v0.81: 数据库迁移
     try:
         db = SessionLocal()
-        from router.scenes import _migrate_schema_v081
+        from router.scene_stream import _migrate_schema_v081
         _migrate_schema_v081(db)
         db.close()
         log.info("✅ Schema v0.81 数据库迁移完成")

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
 import { listScenes, updateScene, deleteScene, Scene, createScene, listMemories, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
 import { ChannelSvg } from './Logo';
+import { showPrompt, showConfirm, showAlert } from '../stores/dialogStore';
 
 const CATEGORIES = [
   { key: 'life', icon: '🌿', label: '生活' },
@@ -114,7 +115,7 @@ export function Sidebar() {
   };
 
   const handleCreateChannel = async () => {
-    const name = prompt('频道名称：');
+    const name = await showPrompt('频道名称：');
     if (!name) return;
     try { await createChannelAndReload(name); } catch (e) { console.error(e); }
   };
@@ -129,7 +130,7 @@ export function Sidebar() {
   };
 
   const handleRenameChannel = async (channelId: string, currentName: string) => {
-    const name = prompt('新名称：', currentName);
+    const name = await showPrompt('新名称：', currentName);
     if (!name) return;
     await updateChannelAndReload(channelId, { name });
     closeMenu();
@@ -141,13 +142,13 @@ export function Sidebar() {
   };
 
   const handleDeleteChannel = async (channelId: string, name: string) => {
-    if (!confirm(`确定删除频道「${name}」？`)) return;
+    if (!await showConfirm(`确定删除频道「${name}」？`)) return;
     await deleteChannelAndReload(channelId);
     closeMenu();
   };
 
   const handleClearChannel = async (channelId: string) => {
-    if (!confirm('确定清空该频道所有聊天记录？')) return;
+    if (!await showConfirm('确定清空该频道所有聊天记录？')) return;
     await clearChannelHistory(channelId);
     closeMenu();
   };
@@ -164,7 +165,7 @@ export function Sidebar() {
   };
 
   const handleRename = async (scene: Scene) => {
-    const name = prompt('新名称：', scene.name);
+    const name = await showPrompt('新名称：', scene.name);
     if (!name) return;
     await updateScene(scene.id, { name });
     await loadWorkshopScenes();
@@ -172,7 +173,8 @@ export function Sidebar() {
   };
 
   const handleDelete = async (scene: Scene) => {
-    if (!confirm(`确定删除场景「${scene.name}」？\\n该场景下的所有数据将被永久删除。`)) return;
+    if (!await showConfirm(`确定删除场景「${scene.name}」？
+该场景下的所有数据将被永久删除。`)) return;
     await deleteScene(scene.id);
     if (currentScene?.id === scene.id) setCurrentScene(null);
     await loadWorkshopScenes();
@@ -527,9 +529,9 @@ export function Sidebar() {
                   {c.count === 0 && (
                     <span className="sidebar-menu-btn" style={{ fontSize: 13, color: '#f85149' }}
                       onClick={async () => {
-                        if (!confirm(`确定删除类别「${c.label}」？`)) return;
+                        if (!await showConfirm(`确定删除类别「${c.label}」？`)) return;
                         try { await deleteCategory(c.name); setCatManageOpen(false); }
-                        catch (e: any) { alert('删除失败: ' + (e.message || '')); }
+                        catch (e: any) { await showAlert('删除失败: ' + (e.message || '')); }
                       }}
                       title="删除"
                     >🗑️</span>
@@ -581,7 +583,7 @@ export function Sidebar() {
                 listCategories().then(setCategories).catch(() => {});
                 setNewCatOpen(false);
                 setCatManageOpen(false);
-              } catch (e: any) { alert('创建失败: ' + (e.message || '')); }
+              } catch (e: any) { await showAlert('创建失败: ' + (e.message || '')); }
               finally { setNewCatCreating(false); }
             }} disabled={newCatCreating || !newCatName.trim()}
               style={{
@@ -624,7 +626,7 @@ export function Sidebar() {
                 await renameCategory(renameTarget.name, renameValue.trim());
                 setRenameOpen(false);
                 setCatManageOpen(false);
-              } catch (e: any) { alert('重命名失败: ' + (e.message || '')); }
+              } catch (e: any) { await showAlert('重命名失败: ' + (e.message || '')); }
               finally { setRenameSaving(false); }
             }} disabled={renameSaving || !renameValue.trim()}
               style={{

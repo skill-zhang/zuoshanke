@@ -179,6 +179,7 @@ def call_llm_with_tools(
     tools: list[dict],
     model: str = "flash",
     temperature: float = 0.3,
+    scene_config: dict | None = None,
 ) -> dict | None:
     """调 DeepSeek API，支持 function calling。
 
@@ -203,6 +204,9 @@ def call_llm_with_tools(
         route_cfg = get_settings("medium")
         _model = DEEPSEEK_MODEL_MAP.get(model, "deepseek-chat")
         temp = route_cfg.get("temperature", temperature)
+        if scene_config and isinstance(scene_config, dict) and "temperature" in scene_config:
+            temp = float(scene_config["temperature"])
+        logger.info(f"[AgentLoop] temperature={temp} (from scene_config={scene_config})")
         mt = route_cfg.get("max_tokens", 8192)
 
         payload = {
@@ -444,6 +448,7 @@ def run_agent_loop(
     initial_messages: Optional[list[dict]] = None,
     dialog_engine=None,  # 🆕 DialogEngine 实例
     scene_id: str = "",  # 🆕 Schema v0.7: 仪表盘场景 ID，提供时自动发射 reflect/pq_update 事件
+    scene_config: dict | None = None,  # 🆕 Schema v1.0: 场景扩展配置（如温度覆盖）
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
@@ -536,7 +541,7 @@ def run_agent_loop(
                     })
 
         # 3a. 调 LLM
-        response = call_llm_with_tools(messages, tools, model=model)
+        response = call_llm_with_tools(messages, tools, model=model, scene_config=scene_config)
 
         if response is None:
             yield {"type": "error", "message": "LLM 调用失败，请检查 API 配置"}

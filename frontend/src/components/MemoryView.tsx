@@ -1,6 +1,7 @@
 /** 🧠 记忆管理全页视图 — 双层卡片：上层按来源聚合，下层按来源展示全部记忆 */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
+import { showConfirm } from '../stores/dialogStore';
 import {
   listMemories, createMemory, deleteMemory,
   reinforceMemory, pinMemory, listMemoryGroups,
@@ -127,7 +128,7 @@ export function MemoryView() {
   };
 
   const handleDelete = async (key: string) => {
-    if (!confirm(`确定删除记忆「${key}」？`)) return;
+    if (!await showConfirm(`确定删除记忆「${key}」？`)) return;
     try {
       await deleteMemory(key);
       setDetailMem(null);

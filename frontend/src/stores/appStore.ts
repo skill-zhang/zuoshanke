@@ -70,11 +70,15 @@ interface AppState {
   deleteActionMapAndReload: (id: string) => Promise<void>;
   generateActionMapAndReload: (thinkNodeId: string) => Promise<void>;
 
-  // ═══ 场景消息 ═══
+  // ═══ 场景消息（分页） ═══
   messages: Message[];
+  messageTotalCount: number;
+  hasOlderMessages: boolean;
+  messagesLoading: boolean;
   currentSessionId: string | null;   // 场景当前会话 ID
   sessions: SceneSession[];          // 历史会话列表
   loadSceneMessages: (sceneId: string) => Promise<void>;
+  loadOlderMessages: (sceneId: string) => Promise<void>;
   sendSceneMsg: (sceneId: string, content: string) => Promise<void>;
   newSceneSession: (sceneId: string) => Promise<string | null>;  // 开始新会话
   batchDeleteMsgs: (ids: string[]) => Promise<void>;             // 批量删除
@@ -92,9 +96,13 @@ interface AppState {
   clearChannelHistory: (id: string) => Promise<void>;
   setCurrentChannel: (c: Channel) => void;
 
-  // ═══ 频道消息 ═══
+  // ═══ 频道消息（分页） ═══
   channelMessages: Message[];
+  channelMessageTotalCount: number;
+  channelHasOlder: boolean;
+  channelMessagesLoading: boolean;
   loadChannelMessages: (channelId: string) => Promise<void>;
+  loadOlderChannelMessages: (channelId: string) => Promise<void>;
   sendChannelMsg: (channelId: string, content: string) => Promise<void>;
 
   // ═══ 流式状态 ═══
@@ -199,7 +207,7 @@ export const useStore = create<AppState>((set, get) => ({
       // 异步提取上一个场景的记忆（fire-and-forget）
       fetch(`/api/scenes/${prev.id}/extract-memory`, { method: 'POST' }).catch(() => {});
     }
-    set({ currentScene: s, messages: [], contextUsage: null, capacityWarning: null });
+    set({ currentScene: s, messages: [], messageTotalCount: 0, hasOlderMessages: false, contextUsage: null, capacityWarning: null });
     if (s) get().loadUserContext(s.id);
   },
   userContext: '',
@@ -401,17 +409,46 @@ export const useStore = create<AppState>((set, get) => ({
     set({ actionMapDrawerOpen: true });
   },
 
-  // ═══ 场景消息 ═══
+  // ═══ 场景消息（分页） ═══
   messages: [],
+  messageTotalCount: 0,
+  hasOlderMessages: false,
+  messagesLoading: false,
   currentSessionId: null,
   sessions: [],
   loadSceneMessages: async (sceneId) => {
     try {
+      set({ messagesLoading: true });
       const sessionId = get().currentSessionId;
-      const msgs = await listSceneMessages(sceneId, sessionId || undefined);
-      set({ messages: msgs });
+      const result = await listSceneMessages(sceneId, sessionId || undefined, 50);
+      set({
+        messages: result.messages,
+        hasOlderMessages: result.has_more,
+        messageTotalCount: result.total,
+        messagesLoading: false,
+      });
     } catch (e) {
       console.error('[store] loadSceneMessages failed:', e);
+      set({ messagesLoading: false });
+    }
+  },
+  loadOlderMessages: async (sceneId) => {
+    const state = get();
+    if (!state.messages.length || !state.hasOlderMessages || state.messagesLoading) return;
+    try {
+      set({ messagesLoading: true });
+      const oldestId = state.messages[0].id;
+      const sessionId = state.currentSessionId;
+      const result = await listSceneMessages(sceneId, sessionId || undefined, 50, oldestId);
+      set({
+        messages: [...result.messages, ...state.messages],
+        hasOlderMessages: result.has_more,
+        messageTotalCount: result.total,
+        messagesLoading: false,
+      });
+    } catch (e) {
+      console.error('[store] loadOlderMessages failed:', e);
+      set({ messagesLoading: false });
     }
   },
   sendSceneMsg: async (sceneId, content) => {
@@ -637,16 +674,44 @@ export const useStore = create<AppState>((set, get) => ({
       set({ channelMessages: [] });
     }
   },
-  setCurrentChannel: (c) => set({ currentChannel: c, channelMessages: [], contextUsage: null, capacityWarning: null }),
+  setCurrentChannel: (c) => set({ currentChannel: c, channelMessages: [], channelMessageTotalCount: 0, channelHasOlder: false, contextUsage: null, capacityWarning: null }),
 
-  // ═══ 频道消息 ═══
+  // ═══ 频道消息（分页） ═══
   channelMessages: [],
+  channelMessageTotalCount: 0,
+  channelHasOlder: false,
+  channelMessagesLoading: false,
   loadChannelMessages: async (channelId) => {
     try {
-      const msgs = await listChannelMessages(channelId);
-      set({ channelMessages: msgs });
+      set({ channelMessagesLoading: true });
+      const result = await listChannelMessages(channelId, 50);
+      set({
+        channelMessages: result.messages,
+        channelHasOlder: result.has_more,
+        channelMessageTotalCount: result.total,
+        channelMessagesLoading: false,
+      });
     } catch (e) {
       console.error('[store] loadChannelMessages failed:', e);
+      set({ channelMessagesLoading: false });
+    }
+  },
+  loadOlderChannelMessages: async (channelId) => {
+    const state = get();
+    if (!state.channelMessages.length || !state.channelHasOlder || state.channelMessagesLoading) return;
+    try {
+      set({ channelMessagesLoading: true });
+      const oldestId = state.channelMessages[0].id;
+      const result = await listChannelMessages(channelId, 50, oldestId);
+      set({
+        channelMessages: [...result.messages, ...state.channelMessages],
+        channelHasOlder: result.has_more,
+        channelMessageTotalCount: result.total,
+        channelMessagesLoading: false,
+      });
+    } catch (e) {
+      console.error('[store] loadOlderChannelMessages failed:', e);
+      set({ channelMessagesLoading: false });
     }
   },
   sendChannelMsg: async (channelId, content) => {
@@ -801,7 +866,7 @@ export const useStore = create<AppState>((set, get) => ({
   newSceneSession: async (sceneId) => {
     try {
       const { session_id } = await apiNewSceneSession(sceneId);
-      set({ currentSessionId: session_id, messages: [] });
+      set({ currentSessionId: session_id, messages: [], messageTotalCount: 0, hasOlderMessages: false });
       // 新会话后刷新会话列表
       get().loadSceneSessions(sceneId);
       return session_id;
@@ -817,7 +882,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   clearSceneMsgs: async (sceneId) => {
     await clearSceneMessages(sceneId);
-    set({ messages: [], currentSessionId: null });
+    set({ messages: [], messageTotalCount: 0, hasOlderMessages: false, currentSessionId: null });
     // 清空后刷新会话列表
     get().loadSceneSessions(sceneId);
   },
@@ -830,7 +895,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   switchSceneSession: (sessionId) => {
-    set({ currentSessionId: sessionId, messages: [], currentToolCards: [] });
+    set({ currentSessionId: sessionId, messages: [], messageTotalCount: 0, hasOlderMessages: false, currentToolCards: [] });
     const state = get();
     if (state.currentScene) {
       state.loadSceneMessages(state.currentScene.id);

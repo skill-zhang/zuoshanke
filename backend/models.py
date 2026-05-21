@@ -461,3 +461,14 @@ class ConfigEntry(Base):
 # - action_edges
 # - action_execution_logs
 # - cross_refs
+
+
+# ═══ 🆕 起居室消息 ═══
+class GardenMessage(Base):
+    """秘密花园聊天消息 — 用户与本体直接在起居室对话"""
+    __tablename__ = "garden_messages"
+
+    id = Column(String, primary_key=True)
+    role = Column(String, nullable=False)  # user | assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=utcnow)

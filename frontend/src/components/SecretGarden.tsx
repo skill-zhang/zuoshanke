@@ -4,9 +4,9 @@
  * 独立于其他管理页面的沉浸空间。
  * 暗色生物荧光风格，暗合中国园林的曲径通幽。
  */
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '../stores/appStore';
-import { getSecretGarden, GardenData } from '../api/client';
+import { getSecretGarden, GardenData, getGardenChatHistory, sendGardenChatMessage, GardenMessageData } from '../api/client';
 
 const MOOD_MAP: Record<string, { emoji: string; label: string; color: string }> = {
   idle:     { emoji: '😌', label: '静候',    color: '#6b9eff' },
@@ -320,6 +320,15 @@ export function SecretGarden() {
   const [navExpanded, setNavExpanded] = useState(false);
   const gardenRef = useRef<HTMLDivElement>(null);
 
+  // 🆕 起居室状态
+  const [chatMessages, setChatMessages] = useState<GardenMessageData[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatStreaming, setChatStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  // 加载聊天历史
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -330,6 +339,48 @@ export function SecretGarden() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // 🆕 加载起居室聊天历史
+  useEffect(() => {
+    setChatLoading(true);
+    getGardenChatHistory()
+      .then(res => { if (res?.data) setChatMessages(res.data); })
+      .catch(() => {})
+      .finally(() => setChatLoading(false));
+  }, []);
+
+  // 🆕 聊天滚动到底部
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [chatMessages, streamingContent]);
+
+  // 🆕 发送消息
+  const handleChatSend = useCallback(async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatStreaming) return;
+    setChatInput('');
+    setChatStreaming(true);
+    setStreamingContent('');
+    // 临时添加用户消息
+    const tempId = `temp-${Date.now()}`;
+    setChatMessages(prev => [...prev, { id: tempId, role: 'user', content: msg, created_at: null }]);
+    try {
+      const full = await sendGardenChatMessage(msg, (text) => {
+        setStreamingContent(prev => prev + text);
+      });
+      // 添加 AI 回复到历史
+      setChatMessages(prev => [...prev, { id: `resp-${Date.now()}`, role: 'assistant', content: full, created_at: null }]);
+      // 刷新历史以获取真实 ID
+      getGardenChatHistory().then(res => { if (res?.data) setChatMessages(res.data); }).catch(() => {});
+    } catch {
+      setChatMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'assistant', content: '（起居室暂时安静了…）', created_at: null }]);
+    } finally {
+      setChatStreaming(false);
+      setStreamingContent('');
+    }
+  }, [chatInput, chatStreaming]);
 
   // 加载状态
   if (loading) {
@@ -385,6 +436,7 @@ export function SecretGarden() {
             <a href="#garden-growth" onClick={() => { setNavExpanded(false); }}>🌳 成长年轮</a>
             <a href="#garden-milestones" onClick={() => { setNavExpanded(false); }}>✨ 协作金石</a>
             <a href="#garden-inner" onClick={() => { setNavExpanded(false); }}>🗺️ 内在风景</a>
+            <a href="#garden-chat" onClick={() => { setNavExpanded(false); }}>🛋️ 起居室</a>
           </div>
         </div>
       )}
@@ -527,6 +579,50 @@ export function SecretGarden() {
         <div className="garden-footer">
           <span className="garden-updated">🌙 花园静谧 · 万物生长</span>
         </div>
+
+        {/* ═══ 🆕 区域⑥ 起居室聊天 ═══ */}
+        <section id="garden-chat" className="garden-section" style={{ marginBottom: 40 }}>
+          <h2 className="garden-section-title">
+            🛋️ 起居室
+            <span className="garden-section-count">与本体对话</span>
+          </h2>
+          <div className="garden-chat-container">
+            <div className="garden-chat-messages" ref={chatRef}>
+              {chatMessages.length === 0 && !chatLoading && (
+                <div className="garden-chat-empty">
+                  坐山客在此静候。你可以问它任何问题——关于它自己、关于记忆、关于你。
+                </div>
+              )}
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`garden-chat-msg garden-chat-msg-${msg.role}`}>
+                  <div className="garden-chat-msg-role">
+                    {msg.role === 'user' ? '你' : '坐山客'}
+                  </div>
+                  <div className="garden-chat-msg-content">{msg.content}</div>
+                </div>
+              ))}
+              {chatStreaming && (
+                <div className="garden-chat-msg garden-chat-msg-assistant">
+                  <div className="garden-chat-msg-role">坐山客</div>
+                  <div className="garden-chat-msg-content">{streamingContent}</div>
+                </div>
+              )}
+            </div>
+            <div className="garden-chat-input-row">
+              <input
+                className="garden-chat-input"
+                placeholder="和坐山客聊聊…"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !chatStreaming) handleChatSend(); }}
+                disabled={chatStreaming}
+              />
+              <button className="garden-chat-send" onClick={handleChatSend} disabled={chatStreaming || !chatInput.trim()}>
+                {chatStreaming ? '…' : '➤'}
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

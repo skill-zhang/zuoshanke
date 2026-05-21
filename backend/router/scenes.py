@@ -32,7 +32,7 @@ from agent_core.token_counter import (
     estimate_messages_tokens, get_context_length_from_route,
     context_usage_str, progress_bar,
 )
-from utils import make_id, utcnow
+from utils import make_id, utcnow, iso_utc
 from router.shared import sse_event, sse_response
 
 router = APIRouter(tags=["场景"])
@@ -299,6 +299,8 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
         scene.converge_enabled = data.converge_enabled
     if data.diverge_min_rounds is not None:
         scene.diverge_min_rounds = data.diverge_min_rounds
+    if data.scene_config is not None:
+        scene.scene_config = data.scene_config
     scene.updated_at = utcnow()
     db.commit()
     db.refresh(scene)
@@ -403,7 +405,7 @@ def list_scene_sessions(scene_id: str, db: Session = Depends(get_db)):
         .all()
     )
     return [
-        {"session_id": r[0], "last_active": r[1].isoformat() if r[1] else None, "message_count": r[2]}
+        {"session_id": r[0], "last_active": iso_utc(r[1]) if r[1] else None, "message_count": r[2]}
         for r in rows
     ]
 

@@ -19,7 +19,9 @@ router = APIRouter(tags=["思维导图"])
 
 @router.get("/api/scenes/{scene_id}/thinking-map", response_model=ThinkingMapOut)
 def get_thinking_map(scene_id: str, db: Session = Depends(get_db)):
-    _get_scene_or_404(db, scene_id)
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(404, "场景不存在")
     tmap = db.query(ThinkingMap).filter(ThinkingMap.scene_id == scene_id).first()
     if not tmap:
         raise HTTPException(404, "Thinking Map 不存在")

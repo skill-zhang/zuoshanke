@@ -39,6 +39,8 @@ export const createScene = (name: string, opts?: { icon?: string; description?: 
 export const updateScene = (sceneId: string, data: {
   name?: string; pinned?: boolean; user_context?: string | null;
   icon?: string | null; description?: string; category?: string; guide_text?: string | null;
+  converge_threshold?: number; converge_enabled?: boolean; diverge_min_rounds?: number;
+  scene_config?: Record<string, any>;
 }) =>
   request<Scene>(`/scenes/${sceneId}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteScene = (id: string) =>
@@ -134,9 +136,20 @@ export interface Message {
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
-export const listSceneMessages = (sceneId: string, sessionId?: string) => {
-  const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
-  return request<Message[]>(`/scenes/${sceneId}/messages${params}`);
+/** 分页消息结果 */
+export interface PaginatedMessages {
+  messages: Message[];
+  has_more: boolean;
+  total: number;
+}
+
+export const listSceneMessages = (sceneId: string, sessionId?: string, limit?: number, beforeId?: string) => {
+  const params = new URLSearchParams();
+  if (sessionId) params.set('session_id', sessionId);
+  if (limit) params.set('limit', String(limit));
+  if (beforeId) params.set('before_id', beforeId);
+  const qs = params.toString();
+  return request<PaginatedMessages>(`/scenes/${sceneId}/messages${qs ? '?' + qs : ''}`);
 };
 export const deleteMessage = (messageId: string) =>
   request(`/messages/${messageId}`, { method: 'DELETE' });
@@ -216,8 +229,13 @@ export const clearChannelMessages = (channelId: string) =>
   request(`/channels/${channelId}/messages`, { method: 'DELETE' });
 export const sendChannelMessage = (channelId: string, content: string) =>
   request<Message>(`/channels/${channelId}/messages`, { method: 'POST', body: JSON.stringify({ content }) });
-export const listChannelMessages = (channelId: string) =>
-  request<Message[]>(`/channels/${channelId}/messages`);
+export const listChannelMessages = (channelId: string, limit?: number, beforeId?: string) => {
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  if (beforeId) params.set('before_id', beforeId);
+  const qs = params.toString();
+  return request<PaginatedMessages>(`/channels/${channelId}/messages${qs ? '?' + qs : ''}`);
+};
 
 
 // ═══ 流式 SSE 类型 ═══
@@ -676,7 +694,7 @@ export interface GardenData {
   observation: string;
   memory_garden: {
     total: number;
-    items: { content: string; key: string; weight: number; level: number; created_at: string | null }[];
+    items: { content: string; key: string; weight: number; level: number; is_narrative: boolean; is_immortal: boolean; correction_count: number; created_at: string | null }[];
   };
   growth: {
     scenes: number;
@@ -691,3 +709,44 @@ export interface GardenData {
 }
 
 export const getSecretGarden = () => request<GardenData>('/zhu-agent/garden');
+
+// 🆕 起居室 SSE 聊天
+export interface GardenMessageData {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string | null;
+}
+
+export const getGardenChatHistory = () =>
+  request<{ success: boolean; data: GardenMessageData[] }>('/zhu-agent/garden/chat/history');
+
+export const sendGardenChatMessage = (
+  message: string,
+  onToken: (text: string) => void
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/zhu-agent/garden/chat/stream', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.responseType = 'text';
+    let full = '';
+    let lastIndex = 0;
+    xhr.onprogress = () => {
+      const chunk = xhr.responseText.slice(lastIndex);
+      lastIndex = xhr.responseText.length;
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const d = JSON.parse(line.slice(6));
+          if (d.text) { full += d.text; onToken(d.text); }
+        } catch { /* ignore */ }
+        if (line.includes('"type":"done"') || line.includes('"event":"done"')) {
+          resolve(full);
+        }
+      }
+    };
+    xhr.onerror = () => reject(new Error('garden chat error'));
+    xhr.send(JSON.stringify({ message }));
+  });
+};

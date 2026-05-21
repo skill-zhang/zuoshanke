@@ -1,6 +1,7 @@
 /** ActionMapDrawer — Action Map 列表 + React Flow 详情视图 + Hermes 日志面板 + 执行记录 + 工具查看 */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '../stores/appStore';
+import { showConfirm } from '../stores/dialogStore';
 import { generateActionMapStream, executeActionMapStream, getActionMapLogs, getToolSkill, type ExecuteStreamEvent, type ActionExecutionLog } from '../api/client';
 import ActionMapView from './ActionMapView';
 
@@ -377,7 +378,7 @@ export function ActionMapDrawer() {
                             style={{ fontSize: '12px', padding: '3px 10px', background: 'rgba(88,166,255,0.08)', borderColor: '#58a6ff', color: '#58a6ff', opacity: generatingNodeId ? 0.5 : 1 }}
                             onClick={() => handleGenerate(m.think_node_id)}>🔄 重新生成</button>
                           <button className="btn" style={{ fontSize: '12px', padding: '3px 10px', background: 'rgba(248,81,73,0.08)', borderColor: '#f85149', color: '#f85149' }}
-                            onClick={() => { if (confirm(`删除 "${m.title}"？`)) deleteActionMapAndReload(m.id); }}>🗑 删除</button>
+                            onClick={async () => { if (await showConfirm(`删除 "${m.title}"？`)) deleteActionMapAndReload(m.id); }}>🗑 删除</button>
                         </div>
                       </div>
                     );

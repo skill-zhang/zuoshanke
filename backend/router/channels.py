@@ -8,7 +8,7 @@ from database import get_db, SessionLocal
 from models import Channel, Message
 from schemas import ChannelCreate, ChannelUpdate, ChannelOut, MessageCreate, MessageOut
 from ai_engine import ai_channel_chat, ai_channel_chat_stream
-from utils import make_id, utcnow
+from utils import make_id, utcnow, iso_utc
 from router.shared import sse_event, sse_response
 from agent_core.memory_extractor import MemoryExtractor
 from logger import get_logger as _get_logger
@@ -144,7 +144,7 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
 
         # 1. 用户消息
         yield sse_event("user_msg", id=user_msg.id, role="user",
-                        content=user_msg.content, created_at=user_msg.created_at.isoformat())
+                        content=user_msg.content, created_at=iso_utc(user_msg.created_at))
 
         # 2. 模型信息
         route_cfg = _get_route_cfg("channel")
@@ -241,7 +241,7 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
             new_db.commit()
             new_db.refresh(ai_msg)
             yield sse_event("done", id=ai_msg.id, role="ai", content=clean_content,
-                            created_at=ai_msg.created_at.isoformat(),
+                            created_at=iso_utc(ai_msg.created_at),
                             model=model_name)
 
             # ── 自动提取记忆（双通道） ──
