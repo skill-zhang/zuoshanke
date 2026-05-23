@@ -267,8 +267,35 @@ result = dial_assert("http://localhost:5173/scenes",
 |----|------|------|
 | 浏览器引擎 | Playwright (Chromium headless) | 成熟、Python 原生、pip install 即可 |
 | 截图分析 | `tools/analyze_image.py`（已有 Qwen 视觉） | 截图后丢给视觉模型做「人工复查」 |
-| 安装 | `pip install playwright` + `playwright install chromium` | 一行安装 |
+| 安装 | `pip install playwright` + 手动下载国内镜像（见下文） | 默认 CDN 被墙，需国内 mirror |
 | 后端集成 | FastAPI 后台异步执行 | 拨测可能耗时 2-5 秒，不阻塞主线程 |
+
+**国内安装 Playwright 浏览器**：默认 CDN `playwright.azureedge.net` → `storage.googleapis.com` 被墙。
+从 npmmirror 下载旧版 headless-shell 1155：
+```bash
+wget -O /tmp/hs.zip "https://cdn.npmmirror.com/binaries/playwright/builds/chromium-headless-shell/1155/chromium-headless-shell-linux.zip"
+# 解压改名到 Playwright 期望路径
+python3 -c "
+import zipfile, os, shutil
+dst = os.path.expanduser('~/.cache/ms-playwright/chromium_headless_shell-1223')
+os.makedirs(dst, exist_ok=True)
+with zipfile.ZipFile('/tmp/hs.zip') as z: z.extractall('/tmp/hs-extract')
+shutil.move('/tmp/hs-extract/chrome-linux', dst + '/chrome-headless-shell-linux64')
+os.rename(dst + '/chrome-headless-shell-linux64/headless_shell',
+          dst + '/chrome-headless-shell-linux64/chrome-headless-shell')
+os.chmod(dst + '/chrome-headless-shell-linux64/chrome-headless-shell', 0o755)
+shutil.rmtree('/tmp/hs-extract')
+"
+```
+**注意**：安装后要清除残留的 `playwright install` 进程防止它们清掉文件。
+验证：`python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); p.chromium.launch().close(); p.stop()"`
+
+#### 3.3.5 修复记录：Console 日志捕获
+
+2026-05-23: `dial_test()` 原来通过 `window.__zuoshanke_console_errors` 读 console，但这个变量从未设置。修复：
+1. 导航前 `page.on("console")` 收集所有 console.error/warning
+2. 增加 `page.on("pageerror")` 捕获未捕获的 JS 运行时异常（如 `undefinedVar is not defined`）
+3. 移除失效的 `_collect_console_logs()`
 
 **接口详情**见 `docs/references/browser-dial-test-api.md`，包含：
 - Pydantic 响应模型（`DialTestReport` / `DialStyleReport` / `DialAssertResult`）
