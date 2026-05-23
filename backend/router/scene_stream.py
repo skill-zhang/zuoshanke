@@ -492,6 +492,16 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                         else:
                             children = []
                         yield sse_event("child:done", children=children)
+                        # 🆕 持久化到 DB
+                        try:
+                            from router.delegate_results import save_delegate_results
+                            save_delegate_results(
+                                scene_id=scene_id, children=children, db=db,
+                                session_id=data.session_id,
+                                parent_message_id=getattr(user_msg, 'id', None),
+                            )
+                        except Exception as e:
+                            pass  # 持久化失败不影响主流程
                     yield sse_event("tool_status", tool=event["tool"], status="done",
                                     success=True, message="已完成")
                     agent_tool_results.append({

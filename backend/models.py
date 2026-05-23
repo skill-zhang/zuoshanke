@@ -525,6 +525,23 @@ class ConfigEntry(Base):
 # - cross_refs
 
 
+# ═══ 🆕 子 Agent 执行结果 ═══
+class DelegateResult(Base):
+    """子 Agent 执行结果 — 持久化到 DB，供前端独立展示"""
+    __tablename__ = "delegate_results"
+
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    session_id = Column(String, nullable=True)              # 关联会话 ID
+    parent_message_id = Column(String, nullable=True)       # 触发 delegate_task 的消息 ID
+    task = Column(String(500), nullable=False)              # 任务目标
+    status = Column(String(20), nullable=False)             # success / error / timeout
+    summary = Column(Text, default="")                      # 结果摘要
+    steps = Column(Integer, default=0)                      # 执行步数
+    error = Column(String(500), nullable=True)              # 错误信息
+    created_at = Column(DateTime, default=utcnow)
+
+
 # ═══ 🆕 起居室消息 ═══
 class GardenMessage(Base):
     """秘密花园聊天消息 — 用户与本体直接在起居室对话"""

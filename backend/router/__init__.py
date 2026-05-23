@@ -18,6 +18,7 @@ from router.sessions import router as sessions_router             # 🆕 Schema 
 from router.outputs import router as outputs_router                # 🆕 产出成果
 from router.garden_chat import router as garden_chat_router          # 🆕 起居室
 from router.clarify_router import router as clarify_router           # 🆕 自开发场景 Clarify
+from router.delegate_results import router as delegate_results_router  # 🆕 子 Agent 成果展示
 
 
 def register_all_routers(app: FastAPI):
@@ -39,3 +40,4 @@ def register_all_routers(app: FastAPI):
     app.include_router(outputs_router)     # 🆕 产出成果
     app.include_router(garden_chat_router)  # 🆕 起居室
     app.include_router(clarify_router)      # 🆕 自开发场景 Clarify
+    app.include_router(delegate_results_router)  # 🆕 子 Agent 成果展示

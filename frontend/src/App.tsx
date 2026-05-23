@@ -11,6 +11,7 @@ import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
 import { CapabilityVerify } from './components/CapabilityVerify';
 import { OutputGalleryView } from './components/OutputGalleryView';
+import { DelegateResultsView } from './components/DelegateResultsView';
 import { SecretGarden } from './components/SecretGarden';
 import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
@@ -247,6 +248,7 @@ export default function App() {
       case 'plaza': return '🏪 场景广场';
       case 'workshop': return '🛠 工坊';
       case 'secret-garden': return '🌸 秘密花园';
+      case 'delegate-results': return '🧩 子 Agent 成果';
       case 'dashboard': return '📊 仪表盘';
       case 'chat':
         if (currentScene) return `${currentScene.icon || '📦'} ${currentScene.name}`;
@@ -290,6 +292,8 @@ export default function App() {
           <MemoryView />
         ) : view === 'outputs' ? (
           <OutputGalleryView />
+        ) : view === 'delegate-results' ? (
+          <DelegateResultsView />
         ) : view === 'secret-garden' ? (
           <SecretGarden />
         ) : (
