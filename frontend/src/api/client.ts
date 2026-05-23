@@ -754,3 +754,64 @@ export const sendGardenChatMessage = (
     xhr.send(JSON.stringify({ message }));
   });
 };
+
+// ═══ Schema v1.1: Session 管理 ═══
+export interface WebSession {
+  id: string;
+  context_type: string;
+  context_id: string;
+  context_name: string | null;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  last_active_at: string | null;
+  duration_seconds: number | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  reasoning_tokens: number;
+  api_calls: number;
+  estimated_cost_usd: number;
+  cost_status: string;
+  cost_source: string | null;
+}
+
+/** 创建或激活 Web session（sidebar 点击时调用） */
+export const activateSession = (contextType: string, contextId: string, contextName?: string) =>
+  request<WebSession>('/sessions/activate', {
+    method: 'POST',
+    body: JSON.stringify({ context_type: contextType, context_id: contextId, context_name: contextName }),
+  });
+
+/** 获取指定上下文的活跃 session */
+export const getActiveSession = (contextType: string, contextId: string) =>
+  request<WebSession | null>(`/sessions/active?context_type=${encodeURIComponent(contextType)}&context_id=${encodeURIComponent(contextId)}`);
+
+/** 刷新 session 的 last_active_at */
+export const touchSession = (sessionId: string) =>
+  request<{ ok: boolean }>(`/sessions/${sessionId}/touch`, { method: 'POST' });
+
+/** 累加 token 用量 */
+export const accumulateTokens = (sessionId: string, data: {
+  prompt_tokens?: number; completion_tokens?: number; total_tokens?: number;
+  input_tokens?: number; output_tokens?: number; cache_read_tokens?: number;
+  cache_write_tokens?: number; reasoning_tokens?: number; api_calls?: number;
+  estimated_cost_usd?: number; cost_status?: string; cost_source?: string | null;
+}) =>
+  request<{ ok: boolean }>(`/sessions/${sessionId}/token`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+/** 列出 Web session */
+export const listSessions = (contextType?: string, status?: string) => {
+  const qs = new URLSearchParams();
+  if (contextType) qs.set('context_type', contextType);
+  if (status) qs.set('status', status);
+  const q = qs.toString();
+  return request<WebSession[]>(`/sessions${q ? '?' + q : ''}`);
+};

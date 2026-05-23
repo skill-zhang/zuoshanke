@@ -139,6 +139,13 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
     # 获取历史（在 session 关闭前）
     history_dicts = _get_channel_history(db, channel_id)
 
+    # 🆕 Schema v1.1: 确保 Web session 存在并更新 last_active_at
+    from router.scene_stream import _ensure_web_session
+    ws = _ensure_web_session(db, "channel", channel_id, channel.name)
+    ws.last_active_at = utcnow()
+    ws.updated_at = utcnow()
+    db.commit()
+
     def generate():
         # 🆕 Schema v0.8: 本体观察 — 频道对话启动
         from agent_core.zhu_agent import ZhuAgentManager
@@ -259,6 +266,23 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
                     print(f"[memory] channel extract: {json.dumps(mem_results, ensure_ascii=False)}")
             except Exception as e:
                 print(f"[memory] channel extract error: {e}")
+
+            # 🆕 Schema v1.1: 累加 token 用量
+            from models import WebSession as _WS
+            _ws = db.query(_WS).filter(
+                _WS.context_type == "channel",
+                _WS.context_id == channel_id,
+                _WS.status == "active",
+            ).first()
+            if _ws:
+                _ws.prompt_tokens += total_tokens
+                _ws.completion_tokens += estimate_messages_tokens([{"role": "assistant", "content": clean_content}])
+                _ws.total_tokens = _ws.prompt_tokens + _ws.completion_tokens
+                _ws.api_calls += 1
+                _ws.last_active_at = utcnow()
+                _ws.updated_at = utcnow()
+                db.commit()
+
         except Exception as e:
             _log.error(f"[channel stream save error] {e}")
             yield sse_event("error", message="AI 回复保存失败")

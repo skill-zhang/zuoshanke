@@ -197,15 +197,56 @@ _MAX_WORKERS = 3  # 最大并行子 Agent 数
 _CHILD_TIMEOUT = 300  # 每个子 Agent 超时秒数
 
 
-def _run_single_child(task_goal: str, task_context: str, tools: list[dict], model: str) -> dict:
-    """运行单个子 Agent，返回结构化结果"""
-    full_task = task_goal
-    if task_context:
-        full_task = f"{task_goal}\n\n上下文:\n{task_context}"
+def _build_child_prompt(task: dict) -> str:
+    """构建子 Agent 的完整 prompt（L1 任务层 + L2 契约层 + L3 项目层）
 
-    result = _run_loop_blocking(full_task, tools=tools, model=model)
+    设计文档 §5.2：
+      三层 Context 共享策略确保子 Agent 拿到所需信息但不会接触无关上下文。
+    """
+    parts = []
+
+    # L1: 任务层
+    parts.append(f"## 任务\n{task.get('goal', '')}\n")
+    if task.get("context"):
+        parts.append(f"## 上下文\n{task['context']}\n")
+
+    # L2: 契约层（如有共享契约文件）
+    if task.get("contract_path"):
+        parts.append(
+            f"## 接口契约\n"
+            f"请参照 {task['contract_path']} 中的定义实现接口。\n"
+            f"契约文件定义了 API 端点、数据模型和模块边界，是你的核心参照。\n"
+        )
+
+    # L3: 项目层
+    if task.get("project_rules"):
+        parts.append(f"## 项目约定\n{task['project_rules']}\n")
+
+    # 身份声明
+    parts.append(
+        "## 身份\n"
+        "你是坐山客派出的开发子 Agent。\n"
+        "你不知道其他子 Agent 的存在，按本任务的 goal 专注完成自己的工作。\n"
+        "完成工作后汇报结果摘要，不要自行扩展任务范围。\n"
+        "如果你需要用户决策，请自行做一个合理的选择——你不能问用户。"
+    )
+
+    return "\n".join(parts)
+
+
+def _run_single_child(task: dict, tools: list[dict], model: str) -> dict:
+    """运行单个子 Agent，返回结构化结果
+
+    task 支持字段：
+        goal: str — 任务目标（必需）
+        context: str — 上下文信息
+        contract_path: str — 共享契约文件路径（L2）
+        project_rules: str — 项目约定规范（L3）
+    """
+    child_prompt = _build_child_prompt(task)
+    result = _run_loop_blocking(child_prompt, tools=tools, model=model)
     return {
-        "task": task_goal,
+        "task": task.get("goal", ""),
         "status": "success" if result.get("success") else "error",
         "summary": result.get("summary", ""),
         "steps": result.get("steps", 0),
@@ -240,8 +281,7 @@ def run_delegate_tasks(
     if len(tasks) == 1:
         # 单任务 → 直接在当前线程执行
         r = _run_single_child(
-            tasks[0].get("goal", ""),
-            tasks[0].get("context", ""),
+            tasks[0],
             child_tools,
             model,
         )
@@ -253,8 +293,7 @@ def run_delegate_tasks(
             for task in tasks:
                 fut = pool.submit(
                     _run_single_child,
-                    task.get("goal", ""),
-                    task.get("context", ""),
+                    task,
                     child_tools,
                     model,
                 )
@@ -296,14 +335,17 @@ def run_delegate_tasks(
 
 
 def run_delegate_single(
-    goal: str,
-    context: str = "",
+    task: dict,
     tools: list[dict] | None = None,
     model: str = "flash",
 ) -> str:
     """单个子任务模式（便捷接口）
 
+    Args:
+        task: 任务 dict，含 goal/context/contract_path/project_rules
+        tools: 子 Agent 可用的工具列表
+
     Returns:
         JSON 字符串: [{"task": ..., "status": ..., "summary": ..., ...}]
     """
-    return run_delegate_tasks([{"goal": goal, "context": context}], tools, model)
+    return run_delegate_tasks([task], tools, model)

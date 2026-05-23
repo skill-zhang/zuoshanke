@@ -239,7 +239,7 @@ class TestDelegateEngine(unittest.TestCase):
                 "summary": "后端模块完成",
                 "steps": 3,
             }
-            result_str = run_delegate_single("实现后端API", "参照 INTERFACE.md")
+            result_str = run_delegate_single({"goal": "实现后端API", "context": "参照 INTERFACE.md"})
             results = json.loads(result_str)
 
         self.assertEqual(len(results), 1)

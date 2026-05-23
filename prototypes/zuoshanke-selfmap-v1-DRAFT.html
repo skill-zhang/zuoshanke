@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 — 自省地图原型</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #020617;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+header {
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #22d3ee, #34d399);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.desc {
+  color: #64748b;
+  font-size: 12px;
+}
+.desc em { color: #94a3b8; font-style: normal; }
+
+/* Breadcrumb */
+.breadcrumb {
+  background: #0f172a;
+  padding: 8px 24px;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  flex-shrink: 0;
+  min-height: 36px;
+}
+.breadcrumb span { color: #64748b; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
+.breadcrumb span:hover { color: #22d3ee; background: rgba(34,211,238,0.1); }
+.breadcrumb .sep { color: #334155; cursor: default; padding: 0; }
+.breadcrumb span.active { color: #34d399; font-weight: 600; }
+
+/* Main map area */
+#map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#map-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Level indicator */
+.level-badge {
+  position: absolute;
+  top: 12px; right: 16px;
+  background: rgba(30,41,59,0.8);
+  border: 1px solid #1e293b;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+/* View toggle */
+.view-toggle {
+  display: flex;
+  gap: 0;
+  margin-left: auto;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.view-btn {
+  background: #0f172a;
+  color: #64748b;
+  border: none;
+  padding: 5px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.view-btn.active { background: rgba(34,211,238,0.15); color: #22d3ee; }
+.view-btn:hover:not(.active) { color: #94a3b8; }
+.view-btn + .view-btn { border-left: 1px solid #1e293b; }
+
+/* Node styles */
+.node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1.5px solid;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  text-align: center;
+  padding: 8px;
+}
+.node:hover {
+  filter: brightness(1.3);
+  transform: scale(1.04);
+  z-index: 10 !important;
+}
+.node .icon { font-size: 20px; margin-bottom: 4px; line-height: 1; }
+.node .label { font-size: 11px; font-weight: 500; line-height: 1.3; }
+.node .sublabel { font-size: 9px; color: #64748b; margin-top: 2px; line-height: 1.2; }
+.node .token { font-size: 8px; color: #475569; margin-top: 2px; }
+.node .status-dot {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+
+/* Node types */
+.node-frontend { background: rgba(8,51,68,0.4); border-color: #22d3ee; }
+.node-backend { background: rgba(6,78,59,0.4); border-color: #34d399; }
+.node-database { background: rgba(76,29,149,0.4); border-color: #a78bfa; }
+.node-external { background: rgba(30,41,59,0.5); border-color: #94a3b8; }
+.node-message { background: rgba(251,146,60,0.3); border-color: #fb923c; }
+.node-process { background: rgba(30,41,59,0.5); border-color: #64748b; }
+.node-layer { background: rgba(6,78,59,0.35); border-color: #34d399; }
+.node-highlight { background: rgba(34,211,238,0.12); border-color: #22d3ee; }
+.node-arrow { border: none; background: none; cursor: default; }
+.node-arrow:hover { transform: none; filter: none; }
+
+/* Arrow SVG layer */
+#arrows-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+#arrows-layer svg { width: 100%; height: 100%; }
+
+/* Grid background */
+#grid-bg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.3;
+}
+
+/* Info panel */
+#info-panel {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15,23,42,0.92);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 12px;
+  color: #94a3b8;
+  max-width: 500px;
+  text-align: center;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+#info-panel strong { color: #e2e8f0; }
+
+/* Transition effect */
+.fade-enter { opacity: 0; transform: scale(0.95); }
+.fade-enter-active { opacity: 1; transform: scale(1); }
+
+/* Connection labels */
+.conn-label {
+  position: absolute;
+  font-size: 8px;
+  color: #475569;
+  pointer-events: none;
+  z-index: 2;
+  text-align: center;
+}
+
+/* SVG chevron/down indicator on drillable nodes */
+.drill-icon {
+  position: absolute;
+  bottom: 4px; right: 6px;
+  font-size: 8px;
+  color: #475569;
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .node .icon { font-size: 16px; }
+  .node .label { font-size: 9px; }
+  .node .sublabel { font-size: 8px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛰️ 坐山客 · 自省地图</h1>
+  <span class="desc">系统架构层 → 业务流程层 → 实现细节层 · <em>点击节点钻取</em></span>
+  <div class="view-toggle">
+    <button class="view-btn active" data-mode="flow" onclick="setViewMode('flow')">流程图</button>
+    <button class="view-btn" data-mode="arch" onclick="setViewMode('arch')">架构图</button>
+  </div>
+</header>
+
+<div class="breadcrumb" id="breadcrumb">
+  <span onclick="navigateTo('root')">🌐 系统总览</span>
+</div>
+
+<div id="map-container">
+  <svg id="grid-bg"><defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+  </defs><rect width="100%" height="100%" fill="url(#grid)"/></svg>
+
+  <div id="map-canvas"></div>
+  <div id="arrows-layer"><svg><defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-hl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee"/>
+    </marker>
+  </defs></svg></div>
+
+  <div class="level-badge" id="level-badge">L1 · 架构总览</div>
+  <div id="info-panel">🖱️ 点击任意模块钻取查看内部流程</div>
+</div>
+
+<script>
+// ═══ 地图数据 ═══
+
+const views = {};
+
+// ── L0: 根节点（系统总览） ──
+views.root = {
+  level: 'L1', label: '架构总览',
+  nodes: [
+    { id:'fe', x:100, y:30,  w:140, h:70, type:'frontend', icon:'🖥️', label:'前端', sub:'React + Zustand', drill:true, view:'frontend' },
+    { id:'gw', x:320, y:30,  w:140, h:70, type:'message',  icon:'📨', label:'网关', sub:'微信 / Telegram', drill:true, view:'gateway' },
+    { id:'be', x:560, y:30,  w:180, h:80, type:'backend',  icon:'⚙️', label:'后端 API', sub:'FastAPI + Agent Core', drill:true, view:'backend' },
+    { id:'llm', x:820, y:30,  w:150, h:70, type:'external', icon:'🧠', label:'LLM 引擎', sub:'DeepSeek / Qwen' },
+
+    { id:'ctx', x:560, y:145, w:180, h:70, type:'layer',    icon:'📐', label:'Context 组合器', sub:'7 层精炼架构', drill:true, view:'context' },
+    { id:'mem', x:320, y:145, w:140, h:70, type:'database', icon:'💾', label:'记忆系统', sub:'Memory Cache + Pool', drill:true, view:'memory' },
+    { id:'ses', x:100, y:145, w:140, h:70, type:'process',  icon:'🔄', label:'Session 管理', sub:'Web + Gateway', drill:true, view:'session' },
+
+    { id:'db',  x:100, y:260, w:140, h:70, type:'database', icon:'🗄️', label:'SQLite', sub:'主存储' },
+    { id:'map', x:320, y:260, w:140, h:70, type:'process',  icon:'🗺️', label:'Thinking Map', sub:'发散 + 收敛 + 排序', drill:true, view:'thinkingmap' },
+    { id:'am',  x:560, y:260, w:140, h:70, type:'process',  icon:'🎯', label:'Action Map', sub:'可执行路径', drill:true, view:'actionmap' },
+    { id:'ext', x:740, y:260, w:140, h:70, type:'process',  icon:'🧪', label:'提取器', sub:'记忆 / 约束 / Diff', drill:true, view:'extractors' },
+  ],
+  arrows: [
+    { from:'fe',  to:'be',  label:'API 调用' },
+    { from:'fe',  to:'gw',  label:'WebSocket' },
+    { from:'gw',  to:'be',  label:'消息路由' },
+    { from:'be',  to:'llm', label:'LLM 请求' },
+    { from:'be',  to:'ctx', label:'上下文构建' },
+    { from:'ctx', to:'llm', label:'组合后 prompt' },
+    { from:'be',  to:'mem', label:'读写记忆' },
+    { from:'be',  to:'ses', label:'session CRUD' },
+    { from:'be',  to:'db',  label:'持久化' },
+    { from:'be',  to:'map', label:'图谱操作' },
+    { from:'be',  to:'am',  label:'行动计划' },
+    { from:'be',  to:'ext', label:'异步提取' },
+  ],
+  info: '🌐 坐山客系统整体架构 · 点击任意模块钻取内部流程',
+};
+
+// ── Context 组合器（L2） ──
+views.context = {
+  level: 'L2', label: 'Context 组合流程',
+  parent: 'root',
+  nodes: [
+    { id:'msg', x:50,  y:20,  w:110, h:50, type:'highlight', icon:'💬', label:'用户消息', sub:'' },
+    { id:'p1',  x:50,  y:100, w:180, h:46, type:'layer',    icon:'1', label:'Prompt Layer',  sub:'系统 prompt + 场景设定',  token:'2.4K' },
+    { id:'p2',  x:250, y:100, w:180, h:46, type:'layer',    icon:'2', label:'Memory Layer',  sub:'Top-5 记忆注入',       token:'1.8K', drill:true, view:'memory-inject' },
+    { id:'p3',  x:450, y:100, w:180, h:46, type:'layer',    icon:'3', label:'Document Layer', sub:'关联文档摘要',         token:'3.2K' },
+    { id:'p4',  x:50,  y:175, w:180, h:46, type:'layer',    icon:'4', label:'Config Layer',   sub:'scene_config + 约束',  token:'0.5K' },
+    { id:'p5',  x:250, y:175, w:180, h:46, type:'layer',    icon:'5', label:'Skill Layer',    sub:'工具注册列表',          token:'1.2K', drill:true, view:'tools' },
+    { id:'p6',  x:450, y:175, w:180, h:46, type:'layer',    icon:'6', label:'History Layer',  sub:'当前 session 历史',     token:'4.6K' },
+    { id:'p7',  x:650, y:175, w:140, h:46, type:'layer',    icon:'7', label:'Work Output',   sub:'上一轮产出',            token:'1.5K' },
+    { id:'cmp', x:380, y:255, w:200, h:56, type:'backend',  icon:'🔀', label:'Context Composer', sub:'7 层合并 + 权重排序', token:'15.2K' },
+    { id:'llm2',x:380, y:335, w:160, h:50, type:'external', icon:'🧠', label:'LLM', sub:'模型推理' },
+  ],
+  arrows: [
+    { from:'msg', to:'p1', hl:true },
+    { from:'p1',  to:'p2', hl:true },
+    { from:'p2',  to:'p3', hl:true },
+    { from:'p3',  to:'p4' },
+    { from:'p4',  to:'p5' },
+    { from:'p5',  to:'p6' },
+    { from:'p6',  to:'p7' },
+    { from:'p7',  to:'cmp', hl:true },
+    { from:'cmp', to:'llm2', hl:true, label:'15.2K tokens' },
+  ],
+  info: '📐 Context 组合器 — 7 层精炼架构 · 每层独立控制加载策略与 token 预算',
+};
+
+// ── 记忆系统（L2） ──
+views.memory = {
+  level: 'L2', label: '记忆系统流程',
+  parent: 'root',
+  nodes: [
+    { id:'w',   x:80,  y:20,  w:120, h:50, type:'highlight', icon:'✍️', label:'写入记忆' },
+    { id:'w1',  x:80,  y:100, w:150, h:46, type:'process',   icon:'📝', label:'MemoryManager.add()', sub:'Jaccard 去重 (0.50)' },
+    { id:'w2',  x:80,  y:175, w:150, h:46, type:'process',   icon:'⚖️', label:'权重分配',  sub:'新 = base_weight(3) / 命中 = reinforce +1' },
+    { id:'d1',  x:300, y:100, w:150, h:46, type:'process',   icon:'🗄️', label:'agent_memory 表', sub:'scope + context_id + content' },
+    { id:'d2',  x:300, y:175, w:150, h:46, type:'process',   icon:'⚡', label:'memory_cache', sub:'写穿透同步' },
+
+    { id:'r',   x:560, y:20,  w:120, h:50, type:'highlight', icon:'📖', label:'读取记忆',  sub:'' },
+    { id:'r1',  x:560, y:100, w:150, h:46, type:'process',   icon:'🔍', label:'Top-N 查询', sub:'按权重 + 时间衰减排序' },
+    { id:'r2',  x:560, y:175, w:150, h:46, type:'process',   icon:'📤', label:'Context 注入', sub:'格式化后注入 Prompt' },
+    { id:'e',   x:380, y:260, w:150, h:46, type:'database',  icon:'🧹', label:'提取器（异步）', sub:'session 结束 / 页面关闭触发', drill:true, view:'extractors' },
+  ],
+  arrows: [
+    { from:'w',  to:'w1' },
+    { from:'w1', to:'w2' },
+    { from:'w2', to:'d1' },
+    { from:'d1', to:'d2' },
+    { from:'r',  to:'r1' },
+    { from:'r1', to:'r2' },
+    { from:'d1', to:'r1', label:'持久层' },
+    { from:'d2', to:'r1', label:'缓存层' },
+  ],
+  info: '💾 双重记忆池 · 本体永久在线 · 分身按需加载 · 写穿透缓存',
+};
+
+// ── 提取器（L2） ──
+views.extractors = {
+  level: 'L2', label: '提取器流程',
+  parent: 'root',
+  nodes: [
+    { id:'tri', x:50,  y:10,  w:180, h:50, type:'highlight', icon:'⚡', label:'触发条件', sub:'页面关闭 / session 结束 / 手动' },
+    { id:'uni', x:50,  y:85,  w:180, h:46, type:'process',   icon:'🔄', label:'取未提取消息', sub:'memory_extracted=false, 最多30条' },
+    { id:'llm', x:300, y:85,  w:160, h:46, type:'external',  icon:'🧠', label:'LLM 提取', sub:'抽取关键信息' },
+    { id:'jac', x:300, y:160, w:160, h:46, type:'process',   icon:'🔗', label:'Jaccard 去重', sub:'同 scope 内相似度 >= 0.50' },
+    { id:'hit', x:100, y:240, w:130, h:46, type:'process',   icon:'⬆️', label:'reinforce', sub:'已有记忆权重 +1' },
+    { id:'new', x:320, y:240, w:130, h:46, type:'process',   icon:'🆕', label:'创建新记忆', sub:'base_weight = 3' },
+    { id:'tag', x:560, y:160, w:140, h:46, type:'process',   icon:'✅', label:'标记已提取', sub:'memory_extracted = True' },
+  ],
+  arrows: [
+    { from:'tri', to:'uni' },
+    { from:'uni', to:'llm' },
+    { from:'llm', to:'jac' },
+    { from:'jac', to:'hit', label:'命中' },
+    { from:'jac', to:'new', label:'未命中' },
+    { from:'hit', to:'tag' },
+    { from:'new', to:'tag' },
+  ],
+  info: '🧪 记忆提取器 · 批量处理 · Jaccard 去重 · 防重复提取',
+};
+
+// ── Session 管理（L2） ──
+views.session = {
+  level: 'L2', label: 'Session 生命周期',
+  parent: 'root',
+  nodes: [
+    { id:'s1', x:50,  y:15,  w:160, h:50, type:'highlight', icon:'🚀', label:'sidebar 点击', sub:'切场景 / 频道' },
+    { id:'s2', x:50,  y:95,  w:160, h:46, type:'process',   icon:'🔍', label:'查活跃 session',  sub:'(context_type, context_id)' },
+    { id:'s3x',x:270, y:95,  w:130, h:46, type:'process',   icon:'✅', label:'复用 session',   sub:'刷新 last_active_at' },
+    { id:'s3n',x:270, y:160, w:130, h:46, type:'process',   icon:'🆕', label:'创建 session',   sub:'status=active, started_at=now' },
+    { id:'s4', x:470, y:120, w:140, h:46, type:'process',   icon:'💬', label:'发消息 → touch', sub:'last_active_at = now' },
+    { id:'s5', x:470, y:200, w:140, h:46, type:'process',   icon:'💰', label:'token 累加',     sub:'prompt + completion + cost' },
+    { id:'s6', x:470, y:10,  w:160, h:50, type:'process',   icon:'⏰', label:'3h 超时扫描',     sub:'后台每 5 分钟扫' },
+    { id:'s7', x:660, y:120, w:130, h:46, type:'process',   icon:'🏁', label:'→ destroyed',   sub:'ended_at = now, duration 计算' },
+  ],
+  arrows: [
+    { from:'s1',  to:'s2' },
+    { from:'s2',  to:'s3x', label:'有' },
+    { from:'s2',  to:'s3n', label:'无' },
+    { from:'s3x', to:'s4' },
+    { from:'s3n', to:'s4' },
+    { from:'s4',  to:'s5' },
+    { from:'s5',  to:'s7' },
+    { from:'s6',  to:'s7', label:'超时' },
+  ],
+  info: '🔄 Session 两态模型 · ACTIVE → destroyed · 3h 超时 · 按上下文隔离',
+};
+
+// ── Thinking Map（L2） ──
+views.thinkingmap = {
+  level: 'L2', label: 'Thinking Map 流程',
+  parent: 'root',
+  nodes: [
+    { id:'tm1', x:100, y:15,  w:160, h:50, type:'highlight', icon:'🌱', label:'发散 Diverge', sub:'LLM 拆解任务维度' },
+    { id:'tm2', x:100, y:95,  w:160, h:46, type:'process',   icon:'🏗️', label:'构建节点树', sub:'domain / leaf / root' },
+    { id:'tm3', x:330, y:95,  w:160, h:46, type:'process',   icon:'🔄', label:'收敛 Converge', sub:'合并相似节点，阈值 2.0' },
+    { id:'tm4', x:330, y:175, w:160, h:46, type:'process',   icon:'📊', label:'优先级排序', sub:'权重 + priority + sort_order' },
+    { id:'tm5', x:100, y:175, w:160, h:46, type:'process',   icon:'🎯', label:'聚焦 Focus Queue', sub:'取 Top-N 可执行叶子' },
+    { id:'tm6', x:560, y:95,  w:160, h:46, type:'process',   icon:'🔄', label:'Agent Loop 执行', sub:'LLM 自主调工具' },
+    { id:'tm7', x:560, y:175, w:160, h:46, type:'process',   icon:'📝', label:'反射 Reflect', sub:'记录结果 + 状态更新' },
+  ],
+  arrows: [
+    { from:'tm1', to:'tm2' },
+    { from:'tm2', to:'tm3' },
+    { from:'tm3', to:'tm4' },
+    { from:'tm4', to:'tm5' },
+    { from:'tm5', to:'tm6' },
+    { from:'tm6', to:'tm7' },
+    { from:'tm7', to:'tm1', label:'循环' },
+  ],
+  info: '🗺️ Thinking Map · Diverge → Converge → Sort → Focus → Execute → Reflect',
+};
+
+// ── Action Map（L2） ──
+views.actionmap = {
+  level: 'L2', label: 'Action Map 概念',
+  parent: 'root',
+  nodes: [
+    { id:'a1', x:50,  y:15,  w:200, h:50, type:'highlight', icon:'🎯', label:'架构自省地图', sub:'系统自己画自己的结构图' },
+    { id:'a2', x:50,  y:95,  w:200, h:60, type:'process',   icon:'🗺️', label:'L1 架构总览', sub:'物理架构 + 业务架构\n宏观组件 + 依赖关系' },
+    { id:'a3', x:300, y:95,  w:200, h:60, type:'process',   icon:'📋', label:'L2 局部流程图', sub:'具体业务流程\nContext 组装 / 记忆提取 / 会话管理' },
+    { id:'a4', x:560, y:95,  w:200, h:60, type:'process',   icon:'🔍', label:'L3 实现细节', sub:'参数 / 阈值 / 算法\n代码路径 / 运行时状态' },
+    { id:'a5', x:300, y:200, w:200, h:50, type:'database',  icon:'🔗', label:'可钻取导航', sub:'点 → 展开 → 返回 · 面包屑' },
+    { id:'a6', x:560, y:200, w:200, h:50, type:'database',  icon:'📊', label:'运行时监控', sub:'token 消耗 · 缓存命中率 · 耗时' },
+  ],
+  arrows: [
+    { from:'a1', to:'a2' },
+    { from:'a2', to:'a3', label:'钻取' },
+    { from:'a3', to:'a4', label:'钻取' },
+    { from:'a4', to:'a5', label:'导航' },
+    { from:'a3', to:'a5' },
+    { from:'a5', to:'a6' },
+  ],
+  info: '🎯 Action Map 的真正定位 — 不是任务面板，是系统的自省地图',
+};
+
+// ── 前端（L2） ──
+views.frontend = {
+  level: 'L2', label: '前端架构',
+  parent: 'root',
+  nodes: [
+    { id:'f1', x:50,  y:15,  w:160, h:50, type:'frontend', icon:'⚛️', label:'React + TypeScript', sub:'Vite + Zustand' },
+    { id:'f2', x:50,  y:95,  w:160, h:46, type:'frontend', icon:'🗄️', label:'Zustand Store', sub:'appStore.ts · 全局状态' },
+    { id:'f3', x:260, y:95,  w:160, h:46, type:'frontend', icon:'📡', label:'API Client', sub:'client.ts · fetch 封装' },
+    { id:'f4', x:470, y:95,  w:160, h:46, type:'frontend', icon:'🖼️', label:'组件树', sub:'ChatView / SceneCard / Dashboard' },
+    { id:'f5', x:470, y:175, w:160, h:46, type:'frontend', icon:'🎨', label:'UI 组件', sub:'Avatar / ToolCard / 卡片式布局' },
+    { id:'f6', x:260, y:175, w:160, h:46, type:'frontend', icon:'🗺️', label:'自省地图组件', sub:'ArchMapView (此原型)' },
+  ],
+  arrows: [
+    { from:'f1', to:'f2' },
+    { from:'f2', to:'f3' },
+    { from:'f3', to:'f4' },
+    { from:'f4', to:'f5' },
+    { from:'f3', to:'f6', label:'新' },
+  ],
+  info: '🖥️ 前端层 · React + Zustand · 无路由（单页模式）',
+};
+
+// ── 后端（L2） ──
+views.backend = {
+  level: 'L2', label: '后端架构',
+  parent: 'root',
+  nodes: [
+    { id:'b1', x:50,  y:15,  w:160, h:50, type:'backend',  icon:'⚡', label:'FastAPI 入口', sub:'main.py + uvicorn' },
+    { id:'b2', x:50,  y:95,  w:160, h:46, type:'backend',  icon:'🛣️', label:'路由层', sub:'router/ · 场景/频道/会话/网关' },
+    { id:'b3', x:260, y:95,  w:160, h:46, type:'backend',  icon:'🧠', label:'Agent Core', sub:'agent_loop / context_builder / memory' },
+    { id:'b4', x:470, y:95,  w:160, h:46, type:'backend',  icon:'📦', label:'工具系统', sub:'tools/ · 注册 + 执行' },
+    { id:'b5', x:260, y:175, w:160, h:46, type:'database', icon:'🗄️', label:'数据层', sub:'models + database + SQLite' },
+    { id:'b6', x:470, y:175, w:160, h:46, type:'backend',  icon:'🤖', label:'本体系统', sub:'zhu_agent + 分身管理' },
+  ],
+  arrows: [
+    { from:'b1', to:'b2' },
+    { from:'b2', to:'b3' },
+    { from:'b3', to:'b4' },
+    { from:'b3', to:'b5' },
+    { from:'b2', to:'b6' },
+  ],
+  info: '⚙️ 后端层 · FastAPI + SQLAlchemy + Agent Loop 引擎',
+};
+
+// ── 记忆注入子流程（L3） ──
+views['memory-inject'] = {
+  level: 'L3', label: 'Memory Layer · 注入细节',
+  parent: 'context',
+  nodes: [
+    { id:'mi1', x:50,  y:15,  w:200, h:50, type:'highlight', icon:'🔍', label:'memory_cache.get()', sub:'scope + context_id' },
+    { id:'mi1a',x:50,  y:95,  w:120, h:46, type:'process',   icon:'✅', label:'缓存命中', sub:'直接返回 Top-5' },
+    { id:'mi1b',x:200, y:95,  w:140, h:46, type:'process',   icon:'❌', label:'缓存未命中', sub:'DB query → 写缓存 → 返回' },
+    { id:'mi2', x:400, y:95,  w:180, h:46, type:'process',   icon:'🏷️', label:'memory_injector.inject()', sub:'排序: 权重 + 时间衰减' },
+    { id:'mi3', x:400, y:175, w:180, h:46, type:'process',   icon:'✂️', label:'截断 + 格式化', sub:'最多 5 条 · 转 context 友好文本' },
+    { id:'mi4', x:400, y:260, w:180, h:50, type:'backend',   icon:'📤', label:'→ Context Composer', sub:'注入到 Memory Layer 槽位' },
+  ],
+  arrows: [
+    { from:'mi1', to:'mi1a', label:'命中' },
+    { from:'mi1', to:'mi1b', label:'未命中' },
+    { from:'mi1a', to:'mi2' },
+    { from:'mi1b', to:'mi2' },
+    { from:'mi2', to:'mi3' },
+    { from:'mi3', to:'mi4' },
+  ],
+  info: '🔍 Memory Layer 注入 · 缓存优先 · Top-5 · 权重 + 时间衰减排序',
+};
+
+// ── 工具/技能层（L3） ──
+views.tools = {
+  level: 'L3', label: 'Skill Layer · 工具详情',
+  parent: 'context',
+  nodes: [
+    { id:'t1', x:50,  y:15,  w:200, h:50, type:'highlight', icon:'📋', label:'tools/registry.json', sub:'工具注册表' },
+    { id:'t2', x:50,  y:95,  w:160, h:46, type:'process',   icon:'🔍', label:'按场景筛选', sub:'仅加载匹配场景的工具' },
+    { id:'t3', x:240, y:95,  w:160, h:46, type:'process',   icon:'📝', label:'生成 description', sub:'工具名 + 参数 + 用例' },
+    { id:'t4', x:430, y:95,  w:160, h:46, type:'process',   icon:'🧠', label:'注入 system prompt', sub:'LLM 可用工具列表' },
+    { id:'t5', x:430, y:175, w:160, h:46, type:'process',   icon:'🔄', label:'Agent Loop 选择', sub:'LLM 自主决策调哪个工具' },
+  ],
+  arrows: [
+    { from:'t1', to:'t2' },
+    { from:'t2', to:'t3' },
+    { from:'t3', to:'t4' },
+    { from:'t4', to:'t5' },
+  ],
+  info: '📋 Skill Layer · 工具注册 → 筛选 → 描述注入 → LLM 自主决策',
+};
+
+// ── 网关（L2） ──
+views.gateway = {
+  level: 'L2', label: '网关流程',
+  parent: 'root',
+  nodes: [
+    { id:'g1', x:50,  y:15,  w:160, h:50, type:'message', icon:'📨', label:'外部消息', sub:'微信 / Telegram / REST' },
+    { id:'g2', x:50,  y:95,  w:160, h:46, type:'process', icon:'🔍', label:'_get_or_create_session()', sub:'platform + user_id' },
+    { id:'g3', x:260, y:95,  w:160, h:46, type:'process', icon:'⏰', label:'场景超时检查', sub:'5分钟 idle → 退回频道' },
+    { id:'g4', x:260, y:175, w:160, h:46, type:'process', icon:'🛣️', label:'路由', sub:'channel mode / scene mode' },
+    { id:'g5', x:470, y:95,  w:160, h:46, type:'process', icon:'💬', label:'频道对话', sub:'ai_channel_chat()' },
+    { id:'g6', x:470, y:175, w:160, h:46, type:'process', icon:'🎭', label:'场景对话', sub:'call_qwen_chat()' },
+  ],
+  arrows: [
+    { from:'g1', to:'g2' },
+    { from:'g2', to:'g3' },
+    { from:'g3', to:'g4' },
+    { from:'g4', to:'g5', label:'channel' },
+    { from:'g4', to:'g6', label:'scene' },
+  ],
+  info: '📨 网关层 · 外部平台消息统一入口 · session 驱动的语境路由',
+};
+
+// ═══ 渲染引擎 ═══
+let currentView = 'root';
+let viewMode = 'flow'; // 'flow' | 'arch'
+
+function setViewMode(mode) {
+  viewMode = mode;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  render(currentView);
+}
+
+function navigateTo(viewId) {
+  if (!views[viewId]) return;
+  currentView = viewId;
+  render(viewId);
+  updateBreadcrumb(viewId);
+}
+
+function updateBreadcrumb(viewId) {
+  const bc = document.getElementById('breadcrumb');
+  const v = views[viewId];
+  const crumbs = [{ id: 'root', label: '🌐 系统总览' }];
+  
+  // Build breadcrumb path
+  function collectPath(id) {
+    const vv = views[id];
+    if (vv && vv.parent && vv.parent !== id) {
+      collectPath(vv.parent);
+    }
+    if (id !== 'root') {
+      crumbs.push({ id, label: vv.label });
+    }
+  }
+  if (viewId !== 'root') collectPath(viewId);
+  
+  bc.innerHTML = crumbs.map((c, i) => {
+    const isLast = i === crumbs.length - 1;
+    const sep = i > 0 ? '<span class="sep">›</span>' : '';
+    return `${sep}<span class="${isLast ? 'active' : ''}" onclick="navigateTo('${c.id}')">${c.label}</span>`;
+  }).join('');
+}
+
+function render(viewId) {
+  const v = views[viewId];
+  if (!v) return;
+  
+  const canvas = document.getElementById('map-canvas');
+  const arrowsSvg = document.querySelector('#arrows-layer svg');
+  const info = document.getElementById('info-panel');
+  const badge = document.getElementById('level-badge');
+  
+  badge.textContent = `${v.level} · ${v.label}`;
+  info.innerHTML = v.info;
+  
+  // Calculate scale to fit all nodes in viewport
+  const containerRect = document.getElementById('map-container').getBoundingClientRect();
+  const cw = containerRect.width - 40;
+  const ch = containerRect.height - 80;
+  
+  // Find bounding box of all nodes
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  v.nodes.forEach(n => {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + (n.w || 140));
+    maxY = Math.max(maxY, n.y + (n.h || 60));
+  });
+  
+  const contentW = maxX - minX + 60;
+  const contentH = maxY - minY + 60;
+  const scale = Math.min(1, Math.min(cw / contentW, ch / contentH, 1.2));
+  const offsetX = (cw - contentW * scale) / 2;
+  const offsetY = (ch - contentH * scale) / 2;
+  
+  // Render nodes
+  let nodesHtml = v.nodes.map(n => {
+    const nx = offsetX + (n.x - minX + 30) * scale;
+    const ny = offsetY + (n.y - minY + 30) * scale;
+    const nw = (n.w || 140) * scale;
+    const nh = (n.h || 60) * scale;
+    const typeClass = `node-${n.type}`;
+    const drill = n.drill ? `<div class="drill-icon">⊞</div>` : '';
+    const token = n.token ? `<div class="token">~${n.token}</div>` : '';
+    
+    return `<div class="node ${typeClass}" style="left:${nx}px;top:${ny}px;width:${nw}px;height:${nh}px;font-size:${12*scale}px"
+                 onclick="${n.drill ? `navigateTo('${n.view}')` : ''}"
+                 title="${n.drill ? '点击钻取查看内部流程' : ''}">
+      <div class="icon" style="font-size:${20*scale}px">${n.icon}</div>
+      <div class="label" style="font-size:${11*scale}px">${n.label}</div>
+      ${n.sub ? `<div class="sublabel" style="font-size:${9*scale}px">${n.sub}</div>` : ''}
+      ${token}
+      ${drill}
+    </div>`;
+  }).join('');
+  
+  canvas.innerHTML = nodesHtml;
+  
+  // Render arrows (SVG)
+  let arrowsHtml = `<defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-hl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee"/>
+    </marker>
+  </defs>`;
+  
+  // Build node position map
+  const nodeMap = {};
+  v.nodes.forEach(n => {
+    nodeMap[n.id] = {
+      x: offsetX + (n.x - minX + 30) * scale,
+      y: offsetY + (n.y - minY + 30) * scale,
+      w: (n.w || 140) * scale,
+      h: (n.h || 60) * scale,
+    };
+  });
+  
+  v.arrows.forEach(a => {
+    const from = nodeMap[a.from];
+    const to = nodeMap[a.to];
+    if (!from || !to) return;
+    
+    const x1 = from.x + from.w / 2;
+    const y1 = from.y + from.h;
+    const x2 = to.x + to.w / 2;
+    const y2 = to.y;
+    const midY = (y1 + y2) / 2;
+    const marker = a.hl ? 'url(#arrow-hl)' : 'url(#arrow)';
+    const stroke = a.hl ? '#22d3ee' : '#334155';
+    const strokeW = a.hl ? 2 : 1.5;
+    const cls = a.hl ? 'hl' : '';
+    
+    arrowsHtml += `<path d="M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}" 
+                   fill="none" stroke="${stroke}" stroke-width="${strokeW}" marker-end="${marker}" class="${cls}"/>`;
+    
+    if (a.label) {
+      const lx = (x1 + x2) / 2;
+      const ly = midY - 6;
+      arrowsHtml += `<text x="${lx}" y="${ly}" text-anchor="middle" fill="#475569" font-size="${8*scale}" font-family="inherit">${a.label}</text>`;
+    }
+  });
+  
+  arrowsSvg.innerHTML = arrowsHtml;
+}
+
+// ── Handle resize ──
+window.addEventListener('resize', () => { render(currentView); });
+
+// ── Handle escape to go up ──
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && currentView !== 'root') {
+    const v = views[currentView];
+    navigateTo(v.parent || 'root');
+  }
+});
+
+// ── Handle click on canvas background → go up ──
+document.getElementById('map-canvas').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    if (currentView !== 'root') {
+      const v = views[currentView];
+      navigateTo(v.parent || 'root');
+    }
+  }
+});
+
+// ── Initialize ──
+navigateTo('root');
+</script>
+</body>
+</html>

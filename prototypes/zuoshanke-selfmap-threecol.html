@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 自省地图（三栏）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #020617;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 12px 20px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
+}
+header h1 { font-size: 16px; font-weight: 600;
+  background: linear-gradient(135deg, #22d3ee, #34d399);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+header .sub { font-size: 11px; color: #475569; margin-left: auto; }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── 左侧树 ── */
+#left-panel {
+  width: 280px; min-width: 200px;
+  border-right: 1px solid #1e293b;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#search-box {
+  background: #0f172a; border: none; border-bottom: 1px solid #1e293b;
+  padding: 8px 12px; color: #e2e8f0; font-size: 11px;
+  font-family: inherit; outline: none; flex-shrink: 0;
+}
+#search-box::placeholder { color: #475569; }
+#tree-scroll { flex: 1; overflow-y: auto; padding: 6px 0 20px 12px; }
+#tree-scroll::-webkit-scrollbar { width: 5px; }
+#tree-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+.tree { list-style: none; }
+.tree ul { list-style: none; padding-left: 16px; }
+.tree li { position: relative; padding: 1px 0; }
+.tree li::before {
+  content: ''; position: absolute; left: -10px; top: 0; bottom: 50%;
+  width: 8px; border-left: 1.5px solid #1e293b; border-bottom: 1.5px solid #1e293b;
+  border-radius: 0 0 0 4px;
+}
+.tree li:last-child::before { border-left: 1.5px solid #1e293b; border-bottom: 1.5px solid #1e293b; border-radius: 0 0 0 4px; }
+.tree li:last-child::after { content: ''; position: absolute; left: -10px; top: 50%; bottom: 0; width: 8px; }
+.tree > li::before { display: none; }
+.tree > li::after { display: none; }
+
+.node {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px 3px 4px; border-radius: 4px;
+  cursor: pointer; transition: all 0.12s;
+  border: 1px solid transparent; user-select: none;
+  font-size: 11px; line-height: 1.3;
+  width: calc(100% - 4px);
+}
+.node:hover { background: rgba(30,41,59,0.5); border-color: #1e293b; }
+.node.selected { background: rgba(34,211,238,0.1); border-color: rgba(34,211,238,0.3); }
+.node .icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+.node .label { color: #e2e8f0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node .sublabel { font-size: 9px; color: #475569; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; }
+.node .diagram-badge {
+  font-size: 8px; padding: 1px 6px; border-radius: 8px;
+  margin-left: 4px; white-space: nowrap; flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(139,92,246,0.15));
+  color: #a78bfa; border: 1px solid rgba(167,139,250,0.25);
+  font-weight: 500; letter-spacing: 0.3px;
+}
+.toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 12px; height: 12px; font-size: 7px; color: #475569;
+  transition: transform 0.2s; flex-shrink: 0;
+}
+.toggle.expanded { transform: rotate(90deg); }
+.toggle.empty { visibility: hidden; }
+
+/* ── 中间流程图 ── */
+#mid-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+#mid-header {
+  padding: 8px 16px; border-bottom: 1px solid #1e293b;
+  flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  min-height: 36px;
+}
+#mid-header .mhi { font-size: 15px; }
+#mid-header .mht { font-size: 13px; font-weight: 600; }
+#mid-header .mhs { font-size: 10px; color: #64748b; }
+#mid-header .mhb {
+  margin-left: auto; font-size: 9px; padding: 2px 6px; border-radius: 6px;
+  background: rgba(34,211,238,0.1); color: #22d3ee;
+  border: 1px solid rgba(34,211,238,0.2);
+}
+#mid-header .mhb.none { background: rgba(71,85,105,0.15); color: #475569; border-color: #1e293b; }
+
+#diagram-area { flex: 1; position: relative; overflow: hidden; }
+#grid-bg { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; opacity:0.2; }
+
+/* ── 右侧详情抽屉 ── */
+#detail-drawer {
+  width: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #0a0f1e;
+  border-left: 1px solid #1e293b;
+}
+#detail-drawer.open { width: 340px; min-width: 280px; }
+#detail-inner {
+  width: 340px; min-width: 280px;
+  flex: 1; overflow-y: auto; padding: 16px;
+}
+#detail-inner::-webkit-scrollbar { width: 5px; }
+#detail-inner::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+.d-empty {
+  color: #475569; font-size: 12px; text-align: center;
+  padding: 40px 16px; line-height: 1.8;
+}
+.d-empty .big-icon { font-size: 32px; margin-bottom: 8px; }
+
+.d-header {
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: 10px; border-bottom: 1px solid #1e293b; margin-bottom: 12px;
+}
+.d-icon { font-size: 22px; width: 32px; text-align: center; }
+.d-title-group { flex: 1; }
+.d-title { font-size: 14px; font-weight: 600; }
+.d-sub { font-size: 11px; color: #64748b; margin-top: 1px; }
+.d-close { background:none; border:none; color:#475569; font-size:14px; cursor:pointer; padding:2px 4px; border-radius:3px; }
+.d-close:hover { color:#e2e8f0; background:rgba(255,255,255,0.05); }
+
+.d-section { margin-bottom: 12px; }
+.d-section h3 { font-size: 9px; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+.d-desc { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+
+.d-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.d-table td { padding: 4px 6px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+.d-table td:first-child { color: #64748b; width: 80px; white-space: nowrap; font-size: 10px; }
+.d-table td:last-child { color: #e2e8f0; }
+
+.d-code { font-size: 11px; color: #22d3ee; background:rgba(34,211,238,0.05); padding:8px 12px; border-radius:5px; border:1px solid rgba(34,211,238,0.12); }
+
+/* ── 分隔条 ── */
+#resizer-left, #resizer-right { width: 3px; cursor: col-resize; flex-shrink: 0; background: transparent; }
+#resizer-left:hover, #resizer-right:hover,
+#resizer-left.active, #resizer-right.active { background: rgba(34,211,238,0.15); }
+
+/* ── Diagram nodes ── */
+.diagram-container { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; }
+.diagram-node {
+  position: absolute; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  border-radius: 6px; border: 1.5px solid;
+  text-align: center; padding: 4px 8px;
+  transition: all 0.2s; font-size: 11px; cursor: pointer;
+}
+.diagram-node:hover { filter: brightness(1.25); }
+.diagram-node .di { font-size: 14px; margin-bottom: 1px; }
+.diagram-node .dl { font-size: 10px; font-weight: 500; line-height: 1.2; }
+.diagram-node .ds { font-size: 8px; color: #64748b; margin-top: 1px; }
+.diagram-node .dk { font-size: 7px; color: #475569; margin-top: 1px; }
+.dn-highlight { background: rgba(34,211,238,0.1); border-color: #22d3ee; }
+.dn-layer { background: rgba(6,78,59,0.3); border-color: #34d399; }
+.dn-process { background: rgba(30,41,59,0.4); border-color: #64748b; }
+.dn-db { background: rgba(76,29,149,0.3); border-color: #a78bfa; }
+.dn-external { background: rgba(30,41,59,0.4); border-color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛰️ 坐山客 · 自省地图</h1>
+  <span class="sub">左树 · 中图 · 右侧详情</span>
+</header>
+
+<div class="main">
+  <!-- 左: 树 -->
+  <div id="left-panel">
+    <input id="search-box" type="text" placeholder="搜索…" oninput="filterTree(this.value)">
+    <div id="tree-scroll"><ul class="tree" id="tree-root"></ul></div>
+  </div>
+
+  <div id="resizer-left"></div>
+
+  <!-- 中: 流程图 -->
+  <div id="mid-panel">
+    <div id="mid-header">
+      <span class="mhi" id="mhi">🏛️</span>
+      <span class="mht" id="mht">坐山客系统</span>
+      <span class="mhs" id="mhs">选择左侧节点查看流程图</span>
+      <span class="mhb none" id="mhb">无图</span>
+    </div>
+    <div id="diagram-area">
+      <svg id="grid-bg"><defs><pattern id="g" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>
+      <div id="diagram-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#475569;font-size:12px">
+          <div style="font-size:32px;margin-bottom:6px">🗺️</div>
+          <div>选择左侧节点</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="resizer-right"></div>
+
+  <!-- 右: 详情抽屉 -->
+  <div id="detail-drawer">
+    <div id="detail-inner">
+      <div class="d-empty" id="d-empty">
+        <div class="big-icon">📋</div>
+        <div>点击节点查看详情</div>
+      </div>
+      <div id="d-content" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ 流程图数据 ═══
+const diagrams = {};
+
+function defDiag(id, title, icon, sub, nodes, arrows) {
+  diagrams[id] = { title, icon, sub, nodes, arrows };
+}
+
+defDiag('backend', '后端 API · 架构概览', '⚙️', 'FastAPI + SQLAlchemy', [
+  { id:'b1', x:100, y:5,  w:140, h:40, type:'highlight', icon:'⚡', label:'FastAPI 入口' },
+  { id:'b2', x:10,  y:70, w:110, h:40, type:'layer',     icon:'🛣️', label:'路由层' },
+  { id:'b3', x:150, y:70, w:120, h:40, type:'layer',     icon:'🧠', label:'Agent Core' },
+  { id:'b4', x:300, y:70, w:110, h:40, type:'layer',     icon:'📦', label:'工具系统' },
+  { id:'b5', x:150, y:135,w:120, h:40, type:'db',        icon:'🗄️', label:'数据层' },
+  { id:'b6', x:300, y:135,w:110, h:40, type:'process',   icon:'🤖', label:'本体系统' },
+], [['b1','b2'],['b1','b3'],['b3','b4'],['b3','b5'],['b1','b6']]);
+
+defDiag('agent-core', 'Agent Core · 执行引擎', '🧠', 'Agent Loop + Context + 记忆', [
+  { id:'a1', x:10, y:5,  w:140, h:40, type:'highlight', icon:'💬', label:'用户消息' },
+  { id:'a2', x:10, y:65, w:140, h:40, type:'layer',     icon:'📐', label:'Context 组合器', sub:'7 层' },
+  { id:'a3', x:180,y:65, w:120, h:40, type:'external',  icon:'🧠', label:'LLM 推理' },
+  { id:'a4', x:180,y:125,w:120, h:40, type:'process',   icon:'🔧', label:'工具执行' },
+  { id:'a5', x:180,y:185,w:120, h:40, type:'process',   icon:'🔄', label:'结果回喂' },
+  { id:'a6', x:340,y:65, w:120, h:40, type:'process',   icon:'💾', label:'记忆写入' },
+  { id:'a7', x:340,y:125,w:120, h:40, type:'process',   icon:'🗺️', label:'Thinking Map' },
+], [['a1','a2'],['a2','a3'],['a3','a4'],['a4','a5'],['a5','a3'],['a3','a6'],['a3','a7'],['a5','a7']]);
+
+defDiag('context', 'Context 组合器 · 7 层精炼', '📐', '每层独立控制加载策略', [
+  { id:'c1', x:10, y:5,  w:120, h:40, type:'layer',    icon:'1', label:'Prompt Layer',  token:'2.4K' },
+  { id:'c2', x:10, y:60, w:120, h:40, type:'layer',    icon:'2', label:'Memory Layer',  token:'1.8K' },
+  { id:'c3', x:10, y:115,w:120, h:40, type:'layer',    icon:'3', label:'Document Layer',token:'3.2K' },
+  { id:'c4', x:145,y:5,  w:120, h:40, type:'layer',    icon:'4', label:'Config Layer',  token:'0.5K' },
+  { id:'c5', x:145,y:60, w:120, h:40, type:'layer',    icon:'5', label:'Skill Layer',   token:'1.2K' },
+  { id:'c6', x:145,y:115,w:120, h:40, type:'layer',    icon:'6', label:'History Layer', token:'4.6K' },
+  { id:'c7', x:280,y:60, w:120, h:40, type:'layer',    icon:'7', label:'Work Output',  token:'1.5K' },
+  { id:'cc', x:190,y:180,w:150, h:44, type:'highlight',icon:'🔀', label:'Context Composer', sub:'7 层合并' },
+  { id:'cl', x:190,y:245,w:130, h:40, type:'external', icon:'🧠', label:'LLM' },
+], [['c1','c2'],['c2','c3'],['c4','c5'],['c5','c6'],['c6','c7'],['c3','cc'],['c7','cc'],['cc','cl']]);
+
+defDiag('memory', '记忆系统 · 双重记忆池', '💾', '本体永久 · 分身按需加载', [
+  { id:'m1', x:10, y:5,  w:130, h:40, type:'highlight', icon:'✍️', label:'写入', sub:'add+reinforce' },
+  { id:'m2', x:10, y:60, w:130, h:40, type:'process',   icon:'🔗', label:'Jaccard 去重', sub:'≥0.50' },
+  { id:'m3', x:155,y:60, w:120, h:40, type:'process',   icon:'⬆️', label:'reinforce', sub:'已有+1' },
+  { id:'m4', x:155,y:120,w:120, h:40, type:'process',   icon:'🆕', label:'新建记忆', sub:'weight=3' },
+  { id:'m5', x:290,y:60, w:120, h:40, type:'db',        icon:'🗄️', label:'agent_memory 表' },
+  { id:'m6', x:290,y:120,w:120, h:40, type:'db',        icon:'⚡', label:'memory_cache' },
+  { id:'r1', x:10, y:200,w:130, h:40, type:'highlight', icon:'📖', label:'读取', sub:'Top-N' },
+  { id:'r2', x:155,y:200,w:140, h:40, type:'process',   icon:'🏷️', label:'排序+截断', sub:'权重+时间→最多5条' },
+], [['m1','m2'],['m2','m3'],['m2','m4'],['m3','m5'],['m4','m5'],['m5','m6'],['r1','r2'],['m5','r2']]);
+
+defDiag('session', 'Session 生命周期 · 两态模型', '🔄', 'ACTIVE→destroyed · 3h', [
+  { id:'s1', x:10, y:5,  w:130, h:40, type:'highlight', icon:'🚀', label:'sidebar 点击' },
+  { id:'s2', x:10, y:60, w:130, h:40, type:'process',   icon:'🔍', label:'查活跃 session' },
+  { id:'s3x',x:155,y:60, w:110, h:40, type:'process',   icon:'✅', label:'复用', sub:'刷新时间' },
+  { id:'s3n',x:155,y:120,w:110, h:40, type:'process',   icon:'🆕', label:'创建', sub:'started_at' },
+  { id:'s4', x:280,y:90, w:120, h:40, type:'process',   icon:'💬', label:'touch', sub:'发消息' },
+  { id:'s5', x:280,y:155,w:120, h:40, type:'process',   icon:'💰', label:'Token 累加' },
+  { id:'s6', x:10, y:155,w:130, h:40, type:'process',   icon:'⏰', label:'超时扫描', sub:'5 分钟' },
+  { id:'s7', x:430,y:90, w:110, h:40, type:'process',   icon:'🏁', label:'→ destroyed' },
+], [['s1','s2'],['s2','s3x'],['s2','s3n'],['s3x','s4'],['s3n','s4'],['s4','s5'],['s5','s7'],['s6','s7']]);
+
+defDiag('thinkingmap', 'Thinking Map · 发散→收敛→反射', '🗺️', 'Diverge→Converge→Focus→Execute', [
+  { id:'t1', x:50, y:5,  w:140, h:40, type:'highlight', icon:'🌱', label:'发散 Diverge' },
+  { id:'t2', x:50, y:65, w:140, h:40, type:'process',   icon:'🏗️', label:'构建节点树' },
+  { id:'t3', x:210,y:65, w:140, h:40, type:'process',   icon:'🔄', label:'收敛 Converge', sub:'阈值 2.0' },
+  { id:'t4', x:210,y:130,w:140, h:40, type:'process',   icon:'📊', label:'优先级排序' },
+  { id:'t5', x:50, y:130,w:140, h:40, type:'process',   icon:'🎯', label:'聚焦 Focus', sub:'Top-N' },
+  { id:'t6', x:380,y:65, w:140, h:40, type:'process',   icon:'🔄', label:'Agent Loop 执行' },
+  { id:'t7', x:380,y:130,w:140, h:40, type:'process',   icon:'📝', label:'反射 Reflect' },
+], [['t1','t2'],['t2','t3'],['t3','t4'],['t4','t5'],['t5','t6'],['t6','t7'],['t7','t1']]);
+
+defDiag('extractors', '记忆提取器 · 异步流程', '🧹', '触发→LLM→Jaccard', [
+  { id:'e1', x:10, y:5,  w:140, h:40, type:'highlight', icon:'⚡', label:'触发', sub:'页面关闭/session结束' },
+  { id:'e2', x:10, y:65, w:140, h:40, type:'process',   icon:'🔄', label:'取未提取消息', sub:'最多 30 条' },
+  { id:'e3', x:170,y:65, w:120, h:40, type:'external',  icon:'🧠', label:'LLM 提取' },
+  { id:'e4', x:170,y:130,w:120, h:40, type:'process',   icon:'🔗', label:'Jaccard 去重', sub:'≥0.50' },
+  { id:'e5', x:40, y:195,w:110, h:40, type:'process',   icon:'⬆️', label:'reinforce', sub:'已有+1' },
+  { id:'e6', x:180,y:195,w:110, h:40, type:'process',   icon:'🆕', label:'新建记忆', sub:'weight=3' },
+  { id:'e7', x:320,y:130,w:110, h:40, type:'process',   icon:'✅', label:'标记已提取' },
+], [['e1','e2'],['e2','e3'],['e3','e4'],['e4','e5'],['e4','e6'],['e5','e7'],['e6','e7']]);
+
+// ═══ 详情数据 ═══
+const details = {
+  '前端层': { icon: '🖥️', desc: '单页应用，Zustand 状态管理，深色主题卡片式布局。', fields: [['框架','React 18 + TypeScript + Vite'],['状态管理','Zustand (appStore.ts)'],['构建工具','Vite (pnpm dev)'],['端口','5173'],['目录','frontend/src/']] },
+  'Zustand Store': { icon: '🗄️', desc: '统一的全局状态管理，涵盖所有模块。', fields: [['文件','frontend/src/stores/appStore.ts'],['量级','~1000 行'],['模式','Zustand create()'],['切片','场景/频道/消息/Thinking Map/Action Map/Session/仪表盘']] },
+  'API Client': { icon: '📡', desc: '所有后端请求的统一封装，基于 fetch 的泛型函数。', fields: [['文件','frontend/src/api/client.ts'],['量级','~800 行'],['模式','request<T>(url, options)']] },
+  '组件树': { icon: '🧩', desc: 'React 组件体系。', fields: [['对话','ChatView'],['场景','SceneCard + 广场/工坊'],['仪表盘','Dashboard'],['图谱','ActionMapView']] },
+  '网关层': { icon: '📨', desc: '微信/Telegram 外部平台消息统一入口。', fields: [['入口','POST /api/gateway/chat'],['协议','HTTP 长轮询 (30s)'],['目录','backend/gateway/ + router/gateway.py']] },
+  'Session 查找': { icon: '🔍', desc: '按 (platform, platform_user_id) 查找/创建 GatewaySession。', fields: [['函数','_get_or_create_session()'],['新建','绑定默认「闲聊」频道']] },
+  '超时回退': { icon: '⏰', desc: '场景模式超过 5 分钟无交互退回频道。', fields: [['超时','5 分钟'],['文件','gateway.py _check_scene_timeout()']] },
+  '语境路由': { icon: '🛣️', desc: '根据 GatewaySession.mode 分发。', fields: [['频道','本体观察模式'],['场景','call_qwen_chat()']] },
+  '后端层': { icon: '⚙️', desc: 'FastAPI 应用，坐山客核心服务端。', fields: [['框架','FastAPI + uvicorn'],['数据库','SQLAlchemy + SQLite'],['AI','DeepSeek / Qwen API'],['端口','8000'],['目录','backend/']] },
+  '路由层': { icon: '🛣️', desc: 'FastAPI 路由注册。', fields: [['注册','router/__init__.py'],['场景','scenes.py + scene_stream.py'],['频道','channels.py'],['Session','sessions.py (v1.1)'],['记忆','memory.py']] },
+  'Agent Core': { icon: '🧠', desc: '坐山客智能核心。Agent Loop + Context 组合器 + 记忆系统 + Session + Thinking Map。', fields: [['引擎','Agent Loop (LLM 自主调工具)'],['上下文','7 层精炼 (Schema v1.0)'],['记忆','双重记忆池'],['Session','两态模型 (v1.1)']] },
+  'Agent Loop': { icon: '🔄', desc: 'LLM 自主决策调工具的核心循环。', fields: [['文件','agent_core/agent_loop.py'],['最大步数','25 (可配)'],['退出','LLM 主动收敛 / 步骤超限']] },
+  'Context 组合器': { icon: '📐', desc: 'Schema v1.0 核心。7 层独立信息源合并为精炼 prompt。', fields: [['层数','7 层'],['策略','每层独立加载 + token 预算'],['入口','build_agent_context_v1()'],['文件','context_builder.py + context_composer.py']] },
+  '记忆系统': { icon: '💾', desc: '双重记忆池。本体永久，分身按需加载，写穿透缓存。', fields: [['本体','永久在线不衰减'],['分身','按需加载正常衰减'],['缓存','写穿透 (MemoryCache)'],['文件','memory_manager.py + memory_cache.py']] },
+  'Session 管理': { icon: '🔄', desc: 'Schema v1.1。Web + Gateway 两态模型，3h 超时。', fields: [['状态','active → destroyed'],['超时','3 小时 (可配置)'],['字段','16 个 v1.1 新增'],['文件','router/sessions.py'],['扫描','每 5 分钟后台']] },
+  'Thinking Map': { icon: '🗺️', desc: '思维导图引擎。Diverge→Converge→Sort→Focus→Execute→Reflect。', fields: [['发散','LLM 拆解任务'],['收敛','合并相似 (阈值 2.0)'],['优先级','权重 + priority + sort_order'],['聚焦','Top-N 可执行叶子'],['文件','converge_engine.py + thinking_map.py']] },
+  '数据层': { icon: '🗄️', desc: 'SQLAlchemy ORM + SQLite。', fields: [['ORM','SQLAlchemy DeclarativeBase'],['DB','SQLite (zuoshanke.db)'],['模型','~30 个 (models.py)'],['迁移','ALTER TABLE + create_all']] },
+  'LLM 引擎': { icon: '🧠', desc: 'AI 推理引擎。DeepSeek 云端 + Qwen 本地。', fields: [['DeepSeek','v4-flash / v4-pro'],['本地','Qwen3.5-8B (llama-server :8083)'],['路由','根据复杂度直达/medium/heavy'],['文件','ai_engine.py']] },
+  '工具系统': { icon: '🔧', desc: 'LLM function calling 工具集。', fields: [['注册','tools/registry.json'],['数量','~15 个'],['模式','function calling (OpenAI 兼容)'],['示例','web_search/weather/read_file/write_file/patch/run_code/memory/skill/session_search']] },
+};
+
+// ═══ 树形数据 ═══
+const treeData = {
+  icon: '🏛️', label: '坐山客系统',
+  children: [
+    { icon: '🖥️', label: '前端层', sub: 'React',
+      children: [
+        { icon: '🗄️', label: 'Zustand Store' },
+        { icon: '📡', label: 'API Client' },
+        { icon: '🧩', label: '组件树' },
+      ]
+    },
+    { icon: '📨', label: '网关层', sub: '外部消息',
+      children: [
+        { icon: '🔍', label: 'Session 查找' },
+        { icon: '⏰', label: '超时回退' },
+        { icon: '🛣️', label: '语境路由' },
+      ]
+    },
+    { icon: '⚙️', label: '后端层', sub: 'FastAPI',
+      diagram: 'backend',
+      children: [
+        { icon: '🛣️', label: '路由层' },
+        { icon: '🧠', label: 'Agent Core', diagram: 'agent-core',
+          children: [
+            { icon: '🔄', label: 'Agent Loop', diagram: 'agent-core' },
+            { icon: '📐', label: 'Context 组合器', diagram: 'context' },
+            { icon: '💾', label: '记忆系统', diagram: 'memory' },
+            { icon: '🔄', label: 'Session 管理', diagram: 'session' },
+            { icon: '🗺️', label: 'Thinking Map', diagram: 'thinkingmap' },
+          ]
+        },
+        { icon: '🗄️', label: '数据层' },
+      ]
+    },
+    { icon: '🧠', label: 'LLM 引擎', sub: 'DeepSeek/Qwen' },
+    { icon: '🔧', label: '工具系统', sub: '注册+执行' },
+  ]
+};
+
+// ═══ 渲染树 ═══
+function renderTree(node, container) {
+  const ul = document.createElement('ul'); ul.className = 'tree';
+  (node.children || []).forEach(child => {
+    const li = document.createElement('li');
+    const hasChildren = child.children && child.children.length > 0;
+    const expanded = child.label === 'Agent Core' || child.label === '后端层';
+
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = 'node';
+    nodeDiv.dataset.search = `${child.icon||''} ${child.label} ${child.sub||''}`.toLowerCase();
+    nodeDiv._diagram = child.diagram; // store for click
+    nodeDiv._label = child.label;
+
+    const toggle = document.createElement('span');
+    toggle.className = `toggle ${hasChildren ? (expanded ? 'expanded' : '') : 'empty'}`;
+    toggle.textContent = hasChildren ? '▶' : '';
+    nodeDiv.appendChild(toggle);
+
+    const icon = document.createElement('span');
+    icon.className = 'icon'; icon.textContent = child.icon || '•';
+    nodeDiv.appendChild(icon);
+
+    const label = document.createElement('span');
+    label.className = 'label'; label.textContent = child.label;
+    nodeDiv.appendChild(label);
+
+    if (child.sub) {
+      const sub = document.createElement('span');
+      sub.className = 'sublabel'; sub.textContent = child.sub;
+      nodeDiv.appendChild(sub);
+    }
+
+    // 流程图标记
+    if (child.diagram) {
+      const badge = document.createElement('span');
+      badge.className = 'diagram-badge'; badge.textContent = '流程图';
+      nodeDiv.appendChild(badge);
+    }
+
+    nodeDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+      nodeDiv.classList.add('selected');
+
+      if (hasChildren) {
+        const childUl = li.querySelector('ul');
+        if (childUl) {
+          childUl.style.display = childUl.style.display === 'none' ? '' : 'none';
+          toggle.classList.toggle('expanded');
+        }
+      }
+
+      onNodeSelect(child);
+    });
+
+    li.appendChild(nodeDiv);
+
+    if (hasChildren) {
+      const childContainer = document.createElement('div');
+      renderTree(child, childContainer);
+      const childUl = childContainer.querySelector('ul');
+      if (childUl) {
+        if (!expanded) childUl.style.display = 'none';
+        li.appendChild(childUl);
+      }
+    }
+    ul.appendChild(li);
+  });
+  container.appendChild(ul);
+}
+
+// ═══ 节点选中 ═══
+function onNodeSelect(node) {
+  // 中间：流程图
+  const diag = node.diagram ? diagrams[node.diagram] : null;
+  const mhi = document.getElementById('mhi');
+  const mht = document.getElementById('mht');
+  const mhs = document.getElementById('mhs');
+  const mhb = document.getElementById('mhb');
+  const canvas = document.getElementById('diagram-canvas');
+
+  mhi.textContent = node.icon || '•';
+  mht.textContent = node.label || '';
+  mhs.textContent = node.sub || '';
+
+  if (diag) {
+    mhb.textContent = diag.title;
+    mhb.className = 'mhb';
+    renderDiagram(diag, canvas);
+  } else {
+    mhb.textContent = '无图';
+    mhb.className = 'mhb none';
+    canvas.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#475569;font-size:12px">
+      <div style="font-size:28px;margin-bottom:4px">📋</div>
+      <div>${node.label}</div>
+      <div style="font-size:10px">暂无流程图</div></div>`;
+  }
+
+  // 右侧：详情
+  showDetail(node.label);
+}
+
+// ═══ 渲染流程图（居中） ═══
+function renderDiagram(diag, canvas) {
+  const area = document.getElementById('diagram-area');
+  const aw = area.clientWidth - 20;
+  const ah = area.clientHeight - 20;
+  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+  diag.nodes.forEach(n => {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + (n.w || 120));
+    maxY = Math.max(maxY, n.y + (n.h || 40));
+  });
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  const scale = Math.min(1, Math.min(aw / (contentW + 40), ah / (contentH + 40), 1.2));
+
+  let html = ''; const pos = {};
+  const clsMap = { highlight:'dn-highlight', layer:'dn-layer', process:'dn-process', db:'dn-db', external:'dn-external' };
+
+  diag.nodes.forEach(n => {
+    // 居中偏移：将 (minX, minY) 平移到画布中心
+    const nx = (aw - contentW * scale) / 2 + (n.x - minX) * scale;
+    const ny = (ah - contentH * scale) / 2 + (n.y - minY) * scale;
+    const nw = (n.w||120)*scale; const nh = (n.h||40)*scale;
+    pos[n.id] = { x:nx, y:ny, w:nw, h:nh };
+    const cls = clsMap[n.type]||'dn-process';
+    html += `<div class="diagram-node ${cls}" style="left:${nx}px;top:${ny}px;width:${nw}px;height:${nh}px;font-size:${10*scale}px">
+      <div class="di" style="font-size:${13*scale}px">${n.icon}</div>
+      <div class="dl" style="font-size:${10*scale}px">${n.label}</div>
+      ${n.sub?`<div class="ds">${n.sub}</div>`:''}
+      ${n.token?`<div class="dk">~${n.token}</div>`:''}
+    </div>`;
+  });
+
+  let svg = `<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker></defs>`;
+  (diag.arrows||[]).forEach(([fid,tid])=>{
+    const f=pos[fid],t=pos[tid]; if(!f||!t) return;
+    const x1=f.x+f.w/2,y1=f.y+f.h,x2=t.x+t.w/2,y2=t.y,mid=(y1+y2)/2;
+    svg+=`<path d="M ${x1} ${y1} L ${x1} ${mid} L ${x2} ${mid} L ${x2} ${y2}" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#a)"/>`;
+  });
+  svg+='</svg>';
+  canvas.innerHTML = svg + html;
+}
+
+// ═══ 右侧详情 ═══
+function showDetail(label) {
+  const drawer = document.getElementById('detail-drawer');
+  const content = document.getElementById('d-content');
+  const empty = document.getElementById('d-empty');
+  const data = details[label];
+
+  if (!data) {
+    content.style.display = 'none';
+    empty.style.display = 'block';
+    empty.innerHTML = `<div class="big-icon">📋</div><div>${label}</div><div style="font-size:10px">暂无详细参数</div>`;
+    drawer.classList.add('open');
+    return;
+  }
+
+  empty.style.display = 'none';
+  content.style.display = 'block';
+
+  let html = `<div class="d-header">
+    <div class="d-icon">${data.icon}</div>
+    <div class="d-title-group">
+      <div class="d-title">${label}</div>
+      <div class="d-sub">${data.desc||''}</div>
+    </div>
+    <button class="d-close" onclick="closeDetail()">✕</button>
+  </div>`;
+
+  if (data.fields && data.fields.length > 0) {
+    html += `<div class="d-section"><h3>参数</h3><table class="d-table">`;
+    data.fields.forEach(f => { html += `<tr><td>${f[0]}</td><td>${f[1]}</td></tr>`; });
+    html += `</table></div>`;
+  }
+
+  if (data.code) {
+    html += `<div class="d-section"><h3>代码路径</h3><div class="d-code">${data.code}</div></div>`;
+  }
+
+  content.innerHTML = html;
+  drawer.classList.add('open');
+}
+
+function closeDetail() { document.getElementById('detail-drawer').classList.remove('open'); }
+
+// ═══ 搜索 ═══
+function filterTree(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.tree .node').forEach(n => {
+    const text = n.dataset.search || '';
+    const li = n.closest('li');
+    if (!q) { li.style.display = ''; return; }
+    const match = text.includes(q);
+    li.style.display = match ? '' : 'none';
+    if (match) {
+      let p = li.parentElement?.closest('li');
+      while (p) {
+        const ul = p.querySelector('ul'); if(ul) ul.style.display='';
+        const t = p.querySelector('.toggle'); if(t) t.classList.add('expanded');
+        p = p.parentElement?.closest('li');
+      }
+    }
+  });
+}
+
+// ═══ Resizers ═══
+['left','right'].forEach(side => {
+  const el = document.getElementById('resizer-'+side);
+  const target = side === 'left' ? document.getElementById('left-panel') : document.getElementById('detail-drawer');
+  let active = false;
+  el.addEventListener('mousedown', e => { active=true; el.classList.add('active'); e.preventDefault(); });
+  document.addEventListener('mousemove', e => {
+    if (!active) return;
+    if (side === 'left') target.style.width = Math.max(180, Math.min(400, e.clientX)) + 'px';
+    else target.style.width = Math.max(200, Math.min(500, window.innerWidth - e.clientX)) + 'px';
+  });
+  document.addEventListener('mouseup', () => { active=false; el.classList.remove('active'); });
+});
+
+// ═══ Init ═══
+renderTree(treeData, document.getElementById('tree-root'));
+const defaultNode = document.querySelector('.tree > ul > li:nth-child(3) > .node');
+if (defaultNode) defaultNode.click();
+
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeDetail(); });
+</script>
+</body>
+</html>

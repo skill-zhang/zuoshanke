@@ -99,4 +99,65 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"Schema v0.81 迁移跳过: {e}")
 
+    # 🆕 Schema v1.1: GatewaySession 扩展字段迁移（ALTER TABLE）
+    try:
+        db = SessionLocal()
+        from sqlalchemy import text as _sa_text
+        for col, col_type in [
+            ("status", "VARCHAR(20) DEFAULT 'active'"),
+            ("started_at", "TIMESTAMP"),
+            ("ended_at", "TIMESTAMP"),
+            ("duration_seconds", "INTEGER"),
+            ("prompt_tokens", "INTEGER DEFAULT 0"),
+            ("completion_tokens", "INTEGER DEFAULT 0"),
+            ("total_tokens", "INTEGER DEFAULT 0"),
+            ("input_tokens", "INTEGER DEFAULT 0"),
+            ("output_tokens", "INTEGER DEFAULT 0"),
+            ("cache_read_tokens", "INTEGER DEFAULT 0"),
+            ("cache_write_tokens", "INTEGER DEFAULT 0"),
+            ("reasoning_tokens", "INTEGER DEFAULT 0"),
+            ("api_calls", "INTEGER DEFAULT 0"),
+            ("estimated_cost_usd", "REAL DEFAULT 0.0"),
+            ("cost_status", "VARCHAR(20) DEFAULT 'unknown'"),
+            ("cost_source", "VARCHAR(50)"),
+        ]:
+            try:
+                db.execute(_sa_text(f"ALTER TABLE gateway_sessions ADD COLUMN {col} {col_type}"))
+            except Exception:
+                pass  # 已有该列
+        db.commit()
+        db.close()
+        log.info("✅ Schema v1.1 GatewaySession 字段迁移完成")
+    except Exception as e:
+        log.warning(f"GatewaySession 字段迁移跳过: {e}")
+
+    # 🆕 Schema v1.1: 启动时清理过期的 session
+    try:
+        db = SessionLocal()
+        from router.sessions import cleanup_all_stale_sessions
+        result = cleanup_all_stale_sessions(db)
+        db.close()
+        log.info(f"✅ 启动清理完成: {result['web_sessions_destroyed']} Web, {result['gateway_sessions_destroyed']} Gateway")
+    except Exception as e:
+        log.warning(f"启动 session 清理跳过: {e}")
+
+    # 🆕 Schema v1.1: 后台 session 超时扫描（每5分钟）
+    import threading as _st
+    def _session_timeout_scanner():
+        import time as _time
+        from config.constants import SESSION_TIMEOUT_HOURS
+        while True:
+            _time.sleep(300)  # 每5分钟扫一次
+            try:
+                _db = SessionLocal()
+                from router.sessions import cleanup_all_stale_sessions
+                _r = cleanup_all_stale_sessions(_db)
+                _db.close()
+                if _r['web_sessions_destroyed'] + _r['gateway_sessions_destroyed'] > 0:
+                    log.info(f"🔄 Session 超时清理: {_r}")
+            except Exception:
+                pass
+    _st.Thread(target=_session_timeout_scanner, daemon=True).start()
+    log.info("✅ Session 超时扫描线程已启动（每5分钟）")
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

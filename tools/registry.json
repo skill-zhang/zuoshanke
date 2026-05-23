@@ -937,6 +937,68 @@
       "returns": "[{task, status, summary, steps, error}]",
       "category": "agent",
       "verified": false
+    },
+    {
+      "name": "git_status",
+      "description": "查看 Git 工作区状态——未跟踪/已修改/待提交的文件列表。做改动前先看状态确认分支和未提交变更。",
+      "file": "tools/git_tool.py",
+      "function": "git_status",
+      "parameters": {
+        "path": {
+          "type": "string",
+          "description": "Git 仓库路径（默认 ~/zuoshanke）",
+          "optional": true
+        }
+      },
+      "returns": "JSON 状态报告（branch, status, short_status, has_changes）",
+      "category": "tools",
+      "verified": true
+    },
+    {
+      "name": "git_commit",
+      "description": "提交代码变更到本地 Git 仓库。自动 git add -A 后 commit。先调 git_status 确认变更再提交。注意：只有本地提交，不推送远端。",
+      "file": "tools/git_tool.py",
+      "function": "git_commit",
+      "parameters": {
+        "message": {
+          "type": "string",
+          "description": "提交信息"
+        },
+        "add_all": {
+          "type": "boolean",
+          "description": "是否自动暂存所有变更（默认 true）",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "description": "Git 仓库路径（默认 ~/zuoshanke）",
+          "optional": true
+        }
+      },
+      "returns": "提交结果（success, committed, output）",
+      "category": "tools",
+      "verified": true
+    },
+    {
+      "name": "git_diff",
+      "description": "查看 Git 工作区 diff——具体改动了哪些代码行。比 git_status 更详细。适合提交前确认改动内容。",
+      "file": "tools/git_tool.py",
+      "function": "git_diff",
+      "parameters": {
+        "staged": {
+          "type": "boolean",
+          "description": "是否查看已暂存的 diff（默认 false 显示未暂存）",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "description": "Git 仓库路径（默认 ~/zuoshanke）",
+          "optional": true
+        }
+      },
+      "returns": "JSON 响应（success, diff, has_diff）",
+      "category": "tools",
+      "verified": true
     }
   ]
 }

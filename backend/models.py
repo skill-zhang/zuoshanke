@@ -315,12 +315,75 @@ class GatewaySession(Base):
     scene_name = Column(String, nullable=True)                # 缓存场景名
     platform_username = Column(String, nullable=True)         # 缓存用户昵称
     last_active_at = Column(DateTime, default=utcnow)         # 最后活跃时间
+
+    # 🆕 Schema v1.1
+    status = Column(String, default="active")                 # active | destroyed
+    started_at = Column(DateTime, default=utcnow)             # session 创建时间
+    ended_at = Column(DateTime, nullable=True)                # session 销毁时间
+    duration_seconds = Column(Integer, nullable=True)         # ended_at - started_at
+
+    # 🆕 Schema v1.1 token 用量
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    cache_read_tokens = Column(Integer, default=0)
+    cache_write_tokens = Column(Integer, default=0)
+    reasoning_tokens = Column(Integer, default=0)
+    api_calls = Column(Integer, default=0)
+    estimated_cost_usd = Column(Float, default=0.0)
+    cost_status = Column(String, default="unknown")
+    cost_source = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-
     __table_args__ = (
         UniqueConstraint("platform", "platform_user_id", name="uq_platform_user"),
+    )
+
+
+# ═══ Schema v1.1: Web Session ═══
+class WebSession(Base):
+    """Web 前端会话 — 每个上下文（闲聊/频道/场景）各自独立
+
+    和 GatewaySession 共用相同的 session 生命周期管理逻辑，但 Web 端
+    每个上下文都有独立 session，不受 (platform, platform_user_id) 唯一约束。
+    """
+    __tablename__ = "web_sessions"
+
+    id = Column(String, primary_key=True)
+    context_type = Column(String, nullable=False)             # channel | scene
+    context_id = Column(String, nullable=False)               # 频道ID 或 场景ID
+    context_name = Column(String, nullable=True)              # 缓存名称（显示用）
+
+    # 🆕 Schema v1.1 session 生命周期
+    status = Column(String, default="active")                 # active | destroyed
+    started_at = Column(DateTime, default=utcnow)             # session 创建时间
+    ended_at = Column(DateTime, nullable=True)                # session 销毁时间
+    duration_seconds = Column(Integer, nullable=True)         # ended_at - started_at
+    last_active_at = Column(DateTime, default=utcnow)         # 最后活跃时间
+
+    # 🆕 Schema v1.1 token 用量
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    cache_read_tokens = Column(Integer, default=0)
+    cache_write_tokens = Column(Integer, default=0)
+    reasoning_tokens = Column(Integer, default=0)
+    api_calls = Column(Integer, default=0)
+    estimated_cost_usd = Column(Float, default=0.0)
+    cost_status = Column(String, default="unknown")
+    cost_source = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("context_type", "context_id", name="uq_web_context"),
     )
 
 

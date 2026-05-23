@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 自省地图（树+详情）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #020617;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 14px 20px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
+}
+header h1 { font-size: 16px; font-weight: 600;
+  background: linear-gradient(135deg, #22d3ee, #34d399);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+header .sub { font-size: 11px; color: #475569; }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── 左侧树 ── */
+#left-panel {
+  width: 360px; min-width: 260px;
+  border-right: 1px solid #1e293b;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#search-box {
+  background: #0f172a; border: none; border-bottom: 1px solid #1e293b;
+  padding: 10px 14px; color: #e2e8f0; font-size: 12px;
+  font-family: inherit; outline: none; flex-shrink: 0;
+}
+#search-box::placeholder { color: #475569; }
+
+#tree-scroll {
+  flex: 1; overflow-y: auto; padding: 8px 0 20px 16px;
+}
+#tree-scroll::-webkit-scrollbar { width: 6px; }
+#tree-scroll::-webkit-scrollbar-track { background: transparent; }
+#tree-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+.tree { list-style: none; }
+.tree ul { list-style: none; padding-left: 20px; }
+.tree li { position: relative; padding: 1px 0; }
+.tree li::before {
+  content: ''; position: absolute; left: -13px; top: 0; bottom: 50%;
+  width: 10px; border-left: 1.5px solid #1e293b; border-bottom: 1.5px solid #1e293b;
+  border-radius: 0 0 0 4px;
+}
+.tree li:last-child::before {
+  border-left: 1.5px solid #1e293b; border-bottom: 1.5px solid #1e293b;
+  border-radius: 0 0 0 4px;
+}
+.tree li:last-child::after {
+  content: ''; position: absolute; left: -13px; top: 50%; bottom: 0; width: 10px;
+}
+.tree > li::before { display: none; }
+.tree > li::after { display: none; }
+
+.node {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px 4px 6px; border-radius: 5px;
+  cursor: pointer; transition: all 0.12s;
+  border: 1px solid transparent; user-select: none;
+  font-size: 12px; line-height: 1.4;
+  width: calc(100% - 4px);
+}
+.node:hover { background: rgba(30,41,59,0.5); border-color: #1e293b; }
+.node.selected {
+  background: rgba(34,211,238,0.1);
+  border-color: rgba(34,211,238,0.3);
+}
+.node.has-detail { border-left: 2px solid transparent; }
+.node.selected.has-detail { border-left-color: #22d3ee; }
+
+.node .icon { font-size: 13px; width: 18px; text-align: center; flex-shrink: 0; }
+.node .label { color: #e2e8f0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node .sublabel {
+  font-size: 10px; color: #475569;
+  margin-left: auto; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 100px;
+}
+.toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; font-size: 8px; color: #475569;
+  transition: transform 0.2s; flex-shrink: 0;
+}
+.toggle.expanded { transform: rotate(90deg); }
+.toggle.empty { visibility: hidden; }
+
+/* ── 右侧详情面板 ── */
+#detail-panel {
+  width: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #0a0f1e;
+  border-left: 1px solid #1e293b;
+}
+#detail-panel.open { width: 400px; min-width: 320px; }
+
+#detail-inner {
+  width: 400px; min-width: 320px;
+  flex: 1; overflow-y: auto; padding: 20px;
+}
+#detail-inner::-webkit-scrollbar { width: 6px; }
+#detail-inner::-webkit-scrollbar-track { background: transparent; }
+#detail-inner::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+/* Detail content */
+.d-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 14px; border-bottom: 1px solid #1e293b; margin-bottom: 16px;
+}
+.d-icon { font-size: 28px; width: 40px; text-align: center; }
+.d-title-group { flex: 1; }
+.d-title { font-size: 16px; font-weight: 600; }
+.d-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+.d-close {
+  background: none; border: none; color: #475569; font-size: 16px;
+  cursor: pointer; padding: 4px; border-radius: 4px;
+}
+.d-close:hover { color: #e2e8f0; background: rgba(255,255,255,0.05); }
+
+.d-section { margin-bottom: 16px; }
+.d-section h3 {
+  font-size: 10px; color: #475569; text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 6px;
+}
+.d-desc { font-size: 13px; color: #94a3b8; line-height: 1.7; }
+
+.d-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.d-table td {
+  padding: 6px 8px; border-bottom: 1px solid #1e293b;
+  vertical-align: top;
+}
+.d-table td:first-child {
+  color: #64748b; width: 90px; white-space: nowrap;
+  font-size: 11px;
+}
+.d-table td:last-child { color: #e2e8f0; }
+
+.d-code-block {
+  font-size: 12px; color: #22d3ee;
+  background: rgba(34,211,238,0.05);
+  padding: 10px 14px; border-radius: 6px;
+  border: 1px solid rgba(34,211,238,0.12);
+  font-family: inherit;
+}
+
+.d-empty {
+  color: #475569; font-size: 13px; text-align: center;
+  padding: 60px 20px; line-height: 2;
+}
+.d-empty .big-icon { font-size: 40px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛰️ 坐山客 · 自省地图</h1>
+  <span class="sub">左树导航 · 右侧详情</span>
+</header>
+
+<div class="main">
+  <!-- 左侧树 -->
+  <div id="left-panel">
+    <input id="search-box" type="text" placeholder="搜索模块、文件、参数…" oninput="filterTree(this.value)">
+    <div id="tree-scroll"><ul class="tree" id="tree-root"></ul></div>
+  </div>
+  <!-- 右侧详情 -->
+  <div id="detail-panel">
+    <div id="detail-inner">
+      <div class="d-empty" id="empty-state">
+        <div class="big-icon">🗺️</div>
+        <div>点击左侧节点</div>
+        <div style="font-size:11px">查看模块详情与参数</div>
+      </div>
+      <div id="detail-content" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ 详情数据 ═══
+
+const details = {
+  '坐山客系统': {
+    icon: '🏛️', desc: '坐山客是 AI 原生的智能工作台。核心架构为 Schema v1.0 七层 Context 组合 + Agent Loop 执行引擎。',
+    fields: [['架构', 'Schema v1.0 七层模型'],['语言', 'Python + TypeScript'],['数据库', 'SQLite (SQLAlchemy)'],['AI', 'DeepSeek Flash / Qwen3.5']],
+  },
+  '前端层': {
+    icon: '🖥️', desc: '单页应用，Zustand 状态管理，无路由。采用深色主题卡片式布局。',
+    fields: [['框架', 'React 18 + TypeScript + Vite'],['状态管理', 'Zustand (appStore.ts)'],['构建工具', 'Vite (pnpm dev)'],['端口', '5173'],['目录', 'frontend/src/']],
+  },
+  'Zustand Store': {
+    icon: '🗄️', desc: '统一的全局状态管理，涵盖场景、频道、消息、Session、Thinking Map、仪表盘等所有模块。',
+    fields: [['文件', 'frontend/src/stores/appStore.ts'],['量级', '~1000 行'],['模式', 'Zustand create()'],['切片', '场景/频道/消息/Thinking Map/Action Map/Session/仪表盘']],
+  },
+  'API Client': {
+    icon: '📡', desc: '所有后端请求的统一封装层，基于 fetch 的泛型请求函数。',
+    fields: [['文件', 'frontend/src/api/client.ts'],['模式', 'request<T>(url, options)'],['量级', '~800 行'],['覆盖', '场景/频道/消息/记忆/Session/工具/设置/网关']],
+  },
+  '组件树': {
+    icon: '🧩', desc: 'React 组件体系，按功能模块组织。',
+    fields: [['对话', 'ChatView (场景+频道)'],['场景', 'SceneCard + 场景广场/工坊'],['仪表盘', 'Dashboard (Agent Loop 监控)'],['图谱', 'ActionMapView (SVG 渲染)'],['系统', 'SettingsDrawer + 能力验证']],
+  },
+  '网关层': {
+    icon: '📨', desc: '微信/Telegram 等外部平台消息的统一入口。根据 GatewaySession 状态路由到频道或场景。',
+    fields: [['入口', 'POST /api/gateway/chat'],['响应', 'GatewayChatResponse (reply + mode)'],['协议', 'HTTP 长轮询 (30s 超时)'],['目录', 'backend/gateway/ + backend/router/gateway.py']],
+  },
+  'Session 查找': {
+    icon: '🔍', desc: '按 (platform, platform_user_id) 查找或创建 GatewaySession。首次使用自动绑定默认「闲聊」频道。',
+    fields: [['函数', '_get_or_create_session()'],['唯一约束', '(platform, platform_user_id)'],['新建', '绑定默认「闲聊」频道'],['缓存', 'platform_username 自动更新']],
+  },
+  '超时回退': {
+    icon: '⏰', desc: '场景模式下超过 5 分钟无交互，自动退回频道模式。',
+    fields: [['函数', '_check_scene_timeout()'],['超时', '5 分钟'],['操作', 'mode=channel, scene_id=null'],['文件', 'backend/router/gateway.py']],
+  },
+  '语境路由': {
+    icon: '🛣️', desc: '根据 GatewaySession.mode 决定走频道还是场景对话引擎。',
+    fields: [['频道', '本体观察模式 (ZhuAgent.observe)'],['场景', '场景 AI 回复 (call_qwen_chat)'],['默认', '频道（闲聊）模式'],
+  ]},
+  '后端层': {
+    icon: '⚙️', desc: 'FastAPI 应用 + SQLite 数据库 + Agent Loop 执行引擎。坐山客的核心服务端。',
+    fields: [['框架', 'FastAPI + uvicorn'],['数据库', 'SQLAlchemy + SQLite'],['AI', 'DeepSeek / Qwen API'],['端口', '8000'],['目录', 'backend/']],
+  },
+  '路由层': {
+    icon: '🛣️', desc: 'FastAPI 路由注册。涵盖场景 CRUD、频道 CRUD、流式消息、Session 管理、记忆操作、工具管理等。',
+    fields: [['注册', 'router/__init__.py register_all_routers()'],['场景', 'scenes.py + scene_stream.py'],['频道', 'channels.py'],['Session', 'sessions.py (v1.1 新增)'],['记忆', 'memory.py'],['网关', 'gateway.py']],
+  },
+  'Agent Core': {
+    icon: '🧠', desc: '坐山客的智能核心。包含 Agent Loop 执行引擎、Context 组合器、记忆系统、Session 管理、Thinking Map 等子系统。',
+    fields: [['引擎', 'Agent Loop (LLM 自主调工具)'],['上下文', '7 层精炼 (Schema v1.0)'],['记忆', '双重记忆池'],['Session', '两态模型 (v1.1)'],['目录', 'backend/agent_core/']],
+  },
+  'Agent Loop': {
+    icon: '🔄', desc: 'LLM 自主决策调工具的核心循环引擎。用户消息进入后：构建 Context → LLM function calling → 执行工具 → 结果回喂 → 继续/收敛退出。',
+    fields: [['文件', 'backend/agent_core/agent_loop.py'],['最大步数', '25 (可配)'],['工具', 'function calling 模式'],['退出', 'LLM 主动收敛 / 步骤超限']],
+  },
+  'Context 组合器': {
+    icon: '📐', desc: 'Schema v1.0 核心组件。将 7 层独立信息源（Prompt/Memory/Document/Config/Skill/History/Work Output）合并为一个精炼的 LLM prompt。每层独立控制加载策略与 token 预算。',
+    fields: [['层数', '7 层'],['策略', '每层独立控制加载 + token 预算'],['入口', 'build_agent_context_v1()'],['文件', 'context_builder.py + context_composer.py']],
+  },
+  '记忆系统': {
+    icon: '💾', desc: '双重记忆池架构。本体记忆永久在线不衰减，分身记忆按需加载正常衰减。写穿透缓存同步。',
+    fields: [['本体', '永久在线，不衰减'],['分身', '按需加载，正常衰减'],['缓存', '写穿透同步 (MemoryCache)'],['文件', 'memory_manager.py + memory_cache.py + memory_injector.py']],
+  },
+  'Session 管理': {
+    icon: '🔄', desc: 'Schema v1.1 统一 Session 管理。Web + Gateway 两态模型（active → destroyed），3 小时超时自动清理。',
+    fields: [['状态', '两态: active → destroyed'],['超时', '3 小时 (可配置)'],['字段', '16 个 v1.1 新增 (状态 + token 用量)'],['文件', 'router/sessions.py'],['扫描', '每 5 分钟后台超时扫描']],
+  },
+  'Thinking Map': {
+    icon: '🗺️', desc: '思维导图引擎。Diverge（发散）→ Converge（收敛）→ Sort（排序）→ Focus（聚焦）→ Execute（执行）→ Reflect（反射）。',
+    fields: [['发散', 'LLM 拆解任务维度'],['收敛', '合并相似节点 (阈值 2.0)'],['优先级', '权重 + priority + sort_order'],['聚焦', 'Top-N 可执行叶子节点'],['反射', '记录执行结果 + 状态更新'],['文件', 'agent_core/converge_engine.py + router/thinking_map.py']],
+  },
+  '数据层': {
+    icon: '🗄️', desc: 'SQLAlchemy ORM + SQLite 数据库。所有数据的持久化层，支持零破坏的 Schema 迁移。',
+    fields: [['ORM', 'SQLAlchemy DeclarativeBase'],['DB', 'SQLite (zuoshanke.db)'],['模型', '~30 个数据模型 (models.py)'],['迁移', 'ALTER TABLE + create_all (零破坏)'],['文件', 'database.py + models.py']],
+  },
+  'LLM 引擎': {
+    icon: '🧠', desc: 'AI 推理引擎。同时支持 DeepSeek 云端 API 和本地 Qwen 模型。',
+    fields: [['DeepSeek', 'v4-flash / v4-pro (云端)'],['本地', 'Qwen3.5-8B (llama-server :8083)'],['路由', '根据复杂度直达 / medium / heavy'],['文件', 'ai_engine.py call_deepseek_chat()']],
+  },
+  '工具系统': {
+    icon: '🔧', desc: 'LLM 可调用的外部工具集。通过 function calling 注册和执行。',
+    fields: [['注册', 'tools/registry.json'],['数量', '~15 个工具'],['模式', 'function calling (OpenAI 兼容)'],['工具', 'web_search/weather/read_file/write_file/patch/run_code/memory/skill/session_search 等'],['目录', 'tools/*.py']],
+  },
+};
+
+// ═══ 树形数据 ═══
+
+const treeData = {
+  icon: '🏛️', label: '坐山客系统', sub: '整体架构全貌',
+  children: [
+    { icon: '🖥️', label: '前端层', sub: 'React + Zustand',
+      children: [
+        { icon: '🗄️', label: 'Zustand Store', sub: '全局状态' },
+        { icon: '📡', label: 'API Client', sub: 'fetch 封装' },
+        { icon: '🧩', label: '组件树', sub: '页面+面板' },
+      ]
+    },
+    { icon: '📨', label: '网关层', sub: '外部平台消息',
+      children: [
+        { icon: '🔍', label: 'Session 查找', sub: 'get_or_create' },
+        { icon: '⏰', label: '超时回退', sub: '5min → 频道' },
+        { icon: '🛣️', label: '语境路由', sub: 'channel/scene' },
+      ]
+    },
+    { icon: '⚙️', label: '后端层', sub: 'FastAPI',
+      children: [
+        { icon: '🛣️', label: '路由层', sub: '场景/频道' },
+        { icon: '🧠', label: 'Agent Core', sub: '执行引擎',
+          children: [
+            { icon: '🔄', label: 'Agent Loop', sub: 'LLM 自主调工具' },
+            { icon: '📐', label: 'Context 组合器', sub: '7 层精炼' },
+            { icon: '💾', label: '记忆系统', sub: '双重记忆池' },
+            { icon: '🔄', label: 'Session 管理', sub: '两态模型' },
+            { icon: '🗺️', label: 'Thinking Map', sub: '发散收敛' },
+          ]
+        },
+        { icon: '🗄️', label: '数据层', sub: 'SQLAlchemy' },
+      ]
+    },
+    { icon: '🧠', label: 'LLM 引擎', sub: 'DeepSeek / Qwen' },
+    { icon: '🔧', label: '工具系统', sub: '注册+执行' },
+  ]
+};
+
+// ═══ 渲染树 ═══
+
+function renderTree(node, container) {
+  const ul = document.createElement('ul'); ul.className = 'tree';
+  (node.children || []).forEach(child => {
+    const li = document.createElement('li');
+    const hasChildren = child.children && child.children.length > 0;
+    const expanded = child.label === 'Agent Core' || child.label === '后端层';
+
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = 'node has-detail';
+    nodeDiv.dataset.searchText = `${child.icon||''} ${child.label} ${child.sub||''}`.toLowerCase();
+
+    const toggle = document.createElement('span');
+    toggle.className = `toggle ${hasChildren ? (expanded ? 'expanded' : '') : 'empty'}`;
+    toggle.textContent = hasChildren ? '▶' : '';
+    nodeDiv.appendChild(toggle);
+
+    const icon = document.createElement('span');
+    icon.className = 'icon'; icon.textContent = child.icon || '•';
+    nodeDiv.appendChild(icon);
+
+    const label = document.createElement('span');
+    label.className = 'label'; label.textContent = child.label;
+    nodeDiv.appendChild(label);
+
+    if (child.sub) {
+      const sub = document.createElement('span');
+      sub.className = 'sublabel'; sub.textContent = child.sub;
+      nodeDiv.appendChild(sub);
+    }
+
+    nodeDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+      nodeDiv.classList.add('selected');
+
+      if (hasChildren) {
+        const childUl = li.querySelector('ul');
+        if (childUl) {
+          childUl.style.display = childUl.style.display === 'none' ? '' : 'none';
+          toggle.classList.toggle('expanded');
+        }
+      }
+
+      showDetail(child.label);
+    });
+
+    li.appendChild(nodeDiv);
+
+    if (hasChildren) {
+      const childContainer = document.createElement('div');
+      renderTree(child, childContainer);
+      const childUl = childContainer.querySelector('ul');
+      if (childUl) {
+        if (!expanded) childUl.style.display = 'none';
+        li.appendChild(childUl);
+      }
+    }
+    ul.appendChild(li);
+  });
+  container.appendChild(ul);
+}
+
+// ═══ 右侧详情 ═══
+
+function showDetail(label) {
+  const panel = document.getElementById('detail-panel');
+  const content = document.getElementById('detail-content');
+  const emptyState = document.getElementById('empty-state');
+  const data = details[label];
+
+  if (!data) {
+    // 无详情数据时显示简易信息
+    content.style.display = 'none';
+    emptyState.style.display = 'block';
+    emptyState.innerHTML = `<div class="big-icon">📋</div><div>${label}</div><div style="font-size:11px">暂无详细参数 · 可手动补充</div>`;
+    panel.classList.add('open');
+    return;
+  }
+
+  emptyState.style.display = 'none';
+  content.style.display = 'block';
+
+  let html = `<div class="d-header">
+    <div class="d-icon">${data.icon}</div>
+    <div class="d-title-group">
+      <div class="d-title">${label}</div>
+      <div class="d-sub">${data.desc || ''}</div>
+    </div>
+    <button class="d-close" onclick="closeDetail()">✕</button>
+  </div>`;
+
+  if (data.fields && data.fields.length > 0) {
+    html += `<div class="d-section"><h3>参数</h3><table class="d-table">`;
+    data.fields.forEach(f => {
+      html += `<tr><td>${f[0]}</td><td>${f[1]}</td></tr>`;
+    });
+    html += `</table></div>`;
+  }
+
+  if (data.code) {
+    html += `<div class="d-section"><h3>代码路径</h3><div class="d-code-block">${data.code}</div></div>`;
+  }
+
+  content.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+// ═══ 搜索 ═══
+
+function filterTree(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.tree .node').forEach(n => {
+    const text = n.dataset.searchText || '';
+    const li = n.closest('li');
+    if (!q) { li.style.display = ''; return; }
+    const match = text.includes(q);
+    li.style.display = match ? '' : 'none';
+    if (match) {
+      let parent = li.parentElement?.closest('li');
+      while (parent) {
+        const ul = parent.querySelector('ul');
+        if (ul) ul.style.display = '';
+        const tog = parent.querySelector('.toggle');
+        if (tog) tog.classList.add('expanded');
+        parent = parent.parentElement?.closest('li');
+      }
+    }
+  });
+}
+
+// ═══ Init ═══
+renderTree(treeData, document.getElementById('tree-root'));
+
+// 默认选中后端层
+const defaultNode = document.querySelector('.tree > ul > li:nth-child(3) > .node');
+if (defaultNode) defaultNode.click();
+</script>
+</body>
+</html>

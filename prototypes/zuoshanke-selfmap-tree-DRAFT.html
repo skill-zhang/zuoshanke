@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 自省地图（树形版）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #020617;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 20px 28px 12px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #22d3ee, #34d399);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+header .sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+#tree-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 28px 40px;
+}
+
+/* Tree structure */
+.tree { list-style: none; padding-left: 0; }
+.tree ul { list-style: none; padding-left: 28px; }
+
+.tree li {
+  position: relative;
+  padding: 3px 0;
+}
+
+/* Tree line connector */
+.tree li::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 0;
+  bottom: 50%;
+  width: 14px;
+  border-left: 1.5px solid #1e293b;
+  border-bottom: 1.5px solid #1e293b;
+  border-radius: 0 0 0 4px;
+}
+.tree li:last-child::before {
+  border-left: 1.5px solid #1e293b;
+  border-bottom: 1.5px solid #1e293b;
+  border-radius: 0 0 0 4px;
+}
+.tree li:last-child::after {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  bottom: 0;
+  width: 14px;
+}
+.tree > li::before { display: none; }
+.tree > li::after { display: none; }
+.tree ul > li:only-child::before { border-radius: 0 0 0 4px; }
+
+/* Node content */
+.node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+  user-select: none;
+  position: relative;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.node:hover {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: #1e293b;
+}
+
+/* Level colors */
+.node.level-1 { border-left: 3px solid #22d3ee; }
+.node.level-2 { border-left: 3px solid #34d399; }
+.node.level-3 { border-left: 3px solid #a78bfa; }
+.node.level-4 { border-left: 3px solid #fbbf24; }
+
+.node .icon { font-size: 15px; width: 22px; text-align: center; flex-shrink: 0; }
+.node .label { color: #e2e8f0; font-weight: 500; }
+.node .sublabel { font-size: 11px; color: #64748b; margin-left: 4px; }
+.node .tag {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+  background: rgba(30,41,59,0.8);
+  color: #64748b;
+}
+.node .tag.cyan { background: rgba(34,211,238,0.12); color: #22d3ee; }
+.node .tag.green { background: rgba(52,211,153,0.12); color: #34d399; }
+.node .tag.purple { background: rgba(167,139,250,0.12); color: #a78bfa; }
+.node .tag.amber { background: rgba(251,191,36,0.12); color: #fbbf24; }
+.node .tag.rose { background: rgba(251,113,133,0.12); color: #fb7185; }
+
+/* Toggle arrow */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  color: #475569;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.toggle.expanded { transform: rotate(90deg); }
+.toggle.empty { visibility: hidden; }
+
+/* Detail panel */
+#detail-panel {
+  display: none;
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  max-width: 90vw;
+  max-height: 70vh;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 20px 24px;
+  z-index: 100;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  overflow-y: auto;
+}
+#detail-panel.show { display: block; }
+#detail-backdrop {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 99;
+}
+#detail-backdrop.show { display: block; }
+#detail-panel h2 { font-size: 16px; margin-bottom: 8px; }
+#detail-panel h2 .di { margin-right: 8px; }
+#detail-panel .d-sub { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+#detail-panel .d-section { margin-top: 14px; }
+#detail-panel .d-section h3 { font-size: 12px; color: #64748b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+#detail-panel table { width: 100%; font-size: 12px; border-collapse: collapse; }
+#detail-panel td { padding: 4px 8px; border-bottom: 1px solid #1e293b; color: #94a3b8; }
+#detail-panel td:first-child { color: #64748b; width: 100px; }
+#detail-panel .close-btn {
+  position: absolute;
+  top: 12px; right: 16px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 18px;
+  cursor: pointer;
+}
+#detail-panel .close-btn:hover { color: #e2e8f0; }
+
+/* Search */
+#search-box {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 8px 14px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: inherit;
+  width: 240px;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 8px;
+}
+#search-box:focus { border-color: #22d3ee; }
+#search-box::placeholder { color: #475569; }
+
+/* Scrollbar */
+#tree-container::-webkit-scrollbar { width: 8px; }
+#tree-container::-webkit-scrollbar-track { background: transparent; }
+#tree-container::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+#tree-container::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+/* Highlight match */
+.node.highlight {
+  background: rgba(34,211,238,0.15) !important;
+  border-color: #22d3ee !important;
+}
+
+/* Count badge */
+.count-badge {
+  font-size: 10px;
+  color: #475569;
+  margin-left: 4px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛰️ 坐山客 · 自省地图</h1>
+  <div class="sub">L1 架构总览 → L2 局部流程 → L3 实现细节 → L4 参数与代码</div>
+</header>
+
+<div id="tree-container">
+  <input id="search-box" type="text" placeholder="搜索模块、文件、参数…" oninput="filterTree(this.value)">
+  <ul class="tree" id="tree-root"></ul>
+</div>
+
+<div id="detail-backdrop" onclick="hideDetail()"></div>
+<div id="detail-panel">
+  <button class="close-btn" onclick="hideDetail()">✕</button>
+  <div id="detail-content"></div>
+</div>
+
+<script>
+// ═══ 树形数据 ═══
+
+const treeData = {
+  id: 'root',
+  icon: '🏛️',
+  label: '坐山客系统',
+  sub: '整体架构全貌',
+  level: 0,
+  children: [
+    {
+      id: 'frontend', icon: '🖥️', label: '前端层', sub: 'React + Zustand',
+      level: 1, tag: 'cyan', tagText: 'L1',
+      detail: {
+        desc: '单页应用，Zustand 状态管理，无路由。',
+        fields: [
+          ['框架', 'React 18 + TypeScript + Vite'],
+          ['状态管理', 'Zustand (appStore.ts)'],
+          ['构建工具', 'Vite (pnpm dev)'],
+          ['端口', '5173'],
+        ],
+        code: 'frontend/src/',
+      },
+      children: [
+        { id: 'fe-store', icon: '🗄️', label: 'Zustand Store', sub: '全局状态中心', level: 2, tag: 'cyan',
+          detail: { desc: '统一状态管理，涵盖场景、频道、消息、Session、Thinking Map、仪表盘。', fields: [['文件', 'appStore.ts'], ['量级', '~1000 行'], ['模式', 'Zustand create()']] },
+          children: [
+            { id: 'fe-store-scene', icon: '🎭', label: '场景状态', sub: 'currentScene + messages + sessions', level: 3, tag: 'green' },
+            { id: 'fe-store-ch', icon: '💬', label: '频道状态', sub: 'currentChannel + channelMessages', level: 3, tag: 'green' },
+            { id: 'fe-store-map', icon: '🗺️', label: 'Thinking Map 状态', sub: 'thinkingMap + 节点操作', level: 3, tag: 'green' },
+            { id: 'fe-store-am', icon: '🎯', label: 'Action Map 状态', sub: 'actionMaps + drawer', level: 3, tag: 'green' },
+            { id: 'fe-store-ses', icon: '🔄', label: 'Session 状态', sub: 'v1.1 activateSession 调用', level: 3, tag: 'amber' },
+          ]
+        },
+        { id: 'fe-client', icon: '📡', label: 'API Client', sub: 'fetch 封装', level: 2, tag: 'cyan',
+          detail: { desc: '所有后端请求的统一封装层，返回 Promise<T>。', fields: [['文件', 'client.ts'], ['模式', 'request<T>(url, options)'], ['量级', '~800 行']] } },
+        { id: 'fe-comp', icon: '🧩', label: '组件树', sub: '页面 + 卡片 + 面板', level: 2, tag: 'cyan',
+          children: [
+            { id: 'fe-comp-chat', icon: '💬', label: 'ChatView', sub: '场景/频道对话面板', level: 3, tag: 'green' },
+            { id: 'fe-comp-scene', icon: '🎭', label: 'SceneCard', sub: '场景卡片列表', level: 3, tag: 'green' },
+            { id: 'fe-comp-dash', icon: '📊', label: 'Dashboard', sub: 'Agent Loop 仪表盘', level: 3, tag: 'green' },
+            { id: 'fe-comp-amv', icon: '🎯', label: 'ActionMapView', sub: '行动图渲染（SVG）', level: 3, tag: 'green' },
+          ]
+        },
+      ]
+    },
+    {
+      id: 'gateway', icon: '📨', label: '网关层', sub: '外部平台消息入口',
+      level: 1, tag: 'amber', tagText: 'L1',
+      detail: { desc: '微信/Telegram 等外部平台消息的统一入口。根据 GatewaySession 状态路由到频道或场景。', fields: [['入口', 'POST /api/gateway/chat'], ['响应', 'GatewayChatResponse (reply + mode)'], ['协议', '长轮询 (30s 超时)']] },
+      children: [
+        { id: 'gw-session', icon: '🔍', label: 'Session 查找', sub: '_get_or_create_session()', level: 2, tag: 'amber',
+          detail: { desc: '按 (platform, platform_user_id) 查找或创建 GatewaySession。', fields: [['唯一约束', '(platform, platform_user_id)'], ['新建', '绑定默认「闲聊」频道'], ['缓存', 'platform_username 自动更新']] } },
+        { id: 'gw-timeout', icon: '⏰', label: '场景超时回退', sub: '_check_scene_timeout()', level: 2, tag: 'amber',
+          detail: { desc: '场景模式下超过 N 分钟无消息，自动退回频道模式。', fields: [['超时', '5 分钟'], ['操作', 'mode=channel, scene_id=null'], ['代码', 'gateway.py _check_scene_timeout()']] } },
+        { id: 'gw-route', icon: '🛣️', label: '语境路由', sub: 'channel / scene 分发', level: 2, tag: 'amber',
+          detail: { desc: '根据 GatewaySession.mode 决定走频道还是场景对话引擎。', fields: [['频道', '本体观察模式 (ZhuAgent.observe)'], ['场景', '场景 AI 回复 (call_qwen_chat)']] } },
+      ]
+    },
+    {
+      id: 'backend', icon: '⚙️', label: '后端层', sub: 'FastAPI + Agent Core',
+      level: 1, tag: 'green', tagText: 'L1',
+      detail: { desc: 'FastAPI 应用，SQLite 数据库，Agent Loop 执行引擎。', fields: [['框架', 'FastAPI + uvicorn'], ['数据库', 'SQLAlchemy + SQLite'], ['AI', 'DeepSeek / Qwen API'], ['端口', '8000']], code: 'backend/' },
+      children: [
+        { id: 'be-router', icon: '🛣️', label: '路由层', sub: '场景/频道/Session/网关', level: 2, tag: 'green',
+          children: [
+            { id: 'be-r-scenes', icon: '🎭', label: 'Scenes', sub: '场景 CRUD + 流式消息 + 思维导图', level: 3, tag: 'green' },
+            { id: 'be-r-ch', icon: '💬', label: 'Channels', sub: '频道 CRUD + 流式消息', level: 3, tag: 'green' },
+            { id: 'be-r-ses', icon: '🔄', label: 'Sessions', sub: 'v1.1 session 管理 API', level: 3, tag: 'amber' },
+            { id: 'be-r-mem', icon: '💾', label: 'Memory', sub: '记忆 CRUD + 搜索', level: 3, tag: 'green' },
+          ]
+        },
+        { id: 'be-core', icon: '🧠', label: 'Agent Core', sub: '执行引擎核心', level: 2, tag: 'green',
+          children: [
+            { id: 'be-core-loop', icon: '🔄', label: 'Agent Loop', sub: 'LLM 自主调工具引擎', level: 3, tag: 'purple',
+              detail: { desc: 'LLM 自主决策调工具的核心引擎。用户消息 → 构建 context → LLM function calling → 执行工具 → 结果喂回 → 循环直到收敛。', fields: [['最大步数', '25 (可配)'], ['上下文', '7 层精炼 (Schema v1.0)'], ['工具', 'function calling 模式']], code: 'backend/agent_core/agent_loop.py' } },
+            { id: 'be-core-ctx', icon: '📐', label: 'Context 组合器', sub: '7 层精炼架构', level: 3, tag: 'purple',
+              detail: { desc: 'Schema v1.0 核心 — 将 7 层独立信息源合并为一个精炼的 LLM prompt。', fields: [['层数', '7 (Prompt/Memory/Document/Config/Skill/History/Work)'], ['策略', '每层独立控制加载 + token 预算'], ['入口', 'build_agent_context_v1()']], code: 'backend/agent_core/context_builder.py + context_composer.py' },
+              children: [
+                { id: 'be-ctx-prompt', icon: '1', label: 'Prompt Layer', sub: '系统 prompt + 场景设定', level: 4, tag: 'amber' },
+                { id: 'be-ctx-mem', icon: '2', label: 'Memory Layer → 注入', sub: 'Top-5 记忆 + 权重排序', level: 4, tag: 'amber', detail: { desc: 'Memory Layer 注入细节', fields: [['策略', '缓存优先 → DB 兜底'], ['排序', '权重 + 时间衰减'], ['截断', '最多 5 条'], ['代码', 'memory_cache.py → memory_injector.py']] } },
+                { id: 'be-ctx-doc', icon: '3', label: 'Document Layer', sub: '关联文档摘要', level: 4, tag: 'amber' },
+                { id: 'be-ctx-cfg', icon: '4', label: 'Config Layer', sub: 'scene_config + 约束', level: 4, tag: 'amber' },
+                { id: 'be-ctx-skill', icon: '5', label: 'Skill Layer → 工具', sub: '工具注册列表注入', level: 4, tag: 'amber', detail: { desc: 'Skill Layer 细节', fields: [['来源', 'tools/registry.json'], ['筛选', '按场景匹配'], ['注入', '工具名 + 参数 + 用例描述'], ['代码', 'tools/registry.json → context_builder.py']] } },
+                { id: 'be-ctx-hist', icon: '6', label: 'History Layer', sub: '当前 session 全部消息', level: 4, tag: 'amber' },
+                { id: 'be-ctx-work', icon: '7', label: 'Work Output', sub: '上一轮产出', level: 4, tag: 'amber' },
+              ]
+            },
+            { id: 'be-core-mem', icon: '💾', label: '记忆系统', sub: '双重记忆池', level: 3, tag: 'purple',
+              detail: { desc: '本体永久记忆 + 分身场景记忆的双重架构', fields: [['本体', '永久在线，不衰减'], ['分身', '按需加载，正常衰减'], ['缓存', '写穿透同步'], ['代码', 'memory_manager.py + memory_cache.py']] },
+              children: [
+                { id: 'be-mem-write', icon: '✍️', label: '写入流程', sub: 'Jaccard 去重 → reinforce / 新建', level: 4, tag: 'amber', detail: { desc: '写入流程细节', fields: [['去重', 'Jaccard 相似度 (阈值 0.50)'], ['命中', 'reinforce 权重 +1'], ['未命中', '新建 base_weight=3'], ['代码', 'memory_manager.py add() + reinforce()']] } },
+                { id: 'be-mem-read', icon: '📖', label: '读取流程', sub: '缓存 → DB → 排序 → 注入', level: 4, tag: 'amber', detail: { desc: '读取流程细节', fields: [['查询', '缓存优先 → DB 兜底'], ['排序', '权重 + 时间衰减'], ['注入', '最多 5 条格式化后注入 Context'], ['代码', 'memory_cache.py + memory_injector.py']] } },
+                { id: 'be-mem-extract', icon: '🧹', label: '提取器', sub: '异步提取记忆', level: 4, tag: 'amber', detail: { desc: '记忆提取流程', fields: [['触发', '页面关闭 (visibilitychange) / session 结束兜底'], ['批量', '最多 30 条'], ['算法', 'Jaccard 去重 (阈值 0.50)'], ['代码', 'memory_extractor.py']] } },
+              ]
+            },
+            { id: 'be-core-ses', icon: '🔄', label: 'Session 管理', sub: 'v1.1 两态模型', level: 3, tag: 'purple',
+              detail: { desc: 'Web + Gateway 统一 Session 管理', fields: [['状态', '两态: active → destroyed'], ['超时', '3 小时 (可配置)'], ['字段', '16 个 v1.1 新增 (状态 + token 用量)'], ['代码', 'router/sessions.py']] },
+              children: [
+                { id: 'be-ses-activate', icon: '🚀', label: '创建/激活', sub: 'sidebar 点击时触发', level: 4, tag: 'amber' },
+                { id: 'be-ses-touch', icon: '💬', label: '活跃刷新', sub: '发消息 → 更新 last_active_at', level: 4, tag: 'amber' },
+                { id: 'be-ses-token', icon: '💰', label: 'Token 累加', sub: 'prompt/completion/total/cost', level: 4, tag: 'amber' },
+                { id: 'be-ses-clean', icon: '⏰', label: '超时清理', sub: '5 分钟后台扫描 → destroyed', level: 4, tag: 'amber' },
+              ]
+            },
+            { id: 'be-core-tmap', icon: '🗺️', label: 'Thinking Map', sub: '发散 → 收敛 → 排序 → 聚焦', level: 3, tag: 'purple',
+              children: [
+                { id: 'be-tm-diverge', icon: '🌱', label: '发散 Diverge', sub: 'LLM 拆解任务维度', level: 4, tag: 'amber' },
+                { id: 'be-tm-converge', icon: '🔄', label: '收敛 Converge', sub: '合并相似节点 (阈值 2.0)', level: 4, tag: 'amber' },
+                { id: 'be-tm-priority', icon: '📊', label: '优先级排序', sub: '权重 + priority + sort_order', level: 4, tag: 'amber' },
+                { id: 'be-tm-reflect', icon: '📝', label: '反射 Reflect', sub: '记录执行结果', level: 4, tag: 'amber' },
+              ]
+            },
+          ]
+        },
+        { id: 'be-data', icon: '🗄️', label: '数据层', sub: 'SQLAlchemy + SQLite', level: 2, tag: 'green',
+          children: [
+            { id: 'be-data-model', icon: '📋', label: 'Models', sub: '~30 个数据模型', level: 3, tag: 'green' },
+            { id: 'be-data-db', icon: '🗄️', label: 'Database', sub: 'SQLite + init_db()', level: 3, tag: 'green' },
+            { id: 'be-data-mig', icon: '🔄', label: 'Schema 迁移', sub: 'ALTER TABLE + create_all', level: 3, tag: 'green' },
+          ]
+        },
+      ]
+    },
+    {
+      id: 'llm', icon: '🧠', label: 'LLM 引擎', sub: 'DeepSeek / Qwen',
+      level: 1, tag: 'rose', tagText: 'L1',
+      detail: { desc: 'AI 推理引擎，支持 DeepSeek 云端 API 和本地 Qwen 模型。', fields: [['DeepSeek', 'v4-flash / v4-pro (云端)'], ['本地', 'Qwen3.5-8B (llama-server :8083)'], ['路由', '根据复杂度直达 / medium / heavy'], ['代码', 'ai_engine.py call_deepseek_chat()']] },
+    },
+    {
+      id: 'tools', icon: '🔧', label: '工具系统', sub: '注册 + 执行',
+      level: 1, tag: 'amber', tagText: 'L1',
+      detail: { desc: 'LLM 可调用的工具集，通过 function calling 注册和执行。', fields: [['注册', 'tools/registry.json'], ['数量', '~15 个工具'], ['模式', 'function calling (OpenAI 兼容)'], ['代码', 'tools/*.py + agent_loop.py']] },
+      children: [
+        { id: 'tool-web', icon: '🌐', label: 'web_search', sub: '联网搜索', level: 2, tag: 'amber' },
+        { id: 'tool-weather', icon: '🌤️', label: 'get_weather', sub: '天气查询', level: 2, tag: 'amber' },
+        { id: 'tool-file', icon: '📄', label: 'read/write/patch', sub: '文件操作', level: 2, tag: 'amber' },
+        { id: 'tool-code', icon: '💻', label: 'run_code', sub: 'Python 代码执行', level: 2, tag: 'amber' },
+        { id: 'tool-mem', icon: '💾', label: 'memory 工具', sub: '记忆读写', level: 2, tag: 'amber' },
+        { id: 'tool-skill', icon: '📚', label: 'skill_view/manage', sub: '技能管理', level: 2, tag: 'amber' },
+        { id: 'tool-session', icon: '🔍', label: 'session_search', sub: '对话历史搜索', level: 2, tag: 'amber' },
+      ]
+    },
+  ]
+};
+
+// ═══ 渲染引擎 ═══
+
+function renderTree(node, container) {
+  const ul = document.createElement('ul');
+  ul.className = 'tree';
+
+  (node.children || []).forEach(child => {
+    const li = document.createElement('li');
+    const hasChildren = child.children && child.children.length > 0;
+    const expanded = child.level <= 2; // 默认展开到 L2
+
+    // Node div
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = `node level-${child.level}`;
+    nodeDiv.dataset.id = child.id;
+    nodeDiv.dataset.searchText = `${child.icon} ${child.label} ${child.sub || ''} ${(child.detail ? child.detail.desc || child.detail.fields.map(f=>f[1]).join(' ') : '')}`.toLowerCase();
+
+    // Toggle
+    const toggle = document.createElement('span');
+    toggle.className = `toggle ${hasChildren ? (expanded ? 'expanded' : '') : 'empty'}`;
+    toggle.textContent = hasChildren ? '▶' : '';
+    nodeDiv.appendChild(toggle);
+
+    // Icon
+    const icon = document.createElement('span');
+    icon.className = 'icon';
+    icon.textContent = child.icon;
+    nodeDiv.appendChild(icon);
+
+    // Label
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = child.label;
+    nodeDiv.appendChild(label);
+
+    // Sublabel
+    if (child.sub) {
+      const sub = document.createElement('span');
+      sub.className = 'sublabel';
+      sub.textContent = child.sub;
+      nodeDiv.appendChild(sub);
+    }
+
+    // Tag
+    if (child.tag && child.tagText) {
+      const tag = document.createElement('span');
+      tag.className = `tag ${child.tag}`;
+      tag.textContent = child.tagText;
+      nodeDiv.appendChild(tag);
+    }
+
+    // Click: toggle children
+    nodeDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (hasChildren) {
+        const childUl = li.querySelector('ul');
+        if (childUl) {
+          childUl.style.display = childUl.style.display === 'none' ? '' : 'none';
+          toggle.classList.toggle('expanded');
+        }
+      }
+      // Show detail if available
+      if (child.detail) {
+        showDetail(child);
+      }
+    });
+
+    li.appendChild(nodeDiv);
+
+    // Children
+    if (hasChildren) {
+      const childContainer = document.createElement('div');
+      renderTree(child, childContainer);
+      const childUl = childContainer.querySelector('ul');
+      if (childUl) {
+        if (!expanded) childUl.style.display = 'none';
+        li.appendChild(childUl);
+      }
+    }
+
+    ul.appendChild(li);
+  });
+
+  container.appendChild(ul);
+}
+
+// ═══ Detail Panel ═══
+
+function showDetail(node) {
+  const panel = document.getElementById('detail-panel');
+  const backdrop = document.getElementById('detail-backdrop');
+  const content = document.getElementById('detail-content');
+
+  const d = node.detail;
+  let html = `<h2><span class="di">${node.icon}</span>${node.label}</h2>`;
+  if (node.sub) html += `<div class="d-sub">${node.sub}</div>`;
+  if (d.desc) html += `<p style="font-size:13px;color:#94a3b8;line-height:1.6;margin-top:4px">${d.desc}</p>`;
+
+  if (d.fields && d.fields.length > 0) {
+    html += `<div class="d-section"><h3>参数</h3><table>`;
+    d.fields.forEach(f => {
+      html += `<tr><td>${f[0]}</td><td>${f[1]}</td></tr>`;
+    });
+    html += `</table></div>`;
+  }
+
+  if (d.code) {
+    html += `<div class="d-section"><h3>代码路径</h3><div style="font-size:12px;color:#22d3ee;background:rgba(34,211,238,0.06);padding:8px 12px;border-radius:6px;border:1px solid rgba(34,211,238,0.15)">${d.code}</div></div>`;
+  }
+
+  content.innerHTML = html;
+  panel.classList.add('show');
+  backdrop.classList.add('show');
+}
+
+function hideDetail() {
+  document.getElementById('detail-panel').classList.remove('show');
+  document.getElementById('detail-backdrop').classList.remove('show');
+}
+
+// ═══ Search ═══
+
+function filterTree(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.tree .node').forEach(n => {
+    const text = n.dataset.searchText || '';
+    const li = n.closest('li');
+    if (!q) {
+      n.classList.remove('highlight');
+      li.style.display = '';
+      return;
+    }
+    const match = text.includes(q);
+    n.classList.toggle('highlight', match);
+    li.style.display = match ? '' : 'none';
+    
+    // Expand parent if match found
+    if (match) {
+      let parent = li.parentElement?.closest('li');
+      while (parent) {
+        const ul = parent.querySelector('ul');
+        if (ul) ul.style.display = '';
+        const tog = parent.querySelector('.toggle');
+        if (tog) tog.classList.add('expanded');
+        parent = parent.parentElement?.closest('li');
+      }
+    }
+  });
+}
+
+// ═══ Init ═══
+renderTree(treeData, document.getElementById('tree-root'));
+
+// ═══ Keyboard ═══
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideDetail();
+});
+</script>
+</body>
+</html>

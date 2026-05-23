@@ -30,5 +30,9 @@ GATEWAY_BACKOFF_DELAY_SECONDS = 30
 # ── 频道／场景 ──
 SCENE_SESSION_TIMEOUT_MINUTES = 5  # 场景模式下无消息自动回到频道
 
+# ── Schema v1.1: Session 管理 ──
+SESSION_TIMEOUT_HOURS = 3           # session 超时时间（小时）
+EXTRACTION_SCAN_INTERVAL_SECONDS = 60  # 提取兜底扫描间隔（秒）
+
 # ── Agent Loop ──
 AGENT_LOOP_MAX_STEPS = 25          # 单次 Agent Loop 最大步数

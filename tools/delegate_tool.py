@@ -44,10 +44,20 @@ DELEGATE_SCHEMA = {
                     "properties": {
                         "goal": {"type": "string", "description": "子任务目标"},
                         "context": {"type": "string", "description": "子任务上下文"},
+                        "contract_path": {"type": "string", "description": "共享契约文件路径（如 shared/INTERFACE.md），子 Agent 据此实现接口"},
+                        "project_rules": {"type": "string", "description": "项目约定（如编码风格、测试规范、分支策略等）"},
                     },
                     "required": ["goal"],
                 },
                 "description": "批量模式：最多 3 个子任务，并行执行。提供此参数时忽略 goal/context。",
+            },
+            "contract_path": {
+                "type": "string",
+                "description": "单任务模式下的共享契约文件路径",
+            },
+            "project_rules": {
+                "type": "string",
+                "description": "单任务模式下的项目约定规范",
             },
         },
     },
@@ -58,13 +68,17 @@ def delegate_task(
     goal: str = "",
     context: str = "",
     tasks: Optional[list[dict]] = None,
+    contract_path: str = "",
+    project_rules: str = "",
 ) -> str:
     """执行子任务委派。
 
     Args:
         goal: 单任务的目标描述
         context: 单任务的上下文
-        tasks: 批量模式的任务列表 [{goal, context}, ...]
+        tasks: 批量模式的任务列表 [{goal, context, contract_path?, project_rules?}, ...]
+        contract_path: 单任务模式的共享契约文件路径
+        project_rules: 单任务模式的项目约定规范
 
     Returns:
         JSON 字符串: [{"task": str, "status": str, "summary": str, "steps": int, "error": str|None}, ...]
@@ -77,5 +91,10 @@ def delegate_task(
             tasks = tasks[:3]
         return run_delegate_tasks(tasks)
     else:
-        # 单任务模式
-        return run_delegate_single(goal, context)
+        # 单任务模式：透传契约字段
+        task = {"goal": goal, "context": context}
+        if contract_path:
+            task["contract_path"] = contract_path
+        if project_rules:
+            task["project_rules"] = project_rules
+        return run_delegate_single(task)
