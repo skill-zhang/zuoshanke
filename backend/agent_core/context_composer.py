@@ -122,7 +122,7 @@ def _build_prompt_layer(
 ) -> str:
     """Prompt Layer — 本体 prompt + 分身 prompt + 工具列表 + 使用说明"""
     from agent_core.context_builder import _build_tm_status_block
-    from agent_core.tool_registry import match_tools, format_tools_for_prompt
+    from agent_core.tool_registry import get_all_tools, format_tools_for_prompt
     from agent_core.agent_loop import _EXCLUDED_TOOLS as _AGENT_EXCLUDED
 
     parts = []
@@ -148,9 +148,9 @@ def _build_prompt_layer(
 
     parts.append(scene_sp)
 
-    # 工具列表
-    matched_tools = match_tools("")
-    filtered_tools = [t for t in matched_tools if t.get("name") not in _AGENT_EXCLUDED]
+    # 工具列表（全量暴露，不再截断 — 全场景可用）
+    all_tools = get_all_tools()
+    filtered_tools = [t for t in all_tools if t.get("name") not in _AGENT_EXCLUDED]
     tools_text = format_tools_for_prompt(filtered_tools)
     if tools_text:
         parts.append(tools_text)
@@ -167,6 +167,11 @@ def _build_prompt_layer(
         "调用 2-3 个工具获取核心信息后，就应该基于已有信息给出分析和结论。\n"
         "不要无限制地连续调用工具。如果已经搜索到足够回答用户问题的内容，\n"
         "直接输出你的回答即可，不需要继续调用更多工具。\n"
+        "\n"
+        "### 浏览器拨测可跨场景使用\n"
+        "browser_dial_test/dial_style/dial_assert 是浏览器自动化工具，\n"
+        "**所有场景都可用**。需要验证前端页面渲染、检查 DOM/CSS/Console 时直接调用，\n"
+        "不限于「自开发」场景。工具会打开 headless 浏览器获取真实渲染状态。\n"
     )
     parts.append(usage)
 

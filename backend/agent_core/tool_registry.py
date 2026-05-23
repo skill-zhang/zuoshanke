@@ -149,7 +149,8 @@ def get_tool_by_name(name: str) -> Optional[dict]:
 def format_tools_for_prompt(tools: list[dict]) -> str:
     """将工具列表格式化为 prompt 可读文本
 
-    预执行模式：工具由系统自动执行，LLM 只需基于结果回复即可。
+    在 context_composer 中，紧随此块之后的「使用说明」会指导 LLM
+    通过 function calling 自主调工具，因此这里只做信息性列举。
     """
     if not tools:
         return ""
@@ -157,37 +158,41 @@ def format_tools_for_prompt(tools: list[dict]) -> str:
     lines = [
         "## 可用工具",
         "",
-        "以下工具系统会在需要时自动执行，你无需输出【工具调用】标记：",
+        "以下是当前可调用的所有工具分类列表：",
         "",
     ]
 
-    # 分组
+    # 分组：基础 / 搜索 / 浏览器 / 文件 / 数据 / 任务管理 / Agent / 其他
     base_names = {t["name"] for t in BASE_TOOLS}
-    base = [t for t in tools if t["name"] in base_names]
-    extra = [t for t in tools if t["name"] not in base_names]
 
-    if base:
-        lines.append("### 基础工具（始终可用）")
-        for t in base:
+    categories = {
+        "基础（始终可用）": [t for t in tools if t["name"] in base_names],
+        "🔍 搜索": [t for t in tools if t.get("category") == "search" and t["name"] not in base_names],
+        "🌐 浏览器拨测": [t for t in tools if t.get("category") == "browser"],
+        "📁 文件操作": [t for t in tools if t["name"] in ("read_file", "write_file", "patch", "search_files")],
+        "🛠 代码执行": [t for t in tools if t["name"] == "run_code"],
+        "📊 数据工具": [t for t in tools if t.get("category") == "data" and t["name"] not in base_names and t.get("category") != "browser" and t["name"] not in ("read_file", "write_file", "patch", "search_files", "run_code")],
+        "🤖 Agent 工具": [t for t in tools if t.get("category") in ("tools", "agent", "interaction")],
+        "🗺 思维导图": [t for t in tools if t["name"] in ("diverge", "converge")],
+        "📝 记忆工具": [t for t in tools if t["name"] == "memory"],
+        "🐙 Git 工具": [t for t in tools if t["name"].startswith("git_")],
+    }
+
+    for category_label, cat_tools in categories.items():
+        if not cat_tools:
+            continue
+        lines.append(f"### {category_label}")
+        for t in cat_tools:
             params_desc = ", ".join(
                 f'{k}({v.get("type","str")})' for k, v in t.get("parameters", {}).items()
             )
-            lines.append(f"- `{t['name']}({params_desc})` - {t['description']}")
+            lines.append(f"- `{t['name']}({params_desc})` — {t['description']}")
         lines.append("")
 
-    if extra:
-        lines.append("### 任务相关工具")
-        for t in extra:
-            params_desc = ", ".join(
-                f'{k}({v.get("type","str")})' for k, v in t.get("parameters", {}).items()
-            )
-            lines.append(f"- `{t['name']}({params_desc})` - {t['description']}")
-        lines.append("")
-
-    lines.append("### 注意事项")
-    lines.append("- 所有数据工具（天气、推荐、装备清单等）由系统自动执行并附上结果。")
-    lines.append("- 你只需基于系统提供的真实数据回复用户，不需要自己编造数据。")
-    lines.append("- 如果系统没有提供所需数据，如实告知用户即可。")
+    lines.append("### 浏览器拨测说明")
+    lines.append("browser_dial_test/dial_style/dial_assert 是浏览器自动化工具，")
+    lines.append("可用于验证前端页面的 DOM 结构、CSS 样式、Console 日志和 Network 信息。")
+    lines.append("**所有场景都可用**——涉及前端验证、页面渲染检查、UI 调试时直接调用。")
     lines.append("")
 
     return "\n".join(lines)

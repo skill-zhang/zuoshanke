@@ -844,7 +844,7 @@
       },
       "returns": "JSON报告",
       "category": "browser",
-      "verified": false
+      "verified": true
     },
     {
       "name": "dial_style",
@@ -871,7 +871,7 @@
       },
       "returns": "样式JSON",
       "category": "browser",
-      "verified": false
+      "verified": true
     },
     {
       "name": "dial_assert",
@@ -898,7 +898,7 @@
       },
       "returns": "断言结果JSON",
       "category": "browser",
-      "verified": false
+      "verified": true
     },
     {
       "name": "delegate_task",
