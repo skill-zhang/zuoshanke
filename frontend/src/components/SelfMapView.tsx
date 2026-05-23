@@ -290,60 +290,63 @@ const DIAGRAMS: Record<string, DiagramDef> = {
   frontend: {
     title: '前端 → 后端通信流',
     nodes: [
-      { id: 'app', x: 80, y: 10, w: 80, h: 40, icon: '📱', label: 'App.tsx', style: 'layer' },
-      { id: 'store', x: 80, y: 80, w: 80, h: 40, icon: '🏪', label: 'Zustand', style: 'process' },
-      { id: 'api', x: 80, y: 150, w: 80, h: 40, icon: '🌐', label: 'API Client', style: 'process' },
-      { id: 'server', x: 80, y: 220, w: 80, h: 40, icon: '⚙️', label: 'FastAPI', style: 'highlight' },
-      { id: 'db', x: 80, y: 290, w: 80, h: 40, icon: '🗄️', label: 'SQLite', style: 'db' },
+      { id: 'app', x: 80, y: 10, w: 130, h: 42, icon: '📱', label: 'App.tsx', sub: '入口', style: 'layer' },
+      { id: 'store', x: 80, y: 80, w: 130, h: 42, icon: '🏪', label: 'Zustand', sub: '全局状态', style: 'process' },
+      { id: 'api', x: 80, y: 150, w: 130, h: 42, icon: '🌐', label: 'API Client', sub: 'fetch/base', style: 'process' },
+      { id: 'server', x: 80, y: 220, w: 130, h: 42, icon: '⚙️', label: 'FastAPI', sub: 'REST + SSE', style: 'highlight' },
+      { id: 'db', x: 80, y: 290, w: 130, h: 42, icon: '🗄️', label: 'SQLite', sub: 'WAL', style: 'db' },
     ],
     edges: [['app', 'store'], ['store', 'api'], ['api', 'server'], ['server', 'db']],
   },
   'backend-core': {
     title: 'Agent Core 模块依赖',
     nodes: [
-      { id: 'loop', x: 20, y: 10, w: 80, h: 40, icon: '🔄', label: 'Agent Loop', style: 'highlight' },
-      { id: 'ctx', x: 20, y: 80, w: 80, h: 40, icon: '📦', label: 'Context', style: 'layer' },
-      { id: 'mem', x: 130, y: 80, w: 80, h: 40, icon: '💾', label: 'Memory', style: 'db' },
-      { id: 'delegate', x: 130, y: 10, w: 80, h: 40, icon: '🧩', label: 'Delegate', style: 'process' },
-      { id: 'conv', x: 240, y: 10, w: 80, h: 40, icon: '🎯', label: 'Converge', style: 'process' },
+      { id: 'loop', x: 20, y: 10, w: 120, h: 42, icon: '🔄', label: 'Agent Loop', sub: '执行引擎', style: 'highlight' },
+      { id: 'ctx', x: 20, y: 80, w: 120, h: 42, icon: '📦', label: 'Context 组合', sub: '7 层', style: 'layer' },
+      { id: 'mem', x: 170, y: 80, w: 120, h: 42, icon: '💾', label: '记忆管理器', sub: '双重池', style: 'db' },
+      { id: 'delegate', x: 170, y: 10, w: 120, h: 42, icon: '🧩', label: 'Delegate', sub: '子 Agent', style: 'process' },
+      { id: 'conv', x: 320, y: 10, w: 120, h: 42, icon: '🎯', label: '收敛引擎', sub: '阈值 2.0', style: 'process' },
     ],
     edges: [['loop', 'ctx'], ['loop', 'mem'], ['loop', 'delegate'], ['loop', 'conv']],
   },
   'frontend-garden': {
     title: '秘密花园区域布局',
     nodes: [
-      { id: 'mood', x: 20, y: 10, w: 70, h: 36, icon: '🌸', label: '心绪', style: 'highlight' },
-      { id: 'inner', x: 110, y: 10, w: 70, h: 36, icon: '🗺️', label: '内在风景', style: 'layer' },
-      { id: 'memory', x: 200, y: 10, w: 80, h: 36, icon: '🌿', label: '记忆花园', style: 'process' },
-      { id: 'growth', x: 20, y: 70, w: 70, h: 36, icon: '🌳', label: '成长年轮', style: 'process' },
-      { id: 'mile', x: 110, y: 70, w: 70, h: 36, icon: '✨', label: '协作金石', style: 'process' },
-      { id: 'chat', x: 200, y: 70, w: 80, h: 36, icon: '🛋️', label: '起居室', style: 'highlight' },
+      { id: 'mood', x: 10, y: 10, w: 110, h: 40, icon: '🌸', label: '心绪', sub: '心情+生命力', style: 'highlight' },
+      { id: 'inner', x: 140, y: 10, w: 110, h: 40, icon: '🗺️', label: '内在风景', sub: '自省地图', style: 'layer' },
+      { id: 'memory', x: 270, y: 10, w: 110, h: 40, icon: '🌿', label: '记忆花园', sub: '回忆之花', style: 'process' },
+      { id: 'growth', x: 10, y: 80, w: 110, h: 40, icon: '🌳', label: '成长年轮', sub: '统计', style: 'process' },
+      { id: 'mile', x: 140, y: 80, w: 110, h: 40, icon: '✨', label: '协作金石', sub: '里程碑', style: 'process' },
+      { id: 'chat', x: 270, y: 80, w: 110, h: 40, icon: '🛋️', label: '起居室', sub: '对话本体', style: 'highlight' },
     ],
     edges: [['mood', 'inner'], ['inner', 'memory'], ['mood', 'growth'], ['inner', 'mile'], ['memory', 'chat']],
   },
   'core-memory': {
-    title: '双重记忆池流程',
+    title: '双重记忆池 · 写穿透',
     nodes: [
-      { id: 'extract', x: 20, y: 10, w: 100, h: 36, icon: '📝', label: 'LLM 提取', style: 'highlight' },
-      { id: 'dedup', x: 20, y: 70, w: 100, h: 36, icon: '🔍', label: 'Jaccard 去重', style: 'process' },
-      { id: 'zhu', x: 150, y: 10, w: 100, h: 36, icon: '🧠', label: '本体池(zhu)', style: 'layer' },
-      { id: 'scene', x: 150, y: 70, w: 100, h: 36, icon: '🎭', label: '分身池(scene)', style: 'process' },
-      { id: 'cache', x: 80, y: 130, w: 100, h: 36, icon: '⚡', label: '缓存层', style: 'db' },
+      { id: 'm1', x: 20, y: 10, w: 120, h: 42, icon: '✍️', label: '写入', sub: 'add+reinforce', style: 'highlight' },
+      { id: 'm2', x: 20, y: 80, w: 120, h: 42, icon: '🔗', label: 'Jaccard 去重', sub: '≥0.50', style: 'process' },
+      { id: 'm3', x: 170, y: 10, w: 120, h: 42, icon: '⬆️', label: 'reinforce', sub: '已有+1', style: 'process' },
+      { id: 'm4', x: 170, y: 80, w: 120, h: 42, icon: '🆕', label: '新建记忆', sub: 'weight=3', style: 'process' },
+      { id: 'm5', x: 320, y: 40, w: 130, h: 50, icon: '🗄️', label: 'agent_memory 表', sub: '持久化', style: 'db' },
+      { id: 'm6', x: 320, y: 120, w: 130, h: 42, icon: '⚡', label: 'memory_cache', sub: '内存加速', style: 'db' },
     ],
-    edges: [['extract', 'dedup'], ['dedup', 'zhu'], ['dedup', 'scene'], ['zhu', 'cache'], ['scene', 'cache']],
+    edges: [['m1', 'm2'], ['m2', 'm3'], ['m2', 'm4'], ['m3', 'm5'], ['m4', 'm5'], ['m5', 'm6']],
   },
   'core-context': {
-    title: '7 层 Context 组合',
+    title: '7 层 Context 组合 · 双列汇聚',
     nodes: [
-      { id: 'l1', x: 80, y: 5, w: 90, h: 28, icon: '1', label: 'Prompt Memory', style: 'layer' },
-      { id: 'l2', x: 80, y: 38, w: 90, h: 28, icon: '2', label: 'Document Summary', style: 'layer' },
-      { id: 'l3', x: 80, y: 71, w: 90, h: 28, icon: '3', label: 'Config', style: 'layer' },
-      { id: 'l4', x: 80, y: 104, w: 90, h: 28, icon: '4', label: 'Skill', style: 'layer' },
-      { id: 'l5', x: 80, y: 137, w: 90, h: 28, icon: '5', label: 'History', style: 'layer' },
-      { id: 'l6', x: 80, y: 170, w: 90, h: 28, icon: '6', label: 'Work Output', style: 'layer' },
-      { id: 'l7', x: 80, y: 203, w: 90, h: 28, icon: '7', label: 'Tool Layer', style: 'layer' },
+      { id: 'c1', x: 20, y: 5,  w: 130, h: 40, icon: '1', label: 'Prompt Memory', sub: '2.4K', style: 'layer' },
+      { id: 'c2', x: 20, y: 60, w: 130, h: 40, icon: '2', label: 'Memory 注入', sub: '1.8K', style: 'layer' },
+      { id: 'c3', x: 20, y: 115, w: 130, h: 40, icon: '3', label: 'Document Summary', sub: '3.2K', style: 'layer' },
+      { id: 'c4', x: 180, y: 5,  w: 130, h: 40, icon: '4', label: 'Config', sub: '0.5K', style: 'layer' },
+      { id: 'c5', x: 180, y: 60, w: 130, h: 40, icon: '5', label: 'Skill', sub: '1.2K', style: 'layer' },
+      { id: 'c6', x: 180, y: 115, w: 130, h: 40, icon: '6', label: 'History', sub: '4.6K', style: 'layer' },
+      { id: 'c7', x: 180, y: 170, w: 130, h: 40, icon: '7', label: 'Work Output', sub: '1.5K', style: 'layer' },
+      { id: 'cc', x: 60, y: 210, w: 200, h: 46, icon: '🔀', label: 'Context Composer', sub: '7 层合并注入', style: 'highlight' },
+      { id: 'cl', x: 100, y: 280, w: 130, h: 42, icon: '🧠', label: 'LLM', sub: '模型推理', style: 'external' },
     ],
-    edges: [['l1', 'l2'], ['l2', 'l3'], ['l3', 'l4'], ['l4', 'l5'], ['l5', 'l6'], ['l6', 'l7']],
+    edges: [['c1', 'c2'], ['c2', 'c3'], ['c4', 'c5'], ['c5', 'c6'], ['c6', 'c7'], ['c3', 'cc'], ['c7', 'cc'], ['cc', 'cl']],
   },
 };
 
@@ -471,16 +474,20 @@ function DiagramView({ diagram }: { diagram: DiagramDef | null }) {
       {diagram.nodes.map(n => (
         <div key={n.id} style={{
           position: 'absolute', left: n.x + offset.x, top: n.y + offset.y, width: n.w, height: n.h,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-          borderRadius: 6, border: `1.5px solid ${STYLE_CLASSES[n.style] || '#64748b'}`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+          borderRadius: 8, border: `1.5px solid ${STYLE_CLASSES[n.style] || '#64748b'}`,
           background: n.style === 'highlight' ? 'rgba(34,211,238,0.1)' :
                        n.style === 'layer' ? 'rgba(6,78,59,0.3)' :
                        n.style === 'db' ? 'rgba(76,29,149,0.3)' :
+                       n.style === 'external' ? 'rgba(30,41,59,0.4)' :
                        'rgba(30,41,59,0.4)',
-          fontSize: 11, cursor: 'pointer',
+          fontSize: 12, cursor: 'pointer', padding: '2px 6px',
         }}>
-          <span style={{ fontSize: 14 }}>{n.icon}</span>
-          <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{n.label}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>{n.icon}</span>
+            <span style={{ fontWeight: 600, whiteSpace: 'nowrap', color: '#e2e8f0', fontSize: 12 }}>{n.label}</span>
+          </div>
+          {n.sub && <span style={{ fontSize: 9, color: '#64748b', lineHeight: 1.1, marginTop: 1 }}>{n.sub}</span>}
         </div>
       ))}
     </div>
