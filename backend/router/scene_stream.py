@@ -24,8 +24,37 @@ from agent_core.context_builder import build_agent_context_v1
 from agent_core.priority_assigner import extract_priority
 from utils import make_id, utcnow, iso_utc
 from router.shared import sse_event, sse_response
+from router.clarify_router import make_clarify_callback  # 🆕 Clarify 回调注入
 
 router = APIRouter(tags=["场景流式"])
+
+# 🆕 Schema v1.1: Web session 辅助
+
+def _ensure_web_session(db, context_type: str, context_id: str, context_name: str | None = None):
+    """获取或创建 Web session，供场景/频道流式端点集成"""
+    from models import WebSession
+    from utils import make_id
+    ws = db.query(WebSession).filter(
+        WebSession.context_type == context_type,
+        WebSession.context_id == context_id,
+        WebSession.status == "active",
+    ).first()
+    if ws:
+        return ws
+    ws = WebSession(
+        id=make_id("ws"),
+        context_type=context_type,
+        context_id=context_id,
+        context_name=context_name,
+        status="active",
+        started_at=utcnow(),
+        last_active_at=utcnow(),
+    )
+    db.add(ws)
+    db.commit()
+    db.refresh(ws)
+    return ws
+
 
 # ═══ 工具卡片 ═══
 def _build_tool_cards(tool_results: list[dict]) -> list[dict]:
@@ -311,6 +340,13 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
     db.commit()
     db.refresh(user_msg)
 
+    # 🆕 Schema v1.1: 确保 Web session 存在（若无 session_id，自动创建/激活）
+    ws = _ensure_web_session(db, "scene", scene_id, scene.name)
+    # 更新 last_active_at
+    ws.last_active_at = utcnow()
+    ws.updated_at = utcnow()
+    db.commit()
+
     def generate():
         nonlocal scene
         # 1. 用户消息事件
@@ -369,12 +405,23 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         _zhu = ZhuAgentManager(db)
         _zhu.observe_fenshen_event("fenshen:started", scene.name)
 
+        # 🆕 自开发场景：注入 clarify 回调
+        tool_callbacks = {}
+        if scene.name and "自开发" in scene.name:
+            def _yield_clarify_event(clarify_data: dict):
+                """在 generate() 内部 yield SSE 事件"""
+                yield sse_event("zhu:clarify", **clarify_data)
+
+            clarify_cb = make_clarify_callback(scene_id, _yield_clarify_event)
+            tool_callbacks["clarify"] = clarify_cb
+
         agent_stream = run_agent_loop(
             initial_messages=agent_messages,
             max_steps=99,
             dialog_engine=dialog_engine,
             scene_id=scene_id,  # 🆕 Schema v0.7
             scene_config=scene.scene_config or {},
+            tool_callbacks=tool_callbacks or None,  # 🆕 工具回调
         )
 
         model_name = "DeepSeek Flash"
@@ -412,6 +459,13 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             for event in agent_stream:
                 etype = event["type"]
                 if etype == "tool_start":
+                    # 🆕 Clarify 工具：发射询问事件给前端（在工具阻塞前）
+                    if event["tool"] == "clarify":
+                        args = event.get("args", {})
+                        yield sse_event("zhu:clarify",
+                            question=args.get("question", ""),
+                            choices=args.get("choices"),
+                        )
                     yield sse_event("tool_status", tool=event["tool"], status="running",
                                     message=f"正在执行：{event['tool']}...")
                     # 🆕 分身开始调工具 → analyzing
@@ -840,6 +894,23 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                         yield sse_event("tool_proposal", **proposal)
             except Exception as e:
                 print(f"[tool_proposal] 生成失败: {e}")
+
+            # 🆕 Schema v1.1: 累加 token 用量
+            from models import WebSession as _WS
+            _ws = db.query(_WS).filter(
+                _WS.context_type == "scene",
+                _WS.context_id == scene_id,
+                _WS.status == "active",
+            ).first()
+            if _ws:
+                _ws.prompt_tokens += total_tokens
+                _ws.completion_tokens += estimate_messages_tokens([{"role": "assistant", "content": full_reply}])
+                _ws.total_tokens = _ws.prompt_tokens + _ws.completion_tokens
+                _ws.api_calls += 1
+                _ws.last_active_at = utcnow()
+                _ws.updated_at = utcnow()
+                db.commit()
+
         except Exception as e:
             print(f"[scene stream save error] {e}")
             yield sse_event("error", message="AI 回复保存失败")

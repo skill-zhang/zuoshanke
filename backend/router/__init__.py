@@ -13,9 +13,11 @@ from router.skills import router as skills_router       # 🆕 Schema v0.5
 from router.gateway import router as gateway_router     # 🆕 多平台网关
 from router.gateway_config import router as gateway_config_router  # 🆕 网关配置
 from router.dashboard import router as dashboard_router           # 🆕 Schema v0.7 仪表盘
-from router.zhu_agent import router as zhu_agent_router           # 🆕 Schema v0.8 本体
+from router.zhu_agent import router as zhu_router                 # 🆕 Schema v0.8 本体
+from router.sessions import router as sessions_router             # 🆕 Schema v1.1 Session 管理
 from router.outputs import router as outputs_router                # 🆕 产出成果
 from router.garden_chat import router as garden_chat_router          # 🆕 起居室
+from router.clarify_router import router as clarify_router           # 🆕 自开发场景 Clarify
 
 
 def register_all_routers(app: FastAPI):
@@ -32,6 +34,8 @@ def register_all_routers(app: FastAPI):
     app.include_router(gateway_router)     # 🆕 多平台网关
     app.include_router(gateway_config_router)  # 🆕 网关配置
     app.include_router(dashboard_router)   # 🆕 Schema v0.7 仪表盘
-    app.include_router(zhu_agent_router)   # 🆕 Schema v0.8 本体
+    app.include_router(zhu_router)         # 🆕 Schema v0.8 本体
+    app.include_router(sessions_router)    # 🆕 Schema v1.1 Session 管理
     app.include_router(outputs_router)     # 🆕 产出成果
     app.include_router(garden_chat_router)  # 🆕 起居室
+    app.include_router(clarify_router)      # 🆕 自开发场景 Clarify

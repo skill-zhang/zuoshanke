@@ -1,0 +1,16 @@
+[
+  {
+    "name": "clarify",
+    "description": "向用户提问，获取确认或选择后再继续。开发场景专用。支持多选题（最多4选项）和开放题。需要用户决策方向、确认方案或选择方案时使用。自己能合理默认的事直接做，无需问。",
+    "file": "tools/clarify_tool.py",
+    "function": "clarify_tool",
+    "parameters": {
+      "question": {"type": "string", "description": "问题文本"},
+      "choices": {"type": "array", "items": {"type": "string"}, "description": "最多4个选项（省略=开放题）"}
+    },
+    "returns": "用户回答文本",
+    "category": "interaction",
+    "verified": false,
+    "hidden": false
+  }
+]

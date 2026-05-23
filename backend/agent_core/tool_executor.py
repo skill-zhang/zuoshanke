@@ -63,12 +63,13 @@ def _ensure_path():
         sys.path.insert(0, TOOLS_DIR)
 
 
-def execute_tool(name: str, params: dict, max_result_len: int = 3000) -> dict:
+def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None, max_result_len: int = 3000) -> dict:
     """执行指定工具
 
     Args:
         name: 工具名（与 registry 中的 name 一致）
         params: 参数 dict
+        extra_kwargs: 额外关键字参数（用于注入回调等，如 clarify callback）
         max_result_len: 结果最大截断长度（防 context 撑爆）
 
     Returns:
@@ -94,7 +95,11 @@ def execute_tool(name: str, params: dict, max_result_len: int = 3000) -> dict:
             return {"success": False, "result": None,
                     "error": f"函数 '{func_name}' 未在 {file_path} 中找到"}
 
-        result = func(**params)
+        # 执行工具函数，传入 params + 可能的额外 kwargs
+        if extra_kwargs:
+            result = func(**params, **extra_kwargs)
+        else:
+            result = func(**params)
         # 截断超大结果（安全截断，不破坏 JSON）
         result = _safe_truncate_result(result, max_result_len)
         return {"success": True, "result": result, "error": None}

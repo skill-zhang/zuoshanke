@@ -449,6 +449,7 @@ def run_agent_loop(
     dialog_engine=None,  # 🆕 DialogEngine 实例
     scene_id: str = "",  # 🆕 Schema v0.7: 仪表盘场景 ID，提供时自动发射 reflect/pq_update 事件
     scene_config: dict | None = None,  # 🆕 Schema v1.0: 场景扩展配置（如温度覆盖）
+    tool_callbacks: dict | None = None,  # 🆕 工具回调映射（如 clarify callback）
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
@@ -461,6 +462,7 @@ def run_agent_loop(
         system_prompt: 自定义系统提示词（None 则用默认的 build_agent_system_prompt，有 initial_messages 时忽略）
         initial_messages: 预构建的初始消息列表（替代 system_prompt + task 构造）。包含 system + 历史 + 当前 user msg。
         dialog_engine: DialogEngine 实例。传入后自动注入阶段提示到 system prompt，并在回复中检测阶段转移。
+        tool_callbacks: 工具回调映射 {tool_name: {callback: func, ...}}。如 clarify 工具需要的 callback 注入。
 
     Yields:
         dict: 事件对象，格式：
@@ -625,7 +627,10 @@ def run_agent_loop(
                 from agent_core.tool_executor import set_tool_context, clear_tool_context
                 set_tool_context(scene_id=scene_id)
                 try:
-                    result = execute_tool(tool_name, args)
+                    # 🆕 传递工具回调（如 clarify callback）
+                    cb = (tool_callbacks or {}).get(tool_name)
+                    extra = {"callback": cb} if cb else None
+                    result = execute_tool(tool_name, args, extra_kwargs=extra)
                 finally:
                     clear_tool_context()
 
