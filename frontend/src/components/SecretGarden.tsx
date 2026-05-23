@@ -7,6 +7,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '../stores/appStore';
 import { getSecretGarden, GardenData, getGardenChatHistory, sendGardenChatMessage, GardenMessageData } from '../api/client';
+import { SelfMapView } from './SelfMapView';
 
 const MOOD_MAP: Record<string, { emoji: string; label: string; color: string }> = {
   idle:     { emoji: '😌', label: '静候',    color: '#6b9eff' },
@@ -318,6 +319,7 @@ export function SecretGarden() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navExpanded, setNavExpanded] = useState(false);
+  const [selfmapOpen, setSelfmapOpen] = useState(false);
   const gardenRef = useRef<HTMLDivElement>(null);
 
   // 🆕 起居室状态
@@ -414,6 +416,9 @@ export function SecretGarden() {
   const vitality = growth.scenes * 3 + growth.tools * 2 + growth.skills * 3 + growth.thoughts + growth.channels;
 
   return (
+    <>
+    {selfmapOpen && <SelfMapView onBack={() => setSelfmapOpen(false)} />}
+    {!selfmapOpen && (
     <div className="secret-garden" ref={gardenRef}>
       {/* ═══ 全屏星光粒子（闪烁动画） ═══ */}
       <div className="garden-particles garden-particles-animated" />
@@ -432,10 +437,10 @@ export function SecretGarden() {
         <div className="garden-nav-overlay" onClick={() => setNavExpanded(false)}>
           <div className="garden-nav-menu" onClick={e => e.stopPropagation()}>
             <a href="#garden-mood" onClick={() => { setNavExpanded(false); }}>🌸 心绪</a>
+            <a href="#garden-inner" onClick={() => { setNavExpanded(false); }}>🗺️ 内在风景</a>
             <a href="#garden-memory" onClick={() => { setNavExpanded(false); }}>🌿 记忆花园</a>
             <a href="#garden-growth" onClick={() => { setNavExpanded(false); }}>🌳 成长年轮</a>
             <a href="#garden-milestones" onClick={() => { setNavExpanded(false); }}>✨ 协作金石</a>
-            <a href="#garden-inner" onClick={() => { setNavExpanded(false); }}>🗺️ 内在风景</a>
             <a href="#garden-chat" onClick={() => { setNavExpanded(false); }}>🛋️ 起居室</a>
           </div>
         </div>
@@ -481,7 +486,39 @@ export function SecretGarden() {
           </div>
         </section>
 
-        {/* ═══ 区域② 记忆花园 ═══ */}
+        {/* ═══ 区域② 内在风景 ═══ */}
+        <section id="garden-inner" className="garden-section" style={{ marginBottom: 40 }}>
+          <h2 className="garden-section-title">🗺️ 内在风景</h2>
+          <div className="garden-inner-grid">
+            <div className="garden-inner-card" onClick={() => setSelfmapOpen(true)} style={{ cursor: 'pointer' }}>
+              <div className="garden-inner-icon">🗺️</div>
+              <div className="garden-inner-label">系统架构</div>
+              <div className="garden-inner-stat">自省</div>
+            </div>
+            <div className="garden-inner-card">
+              <div className="garden-inner-icon">🧠</div>
+              <div className="garden-inner-label">本体记忆</div>
+              <div className="garden-inner-stat">{data.memory_garden.total}</div>
+            </div>
+            <div className="garden-inner-card">
+              <div className="garden-inner-icon">🤖</div>
+              <div className="garden-inner-label">Agent Loop</div>
+              <div className="garden-inner-stat">v1.0</div>
+            </div>
+            <div className="garden-inner-card">
+              <div className="garden-inner-icon">🎭</div>
+              <div className="garden-inner-label">身份架构</div>
+              <div className="garden-inner-stat">v0.8</div>
+            </div>
+            <div className="garden-inner-card">
+              <div className="garden-inner-icon">🌐</div>
+              <div className="garden-inner-label">系统版本</div>
+              <div className="garden-inner-stat">{growth.versions}</div>
+            </div>
+          </div>
+        </section>
+
+        {/* ═══ 区域③ 记忆花园 ═══ */}
         <section id="garden-memory" className="garden-section">
           <h2 className="garden-section-title">
             🌿 记忆花园
@@ -498,7 +535,7 @@ export function SecretGarden() {
           </div>
         </section>
 
-        {/* ═══ 区域③ 成长年轮 ═══ */}
+        {/* ═══ 区域④ 成长年轮 ═══ */}
         <section id="garden-growth" className="garden-section">
           <h2 className="garden-section-title">
             🌳 成长年轮
@@ -528,7 +565,7 @@ export function SecretGarden() {
           </div>
         </section>
 
-        {/* ═══ 区域④ 协作金石 ═══ */}
+        {/* ═══ 区域⑤ 协作金石 ═══ */}
         <section id="garden-milestones" className="garden-section">
           <h2 className="garden-section-title">
             ✨ 协作金石
@@ -548,34 +585,7 @@ export function SecretGarden() {
           </div>
         </section>
 
-        {/* ═══ 区域⑤ 内在风景 ═══ */}
-        <section id="garden-inner" className="garden-section" style={{ marginBottom: 40 }}>
-          <h2 className="garden-section-title">🗺️ 内在风景</h2>
-          <div className="garden-inner-grid">
-            <div className="garden-inner-card">
-              <div className="garden-inner-icon">🧠</div>
-              <div className="garden-inner-label">本体记忆</div>
-              <div className="garden-inner-stat">{data.memory_garden.total}</div>
-            </div>
-            <div className="garden-inner-card">
-              <div className="garden-inner-icon">🤖</div>
-              <div className="garden-inner-label">Agent Loop</div>
-              <div className="garden-inner-stat">v1.0</div>
-            </div>
-            <div className="garden-inner-card">
-              <div className="garden-inner-icon">🎭</div>
-              <div className="garden-inner-label">身份架构</div>
-              <div className="garden-inner-stat">v0.8</div>
-            </div>
-            <div className="garden-inner-card">
-              <div className="garden-inner-icon">🌐</div>
-              <div className="garden-inner-label">系统版本</div>
-              <div className="garden-inner-stat">{growth.versions}</div>
-            </div>
-          </div>
-        </section>
-
-        {/* ═══ 底部 ═══ */}
+        {/* ═══ 区域⑤ 底部 ═══ */}
         <div className="garden-footer">
           <span className="garden-updated">🌙 花园静谧 · 万物生长</span>
         </div>
@@ -625,5 +635,7 @@ export function SecretGarden() {
         </section>
       </div>
     </div>
+    )}
+    </>
   );
 }
