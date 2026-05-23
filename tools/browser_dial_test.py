@@ -186,6 +186,17 @@ def dial_test(url: str, viewport: str = "1440x900", screenshot: bool = True) -> 
 
     page = browser.new_page(viewport={"width": w, "height": h})
     try:
+        # 安装 console 监听（必须在导航前注册）
+        console_entries = []
+        page.on("console", lambda msg: console_entries.append({
+            "level": msg.type,
+            "text": msg.text,
+        }))
+        page.on("pageerror", lambda err: console_entries.append({
+            "level": "error",
+            "text": f"JS异常: {err}",
+        }))
+
         # 导航
         try:
             page.goto(url, wait_until="networkidle", timeout=15000)
@@ -199,8 +210,8 @@ def dial_test(url: str, viewport: str = "1440x900", screenshot: bool = True) -> 
         # DOM 快照
         dom = _extract_dom_snapshot(page)
 
-        # Console 日志
-        console_logs = _collect_console_logs(page)
+        # Console 日志（从 page.on 监听收集）
+        console_logs = console_entries
 
         # Network
         network = _collect_network_logs(page)
