@@ -466,6 +466,13 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                             question=args.get("question", ""),
                             choices=args.get("choices"),
                         )
+                    # 🆕 Delegate 工具：发射子任务状态
+                    elif event["tool"] == "delegate_task":
+                        args = event.get("args", {})
+                        tasks = args.get("tasks", []) or [{"goal": args.get("goal", "未知任务")}]
+                        yield sse_event("child:started",
+                            tasks=[{"goal": t.get("goal", "?"), "status": "running"} for t in tasks],
+                        )
                     yield sse_event("tool_status", tool=event["tool"], status="running",
                                     message=f"正在执行：{event['tool']}...")
                     # 🆕 分身开始调工具 → analyzing
@@ -474,6 +481,17 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     except Exception:
                         pass
                 elif etype == "tool_done":
+                    # 🆕 Delegate 完成：发射子任务结果
+                    if event["tool"] == "delegate_task":
+                        result_raw = event.get("result", "")
+                        if isinstance(result_raw, str):
+                            try:
+                                children = json.loads(result_raw)
+                            except json.JSONDecodeError:
+                                children = []
+                        else:
+                            children = []
+                        yield sse_event("child:done", children=children)
                     yield sse_event("tool_status", tool=event["tool"], status="done",
                                     success=True, message="已完成")
                     agent_tool_results.append({

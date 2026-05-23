@@ -7,6 +7,7 @@ import type { Message, ToolCard, ToolLog, Scene } from '../api/client';
 import { getActionMap, updateScene } from '../api/client';
 import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
 import { showConfirm, showAlert } from '../stores/dialogStore';
+import { DelegationMonitor } from './DelegationMonitor';
 
 // ══════════════════════════════════════════════════
 //  工具卡片组件
@@ -920,6 +921,7 @@ export function ChatView() {
             </div>
           )}
           {displayMessages.length === 0 && <EmptyState isChannel={isChannel} />}
+          <DelegationMonitor />
           {displayMessages.map((msg, idx) => (
             <MessageBubble
               key={msg.id}

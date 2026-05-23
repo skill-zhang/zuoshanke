@@ -820,6 +820,123 @@
       "returns": "用户回答文本",
       "category": "interaction",
       "verified": false
+    },
+    {
+      "name": "browser_dial_test",
+      "description": "浏览器拨测——打开指定URL，返回完整页面状态报告：DOM快照（位置/尺寸/CSS/溢出）、Console日志、Network瀑布。返回结构化JSON供AI分析。用于验证前端页面渲染正确性。LLM自行拼接localhost地址。",
+      "file": "tools/browser_dial_test.py",
+      "function": "dial_test",
+      "parameters": {
+        "url": {
+          "type": "string",
+          "description": "页面URL（如 http://localhost:5173/scenes）"
+        },
+        "viewport": {
+          "type": "string",
+          "description": "视口尺寸 宽x高 默认1440x900",
+          "optional": true
+        },
+        "screenshot": {
+          "type": "boolean",
+          "description": "是否截图（路径在报告中）",
+          "optional": true
+        }
+      },
+      "returns": "JSON报告",
+      "category": "browser",
+      "verified": false
+    },
+    {
+      "name": "dial_style",
+      "description": "提取特定元素的CSS计算样式和位置。比dial_test更快，用于快速排查CSS问题。",
+      "file": "tools/browser_dial_test.py",
+      "function": "dial_style",
+      "parameters": {
+        "url": {
+          "type": "string",
+          "description": "页面URL"
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "CSS选择器列表"
+        },
+        "viewport": {
+          "type": "string",
+          "description": "视口尺寸",
+          "optional": true
+        }
+      },
+      "returns": "样式JSON",
+      "category": "browser",
+      "verified": false
+    },
+    {
+      "name": "dial_assert",
+      "description": "断言式检查：验证页面元素CSS属性值、元素数量、控制台错误数。返回每条断言的通过/失败。",
+      "file": "tools/browser_dial_test.py",
+      "function": "dial_assert",
+      "parameters": {
+        "url": {
+          "type": "string",
+          "description": "页面URL"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "断言规则列表"
+        },
+        "viewport": {
+          "type": "string",
+          "description": "视口尺寸",
+          "optional": true
+        }
+      },
+      "returns": "断言结果JSON",
+      "category": "browser",
+      "verified": false
+    },
+    {
+      "name": "delegate_task",
+      "description": "派一个或多个子 Agent 并行执行任务。子 Agent 有独立上下文和工具集。父 Agent 等待所有子任务完成后拿到结果摘要。子 Agent 不能问用户（clarify 排除），不能递归派任务（delegate_task 排除）。",
+      "file": "tools/delegate_tool.py",
+      "function": "delegate_task",
+      "parameters": {
+        "goal": {
+          "type": "string",
+          "description": "单任务目标",
+          "optional": true
+        },
+        "context": {
+          "type": "string",
+          "description": "单任务上下文",
+          "optional": true
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "goal": {
+                "type": "string"
+              },
+              "context": {
+                "type": "string",
+                "optional": true
+              }
+            }
+          },
+          "description": "批量模式任务列表（最多3个）",
+          "optional": true
+        }
+      },
+      "returns": "[{task, status, summary, steps, error}]",
+      "category": "agent",
+      "verified": false
     }
   ]
 }

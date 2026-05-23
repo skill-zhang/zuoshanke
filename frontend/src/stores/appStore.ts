@@ -19,6 +19,7 @@ import {
   SettingsData, ServiceStatus, RouteConfig,
   DashboardQueueItem, DashboardReflectItem,  // 🆕 Schema v0.7
   getDashboardQueue, getDashboardReflect, getDashboardStatus,  // 🆕 Schema v0.7
+  activateSession,  // 🆕 Schema v1.1: Session 管理
 } from '../api/client';
 
 export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'secret-garden';
@@ -204,7 +205,13 @@ export const useStore = create<AppState>((set, get) => ({
   setCurrentScene: (s) => {
     // 切场景时不触发记忆提取，只保留页面关闭（visibilitychange）触发
     set({ currentScene: s, messages: [], messageTotalCount: 0, hasOlderMessages: false, contextUsage: null, capacityWarning: null });
-    if (s) get().loadUserContext(s.id);
+    if (s) {
+      get().loadUserContext(s.id);
+      // 🆕 Schema v1.1: 激活 session（异步，不阻塞 UI）
+      activateSession('scene', s.id, s.name).catch(e =>
+        console.error('[store] activateSession failed:', e)
+      );
+    }
   },
   userContext: '',
   loadUserContext: async (sceneId) => {
@@ -546,6 +553,12 @@ export const useStore = create<AppState>((set, get) => ({
           }));
           // 流式完成后刷新 Thinking Map
           get().loadThinkingMap(sceneId);
+        } else if (event.type === 'child:started') {
+          const { setDelegateTasks } = await import('../components/DelegationMonitor');
+          setDelegateTasks(event.tasks || []);
+        } else if (event.type === 'child:done') {
+          const { setDelegateResults } = await import('../components/DelegationMonitor');
+          setDelegateResults(event.children || []);
         } else if (event.type === 'asset') {
           set(state => ({
             messages: [...state.messages, {
@@ -670,7 +683,13 @@ export const useStore = create<AppState>((set, get) => ({
       set({ channelMessages: [] });
     }
   },
-  setCurrentChannel: (c) => set({ currentChannel: c, channelMessages: [], channelMessageTotalCount: 0, channelHasOlder: false, contextUsage: null, capacityWarning: null }),
+  setCurrentChannel: (c) => {
+    set({ currentChannel: c, channelMessages: [], channelMessageTotalCount: 0, channelHasOlder: false, contextUsage: null, capacityWarning: null });
+    // 🆕 Schema v1.1: 激活 session（异步，不阻塞 UI）
+    activateSession('channel', c.id, c.name).catch(e =>
+      console.error('[store] activateSession failed:', e)
+    );
+  },
 
   // ═══ 频道消息（分页） ═══
   channelMessages: [],
