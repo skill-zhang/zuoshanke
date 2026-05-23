@@ -999,6 +999,77 @@
       "returns": "JSON 响应（success, diff, has_diff）",
       "category": "tools",
       "verified": true
+    },
+    {
+      "name": "self_map_declare",
+      "description": "声明当前场景的架构自省图（初始化或全量覆盖）。调用后可在场景侧边栏查看可视化架构图。适合首次描述系统架构或大幅重画。",
+      "file": "tools/self_map_tool.py",
+      "function": "do_self_map_declare",
+      "parameters": {
+        "title": {
+          "type": "string",
+          "description": "架构图标题，如「项目系统架构」（可选）",
+          "optional": true
+        },
+        "tree": {
+          "type": "array",
+          "description": "左侧导航树节点列表。最多 3 层。每个节点必须有 id/icon/label，可选 children/detail(description/rows/codePath)/hasDiagram",
+          "optional": true
+        },
+        "diagrams": {
+          "type": "object",
+          "description": "流程图字典（可选），key 为树节点 id，value 为 {title, nodes: [{id,x,y,w,h,icon,label,sub?,style?}], edges: [[from,to],...]}",
+          "optional": true
+        }
+      },
+      "returns": "保存结果（状态 + 节点数）",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "self_map_update",
+      "description": "增量更新当前场景的自省图。适合架构演进时局部修改——增删节点、更新标题、添加/移除流程图。初始化请用 self_map_declare。",
+      "file": "tools/self_map_tool.py",
+      "function": "do_self_map_update",
+      "parameters": {
+        "action": {
+          "type": "string",
+          "description": "操作类型: add_node/update_node/remove_node/add_diagram/remove_diagram/update_title"
+        },
+        "parent_id": {
+          "type": "string",
+          "description": "add_node 时的父节点 id（空=加到根级）",
+          "optional": true
+        },
+        "node": {
+          "type": "object",
+          "description": "add/update_node 时的节点数据：{id, icon, label, sublabel?, children?, detail?{description, rows?, codePath?}, hasDiagram?}",
+          "optional": true
+        },
+        "node_id": {
+          "type": "string",
+          "description": "remove_node 时要删除的节点 id",
+          "optional": true
+        },
+        "diagram_node_id": {
+          "type": "string",
+          "description": "add/remove_diagram 时关联的树节点 id",
+          "optional": true
+        },
+        "diagram": {
+          "type": "object",
+          "description": "add_diagram 时的流程图定义：{title, nodes: [...], edges: [[from,to],...]}",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "description": "update_title 时的新标题",
+          "optional": true
+        }
+      },
+      "returns": "更新结果（状态 + 操作类型 + 节点数）",
+      "category": "data",
+      "verified": true
     }
   ]
 }

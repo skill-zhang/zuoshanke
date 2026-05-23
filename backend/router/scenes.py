@@ -314,7 +314,8 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
 def delete_scene(scene_id: str, db: Session = Depends(get_db)):
     scene = _get_scene_or_404(db, scene_id)
     # 级联清理关联数据
-    from models import Message, ThinkingMap, ThinkNode, PriorityQueue, ReflectTimeline, SceneAsset, DialogState, OutputProject
+    from models import Message, ThinkingMap, ThinkNode, PriorityQueue, ReflectTimeline, SceneAsset, DialogState, OutputProject, SceneSelfMap
+    db.query(SceneSelfMap).filter(SceneSelfMap.scene_id == scene_id).delete()
     db.query(DialogState).filter(DialogState.scene_id == scene_id).delete()
     db.query(SceneAsset).filter(SceneAsset.scene_id == scene_id).delete()
     db.query(PriorityQueue).filter(PriorityQueue.scene_id == scene_id).delete()

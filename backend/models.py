@@ -551,3 +551,20 @@ class GardenMessage(Base):
     role = Column(String, nullable=False)  # user | assistant
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=utcnow)
+
+
+# ═══ 🆕 场景自省地图 ═══
+class SceneSelfMap(Base):
+    """每个场景一张自省架构图 — LLM 通过 function calling 声明"""
+    __tablename__ = "scene_self_maps"
+
+    id = Column(String(32), primary_key=True)
+    scene_id = Column(String(32), ForeignKey("scenes.id"), nullable=False, unique=True, index=True)
+    title = Column(String(200), default="")
+    tree = Column(JSON, default=list)          # 左侧导航树 [{id, icon, label, children?, detail?, hasDiagram?}]
+    diagrams = Column(JSON, default=dict)       # 流程图 {nodeId: {title, nodes, edges}}
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ═══ 已废弃的表（代码中已删除，DB 中保留供历史数据查询） ═══

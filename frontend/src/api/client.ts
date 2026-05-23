@@ -815,3 +815,41 @@ export const listSessions = (contextType?: string, status?: string) => {
   const q = qs.toString();
   return request<WebSession[]>(`/sessions${q ? '?' + q : ''}`);
 };
+
+// ═══ 场景自省地图 🆕 ═══
+export interface SceneSelfMapTree {
+  id: string;
+  icon: string;
+  label: string;
+  sublabel?: string;
+  children?: SceneSelfMapTree[];
+  detail?: {
+    description: string;
+    rows?: [string, string][];
+    codePath?: string;
+  };
+  hasDiagram?: boolean;
+}
+
+export interface SceneSelfMapDiagramNode {
+  id: string; x: number; y: number; w?: number; h?: number;
+  icon: string; label: string; sub?: string; style?: string;
+}
+
+export interface SceneSelfMapDiagram {
+  title: string;
+  nodes: SceneSelfMapDiagramNode[];
+  edges: [string, string][];
+}
+
+export interface SceneSelfMapData {
+  exists: boolean;
+  title: string;
+  tree: SceneSelfMapTree[];
+  diagrams: Record<string, SceneSelfMapDiagram>;
+  updated_at: string;
+}
+
+export const fetchSceneSelfMap = (sceneId: string) =>
+  request<SceneSelfMapData>(`/scenes/${encodeURIComponent(sceneId)}/self-map`);
+

@@ -4,6 +4,7 @@ import { useStore } from '../stores/appStore';
 import { listScenes, updateScene, deleteScene, Scene, createScene, listMemories, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
 import { ChannelSvg } from './Logo';
 import { showPrompt, showConfirm, showAlert } from '../stores/dialogStore';
+import { SelfMapView } from './SelfMapView';
 
 const CATEGORIES = [
   { key: 'life', icon: '🌿', label: '生活' },
@@ -72,6 +73,7 @@ export function Sidebar() {
 
   const [toolsCount, setToolsCount] = useState(0);
   const [skillsCount, setSkillsCount] = useState(0);
+  const [selfmapSceneId, setSelfmapSceneId] = useState<string | null>(null);
 
   useEffect(() => { loadChannels(); }, []);
   // 侧边栏需要工坊数据来展示场景列表和计数，不管当前在哪个视图
@@ -287,6 +289,7 @@ export function Sidebar() {
   };
 
   return (
+    <>
     <div className="sidebar">
       <div className="sidebar-list">
         {/* ═══ 讨论 · 频道 ═══ */}
@@ -468,6 +471,9 @@ export function Sidebar() {
                                 <div className="sidebar-dropdown-item"
                                   onClick={(e) => { e.stopPropagation(); handleRename(s); }}
                                 >✏️ 重命名</div>
+                                <div className="sidebar-dropdown-item"
+                                  onClick={(e) => { e.stopPropagation(); setSelfmapSceneId(s.id); }}
+                                >🗺️ 自省图</div>
                                 <div className="sidebar-dropdown-item danger"
                                   onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
                                 >🗑 删除</div>
@@ -646,5 +652,12 @@ export function Sidebar() {
         </div>
       </div>
     </div>
+    {selfmapSceneId && (
+      <SelfMapView
+        sceneId={selfmapSceneId}
+        onBack={() => setSelfmapSceneId(null)}
+      />
+    )}
+    </>
   );
 }

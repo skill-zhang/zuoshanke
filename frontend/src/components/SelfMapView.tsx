@@ -1,7 +1,14 @@
-/** 🗺️ 坐山客自省地图 — 三栏布局（左树 + 中图 + 右侧详情） */
-import { useState, useCallback, useRef, useEffect } from 'react';
+/** 🗺️ 坐山客自省地图 — 三栏布局（左树 + 中图 + 右侧详情）
 
-// ═══ 数据结构 ═══
+支持两种数据源：
+  - 无 sceneId：本体硬编码树（坐山客系统架构）
+  - 有 sceneId：从 API 拉取该场景的自省图（由 LLM 自主声明）
+*/
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { fetchSceneSelfMap } from '../api/client';
+import type { SceneSelfMapTree, SceneSelfMapDiagram, SceneSelfMapDiagramNode } from '../api/client';
+
+// ═══ 本体数据结构（与 API 返回类型对齐） ═══
 
 interface TreeNode {
   id: string;
@@ -19,7 +26,7 @@ interface NodeDetail {
   codePath?: string;
 }
 
-// ═══ 树数据 ═══
+// ═══ 树数据 — 本体硬编码 ═══
 
 const TREE_DATA: TreeNode[] = [
   {
@@ -275,7 +282,7 @@ const TREE_DATA: TreeNode[] = [
   },
 ];
 
-// ═══ 流程图数据 ═══
+// ═══ 流程图数据 — 本体硬编码 ═══
 
 interface DiagramNode {
   id: string; x: number; y: number; w: number; h: number;
@@ -562,7 +569,20 @@ function TreeNodeItem({
   );
 }
 
-// ── 查找节点 ──
+// ── 辅助函数 ──
+
+function convertToTreeNode(src: SceneSelfMapTree): TreeNode {
+  return {
+    id: src.id,
+    icon: src.icon,
+    label: src.label,
+    sublabel: src.sublabel,
+    hasDiagram: src.hasDiagram,
+    detail: src.detail,
+    children: src.children ? src.children.map(convertToTreeNode) : undefined,
+  };
+}
+
 function findNode(nodes: TreeNode[], id: string): TreeNode | null {
   for (const n of nodes) {
     if (n.id === id) return n;
@@ -574,14 +594,12 @@ function findNode(nodes: TreeNode[], id: string): TreeNode | null {
   return null;
 }
 
-// ── 查找流程图 ──
-function findDiagramForNode(node: TreeNode): DiagramDef | null {
-  if (DIAGRAMS[node.id]) return DIAGRAMS[node.id];
-  // 递归向上查找祖先的流程图
+function findDiagramForNode(node: TreeNode, diagramsMap: Record<string, DiagramDef>): DiagramDef | null {
+  if (diagramsMap[node.id]) return diagramsMap[node.id];
   return null;
 }
 
-export function SelfMapView({ onBack }: { onBack: () => void }) {
+export function SelfMapView({ onBack, sceneId }: { onBack: () => void; sceneId?: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedSet, setExpandedSet] = useState<Set<string>>(new Set(['frontend', 'backend', 'backend-core']));
   const [searchQuery, setSearchQuery] = useState('');
@@ -589,8 +607,67 @@ export function SelfMapView({ onBack }: { onBack: () => void }) {
   const [rightWidth, setRightWidth] = useState(0);
   const resizing = useRef<'left' | 'right' | null>(null);
 
-  const selected = selectedId ? findNode(TREE_DATA, selectedId) : null;
-  const diagram = selected ? findDiagramForNode(selected) : null;
+  // ═══ 场景自省图：动态数据 ═══
+  const [dynamicTree, setDynamicTree] = useState<TreeNode[] | null>(null);
+  const [dynamicDiagrams, setDynamicDiagrams] = useState<Record<string, DiagramDef>>({});
+  const [dynamicTitle, setDynamicTitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [notExists, setNotExists] = useState(false);
+
+  useEffect(() => {
+    if (!sceneId) return;
+    setLoading(true);
+    setNotExists(false);
+    fetchSceneSelfMap(sceneId).then(data => {
+      if (data && data.exists) {
+        setDynamicTree(data.tree.map(convertToTreeNode));
+        // 转换 diagrams（补齐 w/h/style 默认值）
+        const diagrams: Record<string, DiagramDef> = {};
+        for (const [nodeId, diag] of Object.entries(data.diagrams || {})) {
+          diagrams[nodeId] = {
+            title: diag.title,
+            nodes: diag.nodes.map(n => ({
+              id: n.id, x: n.x, y: n.y, w: n.w ?? 120, h: n.h ?? 42,
+              icon: n.icon, label: n.label, sub: n.sub, style: n.style ?? 'process',
+            })),
+            edges: diag.edges,
+          };
+        }
+        setDynamicDiagrams(diagrams);
+        setDynamicTitle(data.title || '');
+        setNotExists(false);
+        // 默认展开第一层
+        const rootIds = data.tree.map(n => n.id);
+        setExpandedSet(new Set(rootIds.slice(0, 3)));
+      } else {
+        setDynamicTree(null);
+        setDynamicDiagrams({});
+        setDynamicTitle('');
+        setNotExists(true);
+      }
+    }).catch(() => {
+      setDynamicTree(null);
+      setNotExists(true);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, [sceneId]);
+
+  // ═══ 数据源选择 ═══
+  const isSceneMode = !!sceneId;
+  const currentTree = isSceneMode ? (dynamicTree ?? []) : TREE_DATA;
+  const currentTitle = isSceneMode ? dynamicTitle : '坐山客 · 自省地图';
+  const currentDiagrams = isSceneMode ? dynamicDiagrams : DIAGRAMS;
+
+  const selected = selectedId ? findNode(currentTree, selectedId) : null;
+  const diagram = selected ? findDiagramForNode(selected, currentDiagrams) : null;
+
+  // 场景模式下根节点默认展开
+  useEffect(() => {
+    if (isSceneMode && dynamicTree && dynamicTree.length > 0 && expandedSet.size === 0) {
+      setExpandedSet(new Set(dynamicTree.map(n => n.id)));
+    }
+  }, [isSceneMode, dynamicTree]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedSet(prev => {
@@ -646,7 +723,7 @@ export function SelfMapView({ onBack }: { onBack: () => void }) {
     });
   };
 
-  const filteredTree = searchQuery ? filterNodes(TREE_DATA, searchQuery) : TREE_DATA;
+  const filteredTree = searchQuery ? filterNodes(currentTree, searchQuery) : currentTree;
 
   // 自动展开搜索命中的节点
   useEffect(() => {
@@ -663,10 +740,42 @@ export function SelfMapView({ onBack }: { onBack: () => void }) {
         }
         return results;
       };
-      const parentIds = collectParentIds(TREE_DATA, searchQuery);
+      const parentIds = collectParentIds(currentTree, searchQuery);
       if (parentIds.length > 0) setExpandedSet(prev => new Set([...prev, ...parentIds]));
     }
   }, [searchQuery]);
+
+  // ═══ 加载态 ═══
+  if (loading) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#020617', color: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div style={{ fontSize: 36, animation: 'spin 2s linear infinite' }}>🗺️</div>
+        <div style={{ fontSize: 13, color: '#64748b' }}>加载自省地图…</div>
+      </div>
+    );
+  }
+
+  // ═══ 空态（场景未声明自省图） ═══
+  if (isSceneMode && notExists) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#020617', color: '#e2e8f0', display: 'flex', flexDirection: 'column', fontFamily: "'JetBrains Mono', 'Noto Sans SC', monospace" }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={onBack} className="garden-back-btn" style={{ background: 'none', border: '1px solid #1e293b', borderRadius: 6, padding: '4px 12px', color: '#94a3b8', cursor: 'pointer', fontSize: 12 }}>← 返回</button>
+          <span style={{ fontSize: 16, fontWeight: 600, background: 'linear-gradient(135deg, #22d3ee, #34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>🗺️ 场景自省地图</span>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, padding: 40 }}>
+          <div style={{ fontSize: 48, opacity: 0.3 }}>🗺️</div>
+          <div style={{ fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 400, lineHeight: 1.8 }}>
+            此场景尚未声明自省地图
+          </div>
+          <div style={{ fontSize: 12, color: '#475569', textAlign: 'center', maxWidth: 500, lineHeight: 1.7 }}>
+            在对话中向分身描述当前系统的架构，它会在合适的时机自动生成可视化架构图。
+            <br/>您可以提示：<span style={{ color: '#22d3ee' }}>「请用 self_map_declare 声明一下当前项目的架构」</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -677,8 +786,9 @@ export function SelfMapView({ onBack }: { onBack: () => void }) {
     }}>
       {/* 顶栏 */}
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={onBack} className="garden-back-btn" style={{ background: 'none', border: '1px solid #1e293b', borderRadius: 6, padding: '4px 12px', color: '#94a3b8', cursor: 'pointer', fontSize: 12 }}>← 返回花园</button>
-        <span style={{ fontSize: 16, fontWeight: 600, background: 'linear-gradient(135deg, #22d3ee, #34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>⛰️ 坐山客 · 自省地图</span>
+        <button onClick={onBack} className="garden-back-btn" style={{ background: 'none', border: '1px solid #1e293b', borderRadius: 6, padding: '4px 12px', color: '#94a3b8', cursor: 'pointer', fontSize: 12 }}>{isSceneMode ? '← 返回' : '← 返回花园'}</button>
+        <span style={{ fontSize: 16, fontWeight: 600, background: 'linear-gradient(135deg, #22d3ee, #34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>🗺️ {currentTitle}</span>
+        {isSceneMode && <span style={{ fontSize: 10, color: '#64748b', padding: '2px 6px', borderRadius: 6, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>场景自省</span>}
         <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>左树 · 中图 · 右侧详情</span>
       </div>
 
@@ -696,19 +806,25 @@ export function SelfMapView({ onBack }: { onBack: () => void }) {
             }}
           />
           <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0 20px 10px' }}>
-            <ul className="tree" style={{ listStyle: 'none' }}>
-              {filteredTree.map(node => (
-                <TreeNodeItem
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  selectedId={selectedId}
-                  onSelect={handleSelect}
-                  expandedSet={expandedSet}
-                  onToggle={toggleExpand}
-                />
-              ))}
-            </ul>
+            {filteredTree.length === 0 && !loading ? (
+              <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: 20 }}>
+                {searchQuery ? '无匹配结果' : '暂无架构节点'}
+              </div>
+            ) : (
+              <ul className="tree" style={{ listStyle: 'none' }}>
+                {filteredTree.map(node => (
+                  <TreeNodeItem
+                    key={node.id}
+                    node={node}
+                    depth={0}
+                    selectedId={selectedId}
+                    onSelect={handleSelect}
+                    expandedSet={expandedSet}
+                    onToggle={toggleExpand}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
@@ -725,17 +841,17 @@ export function SelfMapView({ onBack }: { onBack: () => void }) {
             display: 'flex', alignItems: 'center', gap: 8, minHeight: 36,
           }}>
             <span style={{ fontSize: 15 }}>{selected?.icon || '🏛️'}</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{selected?.label || '坐山客系统'}</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{selected?.label || currentTree.length > 0 ? '' : '架构图'}</span>
             <span style={{ fontSize: 10, color: '#64748b' }}>{diagram?.title || '选择左侧节点查看流程图'}</span>
             {diagram ? (
               <span style={{ marginLeft: 'auto', fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.2)' }}>
                 有图
               </span>
-            ) : (
+            ) : selected ? (
               <span style={{ marginLeft: 'auto', fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(71,85,105,0.15)', color: '#475569', border: '1px solid #1e293b' }}>
                 无图
               </span>
-            )}
+            ) : null}
           </div>
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
             <DiagramView diagram={diagram} />
