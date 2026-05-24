@@ -509,6 +509,15 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                         "result": event.get("result"), "success": True,
                     })
                 elif etype == "tool_error":
+                    # 🆕 高危命令阻断 → 发射 approval 事件
+                    high_risk = event.get("high_risk")
+                    if high_risk:
+                        yield sse_event("command_approval",
+                            command=event.get("blocked_command", ""),
+                            reason=high_risk.get("reason", ""),
+                            category=high_risk.get("category", ""),
+                            description=high_risk.get("description", ""),
+                        )
                     yield sse_event("tool_status", tool=event["tool"], status="error",
                                     success=False, message=event.get("error", "执行失败"))
                     agent_tool_results.append({

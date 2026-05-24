@@ -79,6 +79,21 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None, max_
     if not tool_def:
         return {"success": False, "result": None, "error": f"工具 '{name}' 未注册"}
 
+    # 🆕 高危命令扫描器：run_code 的 bash shell 命令执行前扫描
+    if name == "run_code" and params.get("language") == "bash":
+        command = params.get("code", "")
+        if command:
+            from .command_scanner import scan_command
+            workdir = params.get("workdir", extra_kwargs.get("workdir") if extra_kwargs else None)
+            scan_result = scan_command(command, workdir)
+            if scan_result and scan_result["block"]:
+                return {
+                    "success": False,
+                    "result": None,
+                    "error": scan_result["reason"],
+                    "high_risk": scan_result,
+                }
+
     file_path = tool_def.get("file", "")
     func_name = tool_def.get("function", name)
 

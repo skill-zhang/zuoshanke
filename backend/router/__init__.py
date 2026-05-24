@@ -20,6 +20,7 @@ from router.garden_chat import router as garden_chat_router          # 🆕 起�
 from router.clarify_router import router as clarify_router           # 🆕 自开发场景 Clarify
 from router.delegate_results import router as delegate_results_router  # 🆕 子 Agent 成果展示
 from router.scene_self_map import router as scene_self_map_router      # 🆕 场景自省地图
+from router.command_approval import router as command_approval_router  # 🆕 高危命令审批
 
 
 def register_all_routers(app: FastAPI):
@@ -43,3 +44,4 @@ def register_all_routers(app: FastAPI):
     app.include_router(clarify_router)      # 🆕 自开发场景 Clarify
     app.include_router(delegate_results_router)  # 🆕 子 Agent 成果展示
     app.include_router(scene_self_map_router)     # 🆕 场景自省地图
+    app.include_router(command_approval_router)   # 🆕 高危命令审批

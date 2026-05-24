@@ -642,12 +642,17 @@ def run_agent_loop(
                         "tool_call_id": tc.get("id", ""),
                     }
                 else:
-                    yield {
+                    high_risk = result.get("high_risk")
+                    event = {
                         "type": "tool_error",
                         "tool": tool_name,
                         "error": result.get("error", "执行失败"),
                         "tool_call_id": tc.get("id", ""),
                     }
+                    if high_risk:
+                        event["high_risk"] = high_risk
+                        event["blocked_command"] = params.get("command", "") if isinstance(params, dict) else ""
+                    yield event
 
                 # 将结果加入对话
                 tool_result_content = json.dumps(

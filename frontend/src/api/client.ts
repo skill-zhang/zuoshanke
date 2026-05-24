@@ -258,7 +258,9 @@ export type StreamEvent =
   | { type: 'dashboard:converge'; merge_count: number; queue_count: number }
   | { type: 'dashboard:queue_update'; items: DashboardQueueItem[] }
   | { type: 'dashboard:reflect'; tool: string; tool_success: boolean; result_preview: string }
-  | { type: 'thinking_map:diverged'; node_count: number };
+  | { type: 'thinking_map:diverged'; node_count: number }
+  // 🆕 高危命令审批
+  | { type: 'command_approval'; command: string; reason: string; category: string; description: string };
 
 /** Schema v0.7: 仪表盘队列项 */
 export interface DashboardQueueItem {

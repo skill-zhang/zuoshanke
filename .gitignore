@@ -11,9 +11,10 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 
-# Database
-*.db
-*.db-journal
+# Generated
+shared/
+zuoshanke.db
+zuoshanke.db-journal
 *.db-wal
 *.db-shm
 

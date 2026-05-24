@@ -17,6 +17,7 @@ import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
 import { Dialog } from './components/Dialog';
 import { ClarifyDialog } from './components/ClarifyDialog';
+import { CommandApprovalDialog } from './components/CommandApprovalDialog';
 import { Scene, createScene } from './api/client';
 import { showAlert } from './stores/dialogStore';
 
@@ -309,6 +310,7 @@ export default function App() {
       <SettingsDrawer />
       <Dialog />
       <ClarifyDialog />
+      <CommandApprovalDialog />
 
       {/* ═══ 创建场景弹窗 ═══ */}
       <div className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`} onClick={handleCloseCreate}>

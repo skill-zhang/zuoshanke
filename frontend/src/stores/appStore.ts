@@ -628,6 +628,10 @@ export const useStore = create<AppState>((set, get) => ({
                 : m
             ),
           }));
+        } else if (event.type === 'command_approval') {
+          // 🆕 高危命令审批弹窗 - 由独立 store 管理
+          const { showApproval } = await import('../stores/approvalStore');
+          showApproval(event);
         }
       }
     } catch (e) {
