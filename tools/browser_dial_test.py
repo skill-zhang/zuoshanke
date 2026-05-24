@@ -21,6 +21,13 @@ import uuid
 _browser = None
 _PLAYWRIGHT_AVAILABLE = False
 
+# ── Chromium headless-shell 路径 ──
+# 使用轻量的 headless-shell 而非完整版 Chrome，减少 62MB 下载体积
+_HEADLESS_SHELL_PATH = os.path.expanduser(
+    "~/.cache/ms-playwright/chromium_headless_shell-1223"
+    "/chrome-headless-shell-linux64/chrome-headless-shell"
+)
+
 
 def _ensure_browser():
     """获取/创建全局 Chromium 浏览器实例"""
@@ -30,7 +37,15 @@ def _ensure_browser():
     try:
         from playwright.sync_api import sync_playwright
         _pw = sync_playwright().start()
-        _browser = _pw.chromium.launch(headless=True)
+        # 明确指定 headless-shell 路径，不依赖 Playwright 的默认路径发现
+        if os.path.exists(_HEADLESS_SHELL_PATH):
+            _browser = _pw.chromium.launch(
+                headless=True,
+                executable_path=_HEADLESS_SHELL_PATH,
+                args=["--no-sandbox"],
+            )
+        else:
+            _browser = _pw.chromium.launch(headless=True)
         _PLAYWRIGHT_AVAILABLE = True
     except ImportError:
         _PLAYWRIGHT_AVAILABLE = False

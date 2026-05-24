@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 系统设置原型 v2（全屏）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: #0d1117; color: #c9d1d9; font-size: 14px;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+  }
+  .mock-app {
+    width: 1200px; height: 760px;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 12px;
+    display: flex; overflow: hidden;
+  }
+  .sidebar {
+    width: 220px; border-right: 1px solid #21262d;
+    display: flex; flex-direction: column; padding: 16px 0;
+    flex-shrink: 0;
+  }
+  .sidebar-logo { padding: 0 16px 16px; border-bottom: 1px solid #21262d; margin-bottom: 8px; }
+  .sidebar-logo-text { font-size: 16px; font-weight: 700; color: #e6edf3; }
+  .sidebar-item {
+    padding: 8px 16px; font-size: 13px; color: #8b949e; cursor: default;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sidebar-item.active { color: #c9d1d9; background: #161b22; border-right: 2px solid #58a6ff; }
+  .main-content {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* ── 页面顶部 ── */
+  .page-header {
+    padding: 20px 24px 0;
+    display: flex; flex-direction: column; gap: 16px;
+    flex-shrink: 0;
+  }
+  .page-title { font-size: 16px; font-weight: 600; color: #e6edf3; }
+  .settings-tabs {
+    display: flex; border-bottom: 1px solid #21262d; gap: 0;
+  }
+  .settings-tab {
+    padding: 10px 16px; font-size: 13px; color: #8b949e; cursor: pointer;
+    border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap;
+  }
+  .settings-tab:hover { color: #c9d1d9; }
+  .settings-tab.active { color: #e6edf3; font-weight: 500; border-bottom-color: #f0883e; }
+
+  /* ── 内容区 ── */
+  .page-body {
+    flex: 1; overflow-y: auto; padding: 20px 24px;
+  }
+  .page-body::-webkit-scrollbar { width: 8px; }
+  .page-body::-webkit-scrollbar-track { background: transparent; }
+  .page-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+  .page-body::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+  /* ── 共用组件 ── */
+  .btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    border: 1px solid #30363d; background: #21262d; color: #c9d1d9;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .btn:hover { background: #30363d; }
+  .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-outline { background: transparent; border-color: #30363d; color: #c9d1d9; }
+  .btn-outline:hover { border-color: #8b949e; }
+  .btn-ghost { background: transparent; border-color: transparent; color: #8b949e; }
+  .btn-ghost:hover { color: #c9d1d9; background: transparent; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-icon { padding: 4px 8px; font-size: 14px; line-height: 1; }
+  .section-desc { font-size: 12px; color: #8b949e; line-height: 1.5; }
+
+  /* ═══ Tab 1: Provider 管理 ═══ */
+  .tab-panel { display: none; flex-direction: column; gap: 16px; }
+  .tab-panel.active { display: flex; }
+
+  .desc-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .provider-card { border: 1px solid #30363d; border-radius: 8px; background: #0d1117; overflow: hidden; }
+  .provider-card-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #21262d;
+  }
+  .provider-card-header:hover { background: #161b22; }
+  .provider-icon { font-size: 20px; width: 28px; text-align: center; }
+  .provider-name { font-size: 14px; font-weight: 500; color: #e6edf3; flex: 1; }
+  .provider-badge { font-size: 11px; color: #8b949e; background: #21262d; padding: 2px 8px; border-radius: 4px; }
+  .provider-type-badge { background: #21262d; color: #8b949e; font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  .provider-actions { display: flex; gap: 4px; }
+  .provider-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .provider-url-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8b949e; }
+  .provider-url { color: #58a6ff; font-family: 'SF Mono', monospace; }
+  .provider-api-key {
+    font-family: 'SF Mono', monospace; font-size: 12px;
+    color: #8b949e; background: #161b22; padding: 2px 8px; border-radius: 4px;
+    letter-spacing: 2px;
+  }
+  .provider-models-section { margin-top: 8px; }
+  .provider-models-title {
+    font-size: 12px; color: #8b949e; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .model-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+    padding: 5px 10px 5px 8px; font-size: 12px; color: #c9d1d9;
+    margin: 0 6px 6px 0;
+  }
+  .model-tag .model-name { color: #58a6ff; font-weight: 500; }
+  .model-tag .model-params { color: #8b949e; font-size: 11px; }
+  .model-tag .cap-divider { color: #21262d; margin: 0 2px; }
+  .add-provider-area {
+    border: 1px dashed #30363d; border-radius: 8px;
+    padding: 16px; text-align: center; cursor: pointer; transition: border-color 0.15s;
+  }
+  .add-provider-area:hover { border-color: #58a6ff; }
+  .add-provider-area .icon { font-size: 24px; color: #8b949e; }
+  .add-provider-area .text { font-size: 13px; color: #8b949e; margin-top: 4px; }
+
+  /* ═══ Tab 2: 路由配置（全屏版） ═══ */
+  .route-table { border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+  .route-header {
+    display: grid;
+    grid-template-columns: 28px 120px 1fr 1fr 80px 100px 80px 60px;
+    gap: 4px; background: #161b22; padding: 8px 12px;
+    font-size: 12px; color: #8b949e; font-weight: 600; align-items: center;
+  }
+  .route-row-wrap { border-top: 1px solid #21262d; }
+  .route-row-wrap:hover { background: #161b22; }
+  .route-row {
+    display: grid;
+    grid-template-columns: 28px 120px 1fr 1fr 80px 100px 80px 60px;
+    gap: 4px; padding: 8px 12px; align-items: center;
+  }
+  .route-expand {
+    color: #484f58; cursor: pointer; font-size: 12px; text-align: center;
+    transition: transform 0.15s;
+  }
+  .route-expand.open { transform: rotate(90deg); }
+  .route-label { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+  .route-provider-select select, .route-model-select select {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 14px; padding: 5px 8px; outline: none;
+    cursor: pointer; font-family: inherit;
+  }
+  .route-provider-select select:focus, .route-model-select select:focus { border-color: #58a6ff; }
+  .route-param {
+    font-size: 12px; color: #8b949e; text-align: center;
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .param-override-input {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 14px; padding: 4px 6px; text-align: center;
+    outline: none; font-family: inherit;
+  }
+  .param-override-input:focus { border-color: #58a6ff; }
+  .param-from-model {
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: #484f58; line-height: 1;
+    white-space: nowrap; pointer-events: none;
+  }
+  .route-cap-indicator { font-size: 13px; text-align: center; cursor: pointer; }
+  .route-detail {
+    display: none; padding: 12px 12px 14px 40px;
+    border-top: 1px solid #21262d; background: #0d1117;
+  }
+  .route-detail.open { display: block; }
+  .route-detail-title { font-size: 11px; color: #8b949e; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .cap-override-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .cap-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 8px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    font-size: 12px; color: #8b949e;
+  }
+  .cap-item.disabled { opacity: 0.4; }
+  .cap-toggle {
+    position: relative; width: 28px; height: 16px; cursor: pointer; flex-shrink: 0;
+  }
+  .cap-toggle input { display: none; }
+  .cap-toggle .slider {
+    position: absolute; inset: 0; background: #21262d; border-radius: 8px; transition: 0.2s;
+  }
+  .cap-toggle .slider::before {
+    content: ''; position: absolute; width: 12px; height: 12px; left: 2px; top: 2px;
+    background: #8b949e; border-radius: 50%; transition: 0.2s;
+  }
+  .cap-toggle input:checked + .slider { background: #238636; }
+  .cap-toggle input:checked + .slider::before { transform: translateX(12px); background: #fff; }
+
+  .route-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    padding-top: 4px;
+  }
+
+  /* ═══ Tab 3: 系统人设 ═══ */
+  .prompt-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
+  .prompt-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .prompt-label { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+  .prompt-textarea {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 13px; line-height: 1.5; padding: 8px;
+    resize: vertical; font-family: inherit; outline: none; min-height: 60px;
+  }
+  .prompt-textarea:focus { border-color: #58a6ff; }
+  .prompt-textarea[readonly] { cursor: default; }
+  .prompt-textarea[readonly]:focus { border-color: #30363d; }
+  .prompt-edit-actions {
+    display: none; justify-content: flex-end; gap: 6px; margin-top: 8px;
+  }
+  .prompt-edit-actions.show { display: flex; }
+
+  /* ═══ Tab 4: 服务状态（卡片版） ═══ */
+  .status-header-row {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+  }
+
+  .status-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+
+  .status-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px; display: flex; justify-content: space-between; align-items: flex-start;
+    transition: border-color 0.15s;
+  }
+  .status-card:hover { border-color: #484f58; }
+  .status-card-left { display: flex; flex-direction: column; gap: 4px; }
+  .status-card-name {
+    font-size: 14px; font-weight: 500; color: #e6edf3;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .status-card-detail { font-size: 11px; color: #8b949e; }
+  .status-card-right {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .status-card-badge {
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+  }
+  .badge-ok { background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.2); }
+  .badge-err { background: rgba(248,81,73,0.12); color: #f85149; border: 1px solid rgba(248,81,73,0.2); }
+  .badge-warn { background: rgba(210,153,34,0.12); color: #d29922; border: 1px solid rgba(210,153,34,0.2); }
+  .status-card-action { font-size: 11px; color: #8b949e; cursor: pointer; }
+  .status-card-action:hover { color: #58a6ff; }
+
+  /* ── 提示色块 ── */
+  .legend-box {
+    padding: 10px 14px; background: #161b22; border-radius: 6px; border: 1px solid #21262d;
+    font-size: 11px; color: #8b949e; line-height: 1.6;
+  }
+
+  /* ── 服务状态卡片展开详情 ── */
+  .status-card-wrap { display: contents; }
+  .status-card { cursor: pointer; }
+  .status-card-detail-panel {
+    display: none; grid-column: 1 / -1;
+    background: #0d1117; border: 1px solid #30363d; border-top: none; border-radius: 0 0 8px 8px;
+    padding: 14px 16px; margin-top: -1px;
+  }
+  .status-card-detail-panel.open { display: block; }
+  .status-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .status-detail-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; border-bottom: 1px solid #21262d; font-size: 12px;
+  }
+  .sd-label { color: #8b949e; }
+  .sd-value { color: #c9d1d9; font-family: 'SF Mono', 'Consolas', monospace; }
+
+  /* ── 秘密花园入口 ── */
+  .garden-entry {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 12px 16px; border: 1px solid rgba(107,158,255,0.12);
+    border-radius: 8px; background: rgba(107,158,255,0.03);
+    transition: all 0.2s;
+  }
+  .garden-entry:hover { background: rgba(107,158,255,0.08); border-color: rgba(107,158,255,0.3); }
+  .garden-entry-icon { font-size: 18px; }
+  .garden-entry-text { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+  .garden-entry-arrow { margin-left: auto; font-size: 13px; color: #58a6ff; }
+</style>
+</head>
+<body>
+
+<div class="mock-app">
+
+  <!-- sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><span class="sidebar-logo-text">⛰ 坐山客</span></div>
+    <div class="sidebar-item">💬 频道</div>
+    <div class="sidebar-item">🔧 场景</div>
+    <div class="sidebar-item">📋 工具</div>
+    <div class="sidebar-item">🧠 记忆</div>
+    <div class="sidebar-item">📊 能力验证</div>
+    <div class="sidebar-item active">⚙ 系统设置</div>
+  </div>
+
+  <!-- main -->
+  <div class="main-content">
+    <div class="page-header">
+      <div class="page-title">⚙ 系统设置</div>
+      <div class="settings-tabs">
+        <div class="settings-tab active" data-tab="providers">☁ Provider 管理</div>
+        <div class="settings-tab" data-tab="routing">🔀 路由配置</div>
+        <div class="settings-tab" data-tab="prompts">📝 系统人设</div>
+        <div class="settings-tab" data-tab="service">💻 服务状态</div>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- ═══ Tab 1: Provider 管理 ═══ -->
+      <div class="tab-panel active" id="tab-providers">
+
+        <div class="desc-row">
+          <span class="section-desc" style="margin:0;">管理 AI Provider 的连接信息。Provider 负责模型调用，每个 Provider 可以关联多个模型。</span>
+          <button class="btn btn-sm btn-primary" onclick="alert('弹新增 Provider 表单')">+ 添加 Provider</button>
+        </div>
+
+        <!-- DeepSeek -->
+        <div class="provider-card">
+          <div class="provider-card-header" onclick="toggleBody(this)">
+            <span class="provider-icon">☁</span>
+            <span class="provider-name">DeepSeek</span>
+            <span class="provider-type-badge">OpenAI 兼容</span>
+            <span class="provider-actions">
+              <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">✏️</span>
+              <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">🔗</span>
+            </span>
+          </div>
+          <div class="provider-body" style="display:block;">
+            <div class="provider-url-row">
+              <span>🌐 Base URL</span>
+              <span class="provider-url">https://api.deepseek.com</span>
+            </div>
+            <div class="provider-url-row">
+              <span>🔑 API Key</span>
+              <span class="provider-api-key">sk-***********************T3Bl</span>
+              <button class="btn btn-sm btn-ghost" style="padding:2px 6px;">更换</button>
+            </div>
+            <div class="provider-models-section">
+              <div class="provider-models-title">
+                <span>支持的模型 <span style="color:#484f58;font-weight:400;">（4）</span></span>
+                <button class="btn btn-sm btn-ghost">+ 添加模型</button>
+              </div>
+              <div>
+                <span class="model-tag"><span class="model-name">deepseek-v4-flash</span><span class="model-params">· 1M ctx · 0.7T · 8K tok</span><span class="cap-divider">|</span><span class="model-cap">🖼 🔧</span></span>
+                <span class="model-tag"><span class="model-name">deepseek-v4-pro</span><span class="model-params">· 1M ctx · 0.5T · 8K tok</span><span class="cap-divider">|</span><span class="model-cap">🖼 🔧</span></span>
+                <span class="model-tag"><span class="model-name">deepseek-chat</span><span class="model-params">· 128K ctx · 0.7T · 4K tok</span><span class="cap-divider">|</span><span class="model-cap">🔧</span></span>
+                <span class="model-tag"><span class="model-name">deepseek-reasoner</span><span class="model-params">· 64K ctx · 0.0T · 8K tok</span><span class="cap-divider">|</span><span class="model-cap">🔧</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OpenAI -->
+        <div class="provider-card">
+          <div class="provider-card-header" onclick="toggleBody(this)">
+            <span class="provider-icon">🟢</span>
+            <span class="provider-name">OpenAI</span>
+            <span class="provider-type-badge">OpenAI 兼容</span>
+            <span class="provider-actions">
+              <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">✏️</span>
+              <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">🔗</span>
+            </span>
+          </div>
+          <div class="provider-body" style="display:block;">
+            <div class="provider-url-row">
+              <span>🌐 Base URL</span>
+              <span class="provider-url">https://api.openai.com/v1</span>
+            </div>
+            <div class="provider-url-row">
+              <span>🔑 API Key</span>
+              <span class="provider-api-key">sk-*************************a7Fd</span>
+              <button class="btn btn-sm btn-ghost" style="padding:2px 6px;">更换</button>
+              <span style="font-size:11px;color:#f85149;">未验证</span>
+            </div>
+            <div class="provider-models-section">
+              <div class="provider-models-title">
+                <span>支持的模型 <span style="color:#484f58;font-weight:400;">（3）</span></span>
+                <button class="btn btn-sm btn-ghost">+ 添加模型</button>
+              </div>
+              <div>
+                <span class="model-tag"><span class="model-name">gpt-4o</span><span class="model-params">· 128K ctx · 0.7T · 16K tok</span><span class="cap-divider">|</span><span class="model-cap">🖼 🔧</span></span>
+                <span class="model-tag"><span class="model-name">gpt-4o-mini</span><span class="model-params">· 128K ctx · 0.7T · 16K tok</span><span class="cap-divider">|</span><span class="model-cap">🖼 🔧</span></span>
+                <span class="model-tag"><span class="model-name">o3-mini</span><span class="model-params">· 200K ctx · 1.0T · 100K tok</span><span class="cap-divider">|</span><span class="model-cap">🔧</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 本地 Qwen -->
+        <div class="provider-card">
+          <div class="provider-card-header" onclick="toggleBody(this)">
+            <span class="provider-icon">💻</span>
+            <span class="provider-name">本地 Qwen</span>
+            <span class="provider-type-badge">OpenAI 兼容</span>
+            <span class="provider-badge">本地</span>
+            <span class="provider-actions">
+              <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">✏️</span>
+              <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">🔗</span>
+            </span>
+          </div>
+          <div class="provider-body" style="display:block;">
+            <div class="provider-url-row">
+              <span>🌐 Base URL</span>
+              <span class="provider-url">http://localhost:8083/v1</span>
+            </div>
+            <div class="provider-url-row">
+              <span>🔑 API Key</span>
+              <span style="font-size:12px;color:#484f58;">（无需 API Key）</span>
+            </div>
+            <div class="provider-models-section">
+              <div class="provider-models-title">
+                <span>支持的模型 <span style="color:#484f58;font-weight:400;">（1）</span></span>
+                <button class="btn btn-sm btn-ghost">+ 添加模型</button>
+              </div>
+              <div>
+                <span class="model-tag"><span class="model-name">Qwen3.5-9B</span><span class="model-params">· 32K ctx · 0.7T · 4K tok</span><span class="cap-divider">|</span><span class="model-cap">🖼 🔧</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="add-provider-area" onclick="alert('弹新增 Provider 表单')">
+          <div class="icon">+</div>
+          <div class="text">添加 Provider</div>
+        </div>
+      </div>
+
+      <!-- ═══ Tab 2: 路由配置（全屏版） ═══ -->
+      <div class="tab-panel" id="tab-routing">
+        <div class="desc-row" style="margin-bottom:12px;">
+          <span class="section-desc" style="margin:0;">每个路由指定使用的 Provider 和模型。参数默认跟随模型自身的默认值，覆盖会蓝色高亮。展开行可配置能力开关。</span>
+        </div>
+
+        <div class="route-table">
+          <div class="route-header">
+            <span></span>
+            <span>路由</span>
+            <span>Provider</span>
+            <span>模型</span>
+            <span>温度</span>
+            <span>最大 Token</span>
+            <span>惩罚</span>
+            <span>能力</span>
+          </div>
+
+          <!-- 频道闲聊（已展开） -->
+          <div class="route-row-wrap">
+            <div class="route-row">
+              <span class="route-expand open" onclick="toggleDetail(this)">▶</span>
+              <span class="route-label">💬 频道闲聊</span>
+              <div class="route-provider-select">
+                <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+              </div>
+              <div class="route-model-select">
+                <select><option selected>deepseek-v4-flash</option><option>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="0.70" step="0.05" min="0" max="2">
+                <span class="param-from-model">默认 0.7</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="8192" step="512" min="128" max="1048576">
+                <span class="param-from-model">默认 8192</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                <span class="param-from-model">默认 1.05</span>
+              </div>
+              <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🖼🔧</div>
+            </div>
+            <div class="route-detail open" id="detail-channel">
+              <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+              <div class="cap-override-grid">
+                <div class="cap-item">
+                  <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                  <span>🖼 Vision（来自模型）</span>
+                </div>
+                <div class="cap-item">
+                  <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                  <span>🔧 Function Calling（来自模型）</span>
+                </div>
+                <div class="cap-item">
+                  <label class="cap-toggle"><input type="checkbox"><span class="slider"></span></label>
+                  <span>📤 流式输出</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 场景分析 -->
+          <div class="route-row-wrap">
+            <div class="route-row">
+              <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+              <span class="route-label">🔧 场景分析</span>
+              <div class="route-provider-select">
+                <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+              </div>
+              <div class="route-model-select">
+                <select><option selected>deepseek-v4-flash</option><option>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="0.30" step="0.05" min="0" max="2" style="border-color:#58a6ff;">
+                <span class="param-from-model">默认 0.7</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="16384" step="512" min="128" max="1048576" style="border-color:#58a6ff;">
+                <span class="param-from-model">默认 8192</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                <span class="param-from-model">默认 1.05</span>
+              </div>
+              <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🖼🔧</div>
+            </div>
+            <div class="route-detail">
+              <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+              <div class="cap-override-grid">
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🖼 Vision（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🔧 Function Calling（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox"><span class="slider"></span></label><span>📤 流式输出</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 约束提取 -->
+          <div class="route-row-wrap">
+            <div class="route-row">
+              <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+              <span class="route-label">🔗 约束提取</span>
+              <div class="route-provider-select">
+                <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+              </div>
+              <div class="route-model-select">
+                <select><option>deepseek-v4-flash</option><option selected>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="0.70" step="0.05" min="0" max="2">
+                <span class="param-from-model">默认 0.7</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="8192" step="512" min="128" max="1048576">
+                <span class="param-from-model">默认 8192</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                <span class="param-from-model">默认 1.05</span>
+              </div>
+              <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🔧</div>
+            </div>
+            <div class="route-detail">
+              <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+              <div class="cap-override-grid">
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🔧 Function Calling（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox"><span class="slider"></span></label><span>📤 流式输出</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Medium -->
+          <div class="route-row-wrap">
+            <div class="route-row">
+              <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+              <span class="route-label">⚖️ Medium</span>
+              <div class="route-provider-select">
+                <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+              </div>
+              <div class="route-model-select">
+                <select><option selected>deepseek-v4-flash</option><option>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="0.70" step="0.05" min="0" max="2">
+                <span class="param-from-model">默认 0.7</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="8192" step="512" min="128" max="1048576">
+                <span class="param-from-model">默认 8192</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                <span class="param-from-model">默认 1.05</span>
+              </div>
+              <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🖼🔧</div>
+            </div>
+            <div class="route-detail">
+              <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+              <div class="cap-override-grid">
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🖼 Vision（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🔧 Function Calling（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox"><span class="slider"></span></label><span>📤 流式输出</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Heavy -->
+          <div class="route-row-wrap">
+            <div class="route-row">
+              <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+              <span class="route-label">🏋️ Heavy</span>
+              <div class="route-provider-select">
+                <select><option>DeepSeek</option><option>OpenAI</option><option selected>本地 Qwen</option></select>
+              </div>
+              <div class="route-model-select">
+                <select><option>deepseek-v4-flash</option><option selected>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="0.30" step="0.05" min="0" max="2" style="border-color:#58a6ff;">
+                <span class="param-from-model">默认 0.7</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="32768" step="512" min="128" max="1048576" style="border-color:#58a6ff;">
+                <span class="param-from-model">默认 8192</span>
+              </div>
+              <div class="route-param">
+                <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                <span class="param-from-model">默认 1.05</span>
+              </div>
+              <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🖼🔧</div>
+            </div>
+            <div class="route-detail">
+              <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+              <div class="cap-override-grid">
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🖼 Vision（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label><span>🔧 Function Calling（来自模型）</span></div>
+                <div class="cap-item"><label class="cap-toggle"><input type="checkbox"><span class="slider"></span></label><span>📤 流式输出</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend-box" style="margin-top:12px;">
+          🔵 蓝色边框 = 参数已覆盖（不同于模型默认值） · 🔴 红色边框 = 参数值可能有风险<br>
+          🖼🔧 能力图标 = 模型自带的视觉/函数调用能力 · 展开行可关闭某些能力（灰色 = 模型不支持，不可开启）
+        </div>
+        <div class="route-actions" style="margin-top:4px;">
+          <button class="btn btn-sm btn-primary">💾 保存路由配置</button>
+          <button class="btn btn-sm btn-ghost">重置</button>
+        </div>
+      </div>
+
+      <!-- ═══ Tab 3: 系统人设 ═══ -->
+      <div class="tab-panel" id="tab-prompts">
+        <div class="section-desc" style="margin-bottom:16px;">管理各个场景/频道的系统人设（System Prompt）。修改即时生效。</div>
+
+        <div class="prompt-card">
+          <div class="prompt-card-header">
+            <span class="prompt-label">💬 频道人设</span>
+            <button class="btn btn-sm btn-ghost" onclick="editPrompt(this)">✏️ 编辑</button>
+          </div>
+          <textarea class="prompt-textarea" rows="3" readonly>你是坐山客（Zuoshanke），以广博学识和理性思维为用户提供帮助。用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。</textarea>
+          <div class="prompt-edit-actions">
+            <button class="btn btn-sm btn-ghost" onclick="cancelEdit(this)">取消</button>
+            <button class="btn btn-sm btn-ghost" onclick="resetPrompt(this)">恢复默认</button>
+            <button class="btn btn-sm btn-primary" onclick="savePrompt(this)">保存</button>
+          </div>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-card-header">
+            <span class="prompt-label">🔧 场景人设</span>
+            <button class="btn btn-sm btn-ghost" onclick="editPrompt(this)">✏️ 编辑</button>
+          </div>
+          <textarea class="prompt-textarea" rows="3" readonly>你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。</textarea>
+          <div class="prompt-edit-actions">
+            <button class="btn btn-sm btn-ghost" onclick="cancelEdit(this)">取消</button>
+            <button class="btn btn-sm btn-ghost" onclick="resetPrompt(this)">恢复默认</button>
+            <button class="btn btn-sm btn-primary" onclick="savePrompt(this)">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Tab 4: 服务状态（卡片版） ═══ -->
+      <div class="tab-panel" id="tab-service">
+        <div class="status-header-row">
+          <span class="section-desc" style="margin:0;">系统各服务运行状态概览。实时监控 Provider 连通性和后端服务健康。</span>
+          <button class="btn btn-sm btn-outline" onclick="alert('刷新所有服务状态')">🔄 刷新</button>
+        </div>
+
+        <div class="status-grid">
+          <div class="status-card-wrap">
+            <div class="status-card" onclick="toggleStatusDetail(this)">
+              <div class="status-card-left">
+                <span class="status-card-name">🤖 DeepSeek API</span>
+                <span class="status-card-detail">延迟 128ms · 配额 72%</span>
+              </div>
+              <div class="status-card-right">
+                <span class="status-card-badge badge-ok">● 在线</span>
+                <span class="status-card-action">详情</span>
+              </div>
+            </div>
+            <div class="status-card-detail-panel">
+              <div class="status-detail-grid">
+                <div class="status-detail-item"><span class="sd-label">Base URL</span><span class="sd-value">api.deepseek.com</span></div>
+                <div class="status-detail-item"><span class="sd-label">延迟</span><span class="sd-value">128 ms</span></div>
+                <div class="status-detail-item"><span class="sd-label">月配额</span><span class="sd-value">72% 已用</span></div>
+                <div class="status-detail-item"><span class="sd-label">操作</span><span class="sd-value"><button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;">🔄 刷新</button></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-card-wrap">
+            <div class="status-card" onclick="toggleStatusDetail(this)">
+              <div class="status-card-left">
+                <span class="status-card-name">🟢 OpenAI API</span>
+                <span class="status-card-detail">未配置 API Key</span>
+              </div>
+              <div class="status-card-right">
+                <span class="status-card-badge badge-err">● 未配置</span>
+                <span class="status-card-action">配置</span>
+              </div>
+            </div>
+            <div class="status-card-detail-panel">
+              <div class="status-detail-grid">
+                <div class="status-detail-item"><span class="sd-label">状态</span><span class="sd-value" style="color:#f85149;">未配置 API Key</span></div>
+                <div class="status-detail-item"><span class="sd-label">操作</span><span class="sd-value"><button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;">⚙ 前往配置</button></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-card-wrap">
+            <div class="status-card" onclick="toggleStatusDetail(this)">
+              <div class="status-card-left">
+                <span class="status-card-name">💻 本地 Qwen</span>
+                <span class="status-card-detail">llama-server · Qwen3.5-9B · 端口 8083</span>
+              </div>
+              <div class="status-card-right">
+                <span class="status-card-badge badge-ok">● 运行中</span>
+                <span class="status-card-action">重启</span>
+              </div>
+            </div>
+            <div class="status-card-detail-panel">
+              <div class="status-detail-grid">
+                <div class="status-detail-item"><span class="sd-label">服务</span><span class="sd-value">llama-server</span></div>
+                <div class="status-detail-item"><span class="sd-label">端口</span><span class="sd-value">8083</span></div>
+                <div class="status-detail-item"><span class="sd-label">模型</span><span class="sd-value">Qwen3.5-9B-Q4_K-M.gguf</span></div>
+                <div class="status-detail-item"><span class="sd-label">上下文</span><span class="sd-value">32768 ctx</span></div>
+                <div class="status-detail-item"><span class="sd-label">Flash Attention</span><span class="sd-value">auto</span></div>
+                <div class="status-detail-item"><span class="sd-label">插槽</span><span class="sd-value">4 个</span></div>
+                <div class="status-detail-item"><span class="sd-label">显存</span><span class="sd-value">7 / 12 GB</span></div>
+                <div class="status-detail-item"><span class="sd-label">操作</span><span class="sd-value"><button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;">🔄 刷新</button></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-card-wrap">
+            <div class="status-card" onclick="toggleStatusDetail(this)">
+              <div class="status-card-left">
+                <span class="status-card-name">🗄 数据库</span>
+                <span class="status-card-detail">SQLite · 连接池 5/10 · 245MB</span>
+              </div>
+              <div class="status-card-right">
+                <span class="status-card-badge badge-ok">● 已连接</span>
+                <span class="status-card-action">详情</span>
+              </div>
+            </div>
+            <div class="status-card-detail-panel">
+              <div class="status-detail-grid">
+                <div class="status-detail-item"><span class="sd-label">类型</span><span class="sd-value">SQLite</span></div>
+                <div class="status-detail-item"><span class="sd-label">连接池</span><span class="sd-value">5 / 10</span></div>
+                <div class="status-detail-item"><span class="sd-label">数据大小</span><span class="sd-value">245 MB</span></div>
+                <div class="status-detail-item"><span class="sd-label">操作</span><span class="sd-value"><button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;">🔄 刷新</button></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-card-wrap">
+            <div class="status-card" onclick="toggleStatusDetail(this)">
+              <div class="status-card-left">
+                <span class="status-card-name">🧠 记忆服务</span>
+                <span class="status-card-detail">内存池 76% · 24K 条目</span>
+              </div>
+              <div class="status-card-right">
+                <span class="status-card-badge badge-ok">● 运行中</span>
+                <span class="status-card-action">详情</span>
+              </div>
+            </div>
+            <div class="status-card-detail-panel">
+              <div class="status-detail-grid">
+                <div class="status-detail-item"><span class="sd-label">内存池</span><span class="sd-value">76%</span></div>
+                <div class="status-detail-item"><span class="sd-label">条目数</span><span class="sd-value">24,312</span></div>
+                <div class="status-detail-item"><span class="sd-label">类型</span><span class="sd-value">本体 + 分身</span></div>
+                <div class="status-detail-item"><span class="sd-label">操作</span><span class="sd-value"><button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;">🔄 刷新</button></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-card-wrap">
+            <div class="status-card" onclick="toggleStatusDetail(this)">
+              <div class="status-card-left">
+                <span class="status-card-name">🔧 Agent 引擎</span>
+                <span class="status-card-detail">会话 0 活跃 · 线程池 4</span>
+              </div>
+              <div class="status-card-right">
+                <span class="status-card-badge badge-ok">● 待命中</span>
+                <span class="status-card-action">日志</span>
+              </div>
+            </div>
+            <div class="status-card-detail-panel">
+              <div class="status-detail-grid">
+                <div class="status-detail-item"><span class="sd-label">活跃会话</span><span class="sd-value">0</span></div>
+                <div class="status-detail-item"><span class="sd-label">线程池</span><span class="sd-value">4</span></div>
+                <div class="status-detail-item"><span class="sd-label">队列</span><span class="sd-value">0 待处理</span></div>
+                <div class="status-detail-item"><span class="sd-label">操作</span><span class="sd-value"><button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;">🔄 刷新</button></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="garden-entry" onclick="alert('进入秘密花园')" style="margin-top:16px;">
+          <span class="garden-entry-icon">🌸</span>
+          <span class="garden-entry-text">秘密花园</span>
+          <span style="font-size:11px;color:#8b949e;">专属的私密空间 · 路由在花园内配置</span>
+          <span class="garden-entry-arrow">→</span>
+        </div>
+      </div>
+
+    </div><!-- /page-body -->
+  </div><!-- /main-content -->
+</div><!-- /mock-app -->
+
+<script>
+function toggleBody(header) {
+  const body = header.nextElementSibling;
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+function toggleDetail(btn) {
+  const wrap = btn.closest('.route-row-wrap');
+  const detail = wrap.querySelector('.route-detail');
+  const expand = wrap.querySelector('.route-expand');
+  detail.classList.toggle('open');
+  if (expand) expand.classList.toggle('open');
+}
+function toggleStatusDetail(el) {
+  const wrap = el.closest('.status-card-wrap');
+  const panel = wrap.querySelector('.status-card-detail-panel');
+  panel.classList.toggle('open');
+}
+// 系统人设编辑
+function editPrompt(btn) {
+  const card = btn.closest('.prompt-card');
+  card.querySelector('.prompt-textarea').removeAttribute('readonly');
+  card.querySelector('.prompt-edit-actions').classList.add('show');
+}
+function cancelEdit(btn) {
+  const card = btn.closest('.prompt-card');
+  const ta = card.querySelector('.prompt-textarea');
+  ta.setAttribute('readonly', '');
+  card.querySelector('.prompt-edit-actions').classList.remove('show');
+}
+function savePrompt(btn) {
+  const card = btn.closest('.prompt-card');
+  const ta = card.querySelector('.prompt-textarea');
+  ta.setAttribute('readonly', '');
+  card.querySelector('.prompt-edit-actions').classList.remove('show');
+}
+function resetPrompt(btn) {
+  const card = btn.closest('.prompt-card');
+  const ta = card.querySelector('.prompt-textarea');
+  // reset 不做大动作，原型示范用
+  alert('恢复为默认 System Prompt');
+  ta.setAttribute('readonly', '');
+  card.querySelector('.prompt-edit-actions').classList.remove('show');
+}
+// Tab 切换
+document.querySelectorAll('.settings-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 系统设置原型 v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: #0d1117; color: #c9d1d9; font-size: 14px;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 40px;
+  }
+  .mock-app {
+    width: 1200px; height: 760px;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 12px;
+    display: flex; overflow: hidden; position: relative;
+  }
+  .sidebar {
+    width: 220px; border-right: 1px solid #21262d;
+    display: flex; flex-direction: column; padding: 16px 0;
+  }
+  .sidebar-logo { padding: 0 16px 16px; border-bottom: 1px solid #21262d; margin-bottom: 8px; }
+  .sidebar-logo-text { font-size: 16px; font-weight: 700; color: #e6edf3; }
+  .sidebar-item {
+    padding: 8px 16px; font-size: 13px; color: #8b949e; cursor: default;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sidebar-item.active { color: #c9d1d9; background: #161b22; border-right: 2px solid #58a6ff; }
+  .main-content {
+    flex: 1; display: flex; flex-direction: column; position: relative;
+  }
+  .topbar {
+    height: 48px; border-bottom: 1px solid #21262d;
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+  }
+  .topbar-title { font-size: 15px; color: #e6edf3; font-weight: 500; }
+  .chat-area {
+    flex: 1; padding: 24px; display: flex; align-items: flex-end; justify-content: center;
+    color: #484f58; font-size: 14px;
+  }
+  .drawer-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 100; pointer-events: auto;
+  }
+  .drawer {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: 640px; background: #0d1117; border-left: 1px solid #30363d;
+    z-index: 101; display: flex; flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.4);
+  }
+  .drawer-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid #21262d;
+  }
+  .drawer-title { font-size: 16px; font-weight: 600; color: #e6edf3; }
+  .drawer-close { font-size: 18px; color: #484f58; cursor: pointer; }
+  .settings-tabs {
+    display: flex; border-bottom: 1px solid #21262d; padding: 0 20px;
+    background: #0d1117; flex-shrink: 0;
+  }
+  .settings-tab {
+    padding: 12px 14px; font-size: 13px; color: #8b949e; cursor: pointer;
+    border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap;
+  }
+  .settings-tab:hover { color: #c9d1d9; }
+  .settings-tab.active { color: #e6edf3; font-weight: 500; border-bottom-color: #f0883e; }
+  .settings-body {
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .settings-body::-webkit-scrollbar { width: 8px; }
+  .settings-body::-webkit-scrollbar-track { background: transparent; }
+  .settings-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+  .settings-body::-webkit-scrollbar-thumb:hover { background: #484f58; }
+  .settings-card { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; }
+  .card-header {
+    padding: 12px 16px; border-bottom: 1px solid #21262d;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-body { padding: 16px; }
+  .section-title { font-size: 14px; font-weight: 600; color: #c9d1d9; margin-bottom: 12px; }
+  .section-desc { font-size: 12px; color: #8b949e; margin-bottom: 12px; line-height: 1.5; }
+  .gap-y { display: flex; flex-direction: column; gap: 8px; }
+  .gap-x { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    border: 1px solid #30363d; background: #21262d; color: #c9d1d9;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .btn:hover { background: #30363d; }
+  .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-ghost { background: transparent; border-color: transparent; color: #8b949e; }
+  .btn-ghost:hover { color: #c9d1d9; background: transparent; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .form-label { font-size: 12px; color: #8b949e; margin-bottom: 4px; display: block; }
+  .form-input, .form-select {
+    width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; font-size: 13px; padding: 8px 10px; outline: none;
+    font-family: inherit; transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-select:focus { border-color: #58a6ff; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ── Provider 卡片 ── */
+  .provider-card { border: 1px solid #30363d; border-radius: 8px; background: #0d1117; overflow: hidden; }
+  .provider-card-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #21262d;
+  }
+  .provider-card-header:hover { background: #161b22; }
+  .provider-icon { font-size: 20px; width: 28px; text-align: center; }
+  .provider-name { font-size: 14px; font-weight: 500; color: #e6edf3; flex: 1; }
+  .provider-badge { font-size: 11px; color: #8b949e; background: #21262d; padding: 2px 8px; border-radius: 4px; }
+  .provider-type-badge { background: #21262d; color: #8b949e; font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  .provider-actions { display: flex; gap: 4px; }
+  .provider-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .provider-url-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8b949e; }
+  .provider-url { color: #58a6ff; font-family: 'SF Mono', monospace; }
+  .provider-api-key {
+    font-family: 'SF Mono', monospace; font-size: 12px;
+    color: #8b949e; background: #161b22; padding: 2px 8px; border-radius: 4px;
+    letter-spacing: 2px;
+  }
+  .provider-models-section { margin-top: 8px; }
+  .provider-models-title {
+    font-size: 12px; color: #8b949e; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  /* ── 模型 tag ── */
+  .model-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+    padding: 5px 10px 5px 8px; font-size: 12px; color: #c9d1d9;
+    margin: 0 6px 6px 0;
+  }
+  .model-tag .model-name { color: #58a6ff; font-weight: 500; }
+  .model-tag .model-params { color: #8b949e; font-size: 11px; }
+  .model-tag .cap-divider { color: #21262d; margin: 0 2px; }
+
+  /* ── 路由配置表 ── */
+  .route-table { border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+  .route-header {
+    display: grid;
+    grid-template-columns: 24px 85px 1fr 1fr 68px 85px 65px 42px;
+    gap: 2px; background: #161b22; padding: 7px 8px;
+    font-size: 12px; color: #8b949e; font-weight: 600; align-items: center;
+  }
+  .route-row-wrap { border-top: 1px solid #21262d; }
+  .route-row-wrap:hover { background: #161b22; }
+  .route-row {
+    display: grid;
+    grid-template-columns: 24px 85px 1fr 1fr 68px 85px 65px 42px;
+    gap: 2px; padding: 7px 8px; align-items: center;
+  }
+  .route-expand {
+    color: #484f58; cursor: pointer; font-size: 12px; text-align: center;
+    transition: transform 0.15s;
+  }
+  .route-expand.open { transform: rotate(90deg); }
+  .route-label { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+  .route-provider-select select, .route-model-select select {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 14px; padding: 4px 6px; outline: none;
+    cursor: pointer; font-family: inherit;
+  }
+  .route-provider-select select:focus, .route-model-select select:focus { border-color: #58a6ff; }
+  .route-param {
+    font-size: 12px; color: #8b949e; text-align: center;
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .route-param .param-from-model {
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: #484f58; line-height: 1;
+    white-space: nowrap; pointer-events: none;
+  }
+  .param-override-input {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 12px; padding: 3px 4px; text-align: center;
+    outline: none; font-family: inherit;
+  }
+  .param-override-input:focus { border-color: #58a6ff; }
+  .route-cap-indicator { font-size: 12px; text-align: center; cursor: pointer; }
+
+  /* ── 路由展开行（能力覆盖） ── */
+  .route-detail {
+    display: none; padding: 12px 12px 14px 34px;
+    border-top: 1px solid #21262d; background: #0d1117;
+  }
+  .route-detail.open { display: block; }
+  .route-detail-title { font-size: 11px; color: #8b949e; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .cap-override-grid {
+    display: flex; flex-wrap: wrap; gap: 12px;
+  }
+  .cap-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 8px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    font-size: 12px; color: #8b949e;
+  }
+  .cap-item.disabled { opacity: 0.4; }
+  .cap-toggle {
+    position: relative; width: 28px; height: 16px; cursor: pointer; flex-shrink: 0;
+  }
+  .cap-toggle input { display: none; }
+  .cap-toggle .slider {
+    position: absolute; inset: 0; background: #21262d; border-radius: 8px; transition: 0.2s;
+  }
+  .cap-toggle .slider::before {
+    content: ''; position: absolute; width: 12px; height: 12px; left: 2px; top: 2px;
+    background: #8b949e; border-radius: 50%; transition: 0.2s;
+  }
+  .cap-toggle input:checked + .slider { background: #238636; }
+  .cap-toggle input:checked + .slider::before { transform: translateX(12px); background: #fff; }
+  .cap-toggle input:disabled + .slider { opacity: 0.3; }
+  .detail-param-row {
+    display: flex; gap: 16px; align-items: center; margin-top: 10px; flex-wrap: wrap;
+  }
+  .detail-param {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e;
+  }
+  .detail-param input {
+    width: 70px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 12px; padding: 3px 6px; text-align: center; outline: none;
+  }
+
+  /* ── 人设编辑 ── */
+  .prompt-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
+  .prompt-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .prompt-label { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+  .prompt-textarea {
+    width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 12px; line-height: 1.5; padding: 8px;
+    resize: vertical; font-family: inherit; outline: none; min-height: 60px;
+  }
+  .prompt-textarea:focus { border-color: #58a6ff; }
+
+  /* ── 服务状态 ── */
+  .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .status-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid #21262d;
+  }
+  .status-label { font-size: 13px; color: #8b949e; }
+  .status-value { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+  .status-ok { color: #3fb950 !important; }
+  .status-err { color: #f85149 !important; }
+
+  /* ── 添加 Provider ── */
+  .add-provider-area {
+    border: 1px dashed #30363d; border-radius: 8px;
+    padding: 16px; text-align: center; cursor: pointer; transition: border-color 0.15s;
+  }
+  .add-provider-area:hover { border-color: #58a6ff; }
+  .add-provider-area .icon { font-size: 24px; color: #8b949e; }
+  .add-provider-area .text { font-size: 13px; color: #8b949e; margin-top: 4px; }
+
+  /* ── Tab 面板 ── */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── 秘密花园入口 ── */
+  .garden-entry {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 12px; border: 1px solid rgba(107,158,255,0.12);
+    border-radius: 8px; background: rgba(107,158,255,0.03);
+    transition: all 0.2s;
+  }
+  .garden-entry:hover { background: rgba(107,158,255,0.08); border-color: rgba(107,158,255,0.3); }
+
+  /* ── 提示色块 ── */
+  .legend-box {
+    padding: 12px; background: #161b22; border-radius: 8px; border: 1px solid #21262d;
+    font-size: 12px; color: #8b949e; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="mock-app">
+
+  <!-- 侧边栏 -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><span class="sidebar-logo-text">⛰ 坐山客</span></div>
+    <div class="sidebar-item">💬 频道</div>
+    <div class="sidebar-item active">🔧 场景</div>
+    <div class="sidebar-item">📋 工具</div>
+    <div class="sidebar-item">🧠 记忆</div>
+    <div class="sidebar-item">📊 能力验证</div>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">🏠 场景广场</span>
+    </div>
+    <div class="chat-area">主内容区域 · 系统设置抽屉已打开 ↓</div>
+
+    <!-- 设置抽屉 -->
+    <div class="drawer-overlay"></div>
+    <div class="drawer">
+      <div class="drawer-header">
+        <span class="drawer-title">⚙ 系统设置</span>
+        <span class="drawer-close">✕</span>
+      </div>
+
+      <!-- Tab 栏 -->
+      <div class="settings-tabs">
+        <div class="settings-tab active" data-tab="providers">☁ Provider 管理</div>
+        <div class="settings-tab" data-tab="routing">🔀 路由配置</div>
+        <div class="settings-tab" data-tab="prompts">📝 系统人设</div>
+        <div class="settings-tab" data-tab="service">💻 服务状态</div>
+      </div>
+
+      <!-- 主体 -->
+      <div class="settings-body">
+
+        <!-- ═══ Tab 1: Provider 管理 ═══ -->
+        <div class="tab-panel active" id="tab-providers">
+
+          <!-- DeepSeek -->
+          <div class="provider-card">
+            <div class="provider-card-header" onclick="toggleBody(this)">
+              <span class="provider-icon">☁</span>
+              <span class="provider-name">DeepSeek</span>
+              <span class="provider-type-badge">OpenAI 兼容</span>
+              <span class="provider-actions">
+                <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">✏️</span>
+                <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">🔗</span>
+              </span>
+            </div>
+            <div class="provider-body" style="display:block;">
+              <div class="provider-url-row">
+                <span>🌐 Base URL</span>
+                <span class="provider-url">https://api.deepseek.com</span>
+              </div>
+              <div class="provider-url-row">
+                <span>🔑 API Key</span>
+                <span class="provider-api-key">sk-***********************T3Bl</span>
+                <button class="btn btn-sm btn-ghost" style="padding:2px 6px;">更换</button>
+                <span style="font-size:11px;color:#3fb950;">✓ 已验证</span>
+              </div>
+              <div class="provider-models-section">
+                <div class="provider-models-title">
+                  <span>支持的模型 <span style="color:#484f58;font-weight:400;">（4）</span></span>
+                  <button class="btn btn-sm btn-ghost">+ 添加模型</button>
+                </div>
+                <div>
+                  <span class="model-tag">
+                    <span class="model-name">deepseek-v4-flash</span>
+                    <span class="model-params">· 1M ctx · 0.7T · 8K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🖼 🔧</span>
+                  </span>
+                  <span class="model-tag">
+                    <span class="model-name">deepseek-v4-pro</span>
+                    <span class="model-params">· 1M ctx · 0.5T · 8K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🖼 🔧</span>
+                  </span>
+                  <span class="model-tag">
+                    <span class="model-name">deepseek-chat</span>
+                    <span class="model-params">· 128K ctx · 0.7T · 4K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🔧</span>
+                  </span>
+                  <span class="model-tag">
+                    <span class="model-name">deepseek-reasoner</span>
+                    <span class="model-params">· 64K ctx · 0.0T · 8K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🔧</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- OpenAI -->
+          <div class="provider-card">
+            <div class="provider-card-header" onclick="toggleBody(this)">
+              <span class="provider-icon">🟢</span>
+              <span class="provider-name">OpenAI</span>
+              <span class="provider-type-badge">OpenAI 兼容</span>
+              <span class="provider-actions">
+                <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">✏️</span>
+                <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">🔗</span>
+              </span>
+            </div>
+            <div class="provider-body" style="display:block;">
+              <div class="provider-url-row">
+                <span>🌐 Base URL</span>
+                <span class="provider-url">https://api.openai.com/v1</span>
+              </div>
+              <div class="provider-url-row">
+                <span>🔑 API Key</span>
+                <span class="provider-api-key">sk-*************************a7Fd</span>
+                <button class="btn btn-sm btn-ghost" style="padding:2px 6px;">更换</button>
+                <span style="font-size:11px;color:#f85149;">未验证</span>
+              </div>
+              <div class="provider-models-section">
+                <div class="provider-models-title">
+                  <span>支持的模型 <span style="color:#484f58;font-weight:400;">（3）</span></span>
+                  <button class="btn btn-sm btn-ghost">+ 添加模型</button>
+                </div>
+                <div>
+                  <span class="model-tag">
+                    <span class="model-name">gpt-4o</span>
+                    <span class="model-params">· 128K ctx · 0.7T · 16K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🖼 🔧</span>
+                  </span>
+                  <span class="model-tag">
+                    <span class="model-name">gpt-4o-mini</span>
+                    <span class="model-params">· 128K ctx · 0.7T · 16K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🖼 🔧</span>
+                  </span>
+                  <span class="model-tag">
+                    <span class="model-name">o3-mini</span>
+                    <span class="model-params">· 200K ctx · 1.0T · 100K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🔧</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 本地 Qwen -->
+          <div class="provider-card">
+            <div class="provider-card-header" onclick="toggleBody(this)">
+              <span class="provider-icon">💻</span>
+              <span class="provider-name">本地 Qwen</span>
+              <span class="provider-type-badge">OpenAI 兼容</span>
+              <span class="provider-badge">本地</span>
+              <span class="provider-actions">
+                <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">✏️</span>
+                <span class="btn btn-sm btn-ghost" onclick="event.stopPropagation()">🔗</span>
+              </span>
+            </div>
+            <div class="provider-body" style="display:block;">
+              <div class="provider-url-row">
+                <span>🌐 Base URL</span>
+                <span class="provider-url">http://localhost:8083/v1</span>
+              </div>
+              <div class="provider-url-row">
+                <span>🔑 API Key</span>
+                <span style="font-size:12px;color:#484f58;">（无需 API Key）</span>
+              </div>
+              <div class="provider-models-section">
+                <div class="provider-models-title">
+                  <span>支持的模型 <span style="color:#484f58;font-weight:400;">（1）</span></span>
+                  <button class="btn btn-sm btn-ghost">+ 添加模型</button>
+                </div>
+                <div>
+                  <span class="model-tag">
+                    <span class="model-name">Qwen3.5-9B</span>
+                    <span class="model-params">· 32K ctx · 0.7T · 4K tok</span>
+                    <span class="cap-divider">|</span>
+                    <span class="model-cap">🖼 🔧</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 添加 Provider -->
+          <div class="add-provider-area" onclick="alert('弹新增 Provider 表单')">
+            <div class="icon">+</div>
+            <div class="text">添加 Provider</div>
+          </div>
+        </div>
+
+        <!-- ═══ Tab 2: 路由配置 ═══ -->
+        <div class="tab-panel" id="tab-routing">
+          <div style="border:none;padding:0;">
+            <div class="section-desc" style="margin-bottom:16px;">每个路由指定使用的 Provider 和模型。参数默认跟随模型自身的默认值，覆盖会蓝色高亮。展开行可配置能力开关。</div>
+
+            <div class="route-table">
+              <div class="route-header">
+                <span></span>
+                <span>路由</span>
+                <span>Provider</span>
+                <span>模型</span>
+                <span>温度</span>
+                <span>最大 Token</span>
+                <span>惩罚</span>
+                <span>能力</span>
+              </div>
+
+              <!-- 频道闲聊（已展开） -->
+              <div class="route-row-wrap">
+                <div class="route-row">
+                  <span class="route-expand open" onclick="toggleDetail(this)">▶</span>
+                  <span class="route-label">💬 频道闲聊</span>
+                  <div class="route-provider-select">
+                    <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+                  </div>
+                  <div class="route-model-select">
+                    <select><option selected>deepseek-v4-flash</option><option>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="0.70" step="0.05" min="0" max="2">
+                    <span class="param-from-model">默认 0.7</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="8192" step="512" min="128" max="1048576">
+                    <span class="param-from-model">默认 8192</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                    <span class="param-from-model">默认 1.05</span>
+                  </div>
+                  <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🖼🔧</div>
+                </div>
+                <div class="route-detail open" id="detail-channel">
+                  <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+                  <div class="cap-override-grid">
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🖼 Vision（来自模型）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🔧 Function Calling（来自模型）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox"><span class="slider"></span></label>
+                      <span>📤 流式输出</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 场景分析 -->
+              <div class="route-row-wrap">
+                <div class="route-row">
+                  <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+                  <span class="route-label">🔧 场景分析</span>
+                  <div class="route-provider-select">
+                    <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+                  </div>
+                  <div class="route-model-select">
+                    <select><option selected>deepseek-v4-flash</option><option>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="0.30" step="0.05" min="0" max="2" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 0.7</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="16384" step="512" min="128" max="1048576" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 8192</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                    <span class="param-from-model">默认 1.05</span>
+                  </div>
+                  <div class="route-cap-indicator" title="点击展开能力覆盖" onclick="toggleDetail(this)">🖼🔧</div>
+                </div>
+                <div class="route-detail">
+                  <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+                  <div class="cap-override-grid">
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🖼 Vision（来自模型）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🔧 Function Calling（来自模型）</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 约束提取（本地 Qwen） -->
+              <div class="route-row-wrap">
+                <div class="route-row">
+                  <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+                  <span class="route-label">📝 约束提取</span>
+                  <div class="route-provider-select">
+                    <select><option>DeepSeek</option><option>OpenAI</option><option selected>本地 Qwen</option></select>
+                  </div>
+                  <div class="route-model-select">
+                    <select><option>deepseek-v4-flash</option><option selected>Qwen3.5-9B</option></select>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="0.10" step="0.05" min="0" max="2" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 0.7</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="2048" step="512" min="128" max="1048576" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 4096</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                    <span class="param-from-model">默认 1.05</span>
+                  </div>
+                  <div class="route-cap-indicator" onclick="toggleDetail(this)">🖼🔧</div>
+                </div>
+                <div class="route-detail">
+                  <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+                  <div class="cap-override-grid">
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🖼 Vision（来自模型）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🔧 Function Calling（来自模型）</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Medium -->
+              <div class="route-row-wrap">
+                <div class="route-row">
+                  <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+                  <span class="route-label">⚖ Medium</span>
+                  <div class="route-provider-select">
+                    <select><option selected>DeepSeek</option><option>OpenAI</option><option>本地 Qwen</option></select>
+                  </div>
+                  <div class="route-model-select">
+                    <select><option selected>deepseek-v4-flash</option><option>deepseek-v4-pro</option><option>deepseek-chat</option></select>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="0.30" step="0.05" min="0" max="2" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 0.7</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="16384" step="512" min="128" max="1048576" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 8192</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="1.05" step="0.05" min="1" max="2">
+                    <span class="param-from-model">默认 1.05</span>
+                  </div>
+                  <div class="route-cap-indicator" onclick="toggleDetail(this)">🖼🔧</div>
+                </div>
+                <div class="route-detail">
+                  <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+                  <div class="cap-override-grid">
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🖼 Vision（来自模型）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🔧 Function Calling（来自模型）</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Heavy（OpenAI o3-mini） -->
+              <div class="route-row-wrap">
+                <div class="route-row">
+                  <span class="route-expand" onclick="toggleDetail(this)">▶</span>
+                  <span class="route-label">🏋 Heavy</span>
+                  <div class="route-provider-select">
+                    <select><option>DeepSeek</option><option selected>OpenAI</option><option>本地 Qwen</option></select>
+                  </div>
+                  <div class="route-model-select">
+                    <select><option>deepseek-v4-flash</option><option>gpt-4o</option><option>gpt-4o-mini</option><option selected>o3-mini</option></select>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="0.50" step="0.05" min="0" max="2" style="border-color:#da3633;">
+                    <span class="param-from-model">默认 1.0</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="100000" step="512" min="128" max="1048576" style="border-color:#58a6ff;">
+                    <span class="param-from-model">默认 100000</span>
+                  </div>
+                  <div class="route-param">
+                    <input class="param-override-input" type="number" value="1.00" step="0.05" min="1" max="2">
+                    <span class="param-from-model">默认 1.0</span>
+                  </div>
+                  <div class="route-cap-indicator" onclick="toggleDetail(this)">🔧</div>
+                </div>
+                <div class="route-detail">
+                  <div class="route-detail-title">⚡ 能力覆盖（可选）</div>
+                  <div class="cap-override-grid">
+                    <div class="cap-item disabled">
+                      <label class="cap-toggle"><input type="checkbox" disabled><span class="slider"></span></label>
+                      <span>🖼 Vision（此模型不支持）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>🔧 Function Calling（来自模型）</span>
+                    </div>
+                    <div class="cap-item">
+                      <label class="cap-toggle"><input type="checkbox" checked><span class="slider"></span></label>
+                      <span>📤 流式输出</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 图例 -->
+            <div class="legend-box" style="margin-top:16px;">
+              <span style="color:#58a6ff;">蓝色边框</span> = 参数已覆盖（不同于模型默认值） ·
+              <span style="color:#da3633;">红色边框</span> = 参数值可能有风险 ·
+              能力图标 <span style="color:#8b949e;">🖼🔧</span> = 模型自带的视觉/函数调用能力 ·
+              展开行可关闭某些能力（<span style="color:#484f58;">灰色</span> = 模型不支持，不可开启）
+            </div>
+
+            <div class="gap-x" style="margin-top:4px;">
+              <button class="btn btn-primary">💾 保存路由配置</button>
+              <button class="btn">↩ 重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ Tab 3: 系统人设 ═══ -->
+        <div class="tab-panel" id="tab-prompts">
+          <div style="border:none;padding:0;">
+            <div class="prompt-card">
+              <div class="prompt-card-header">
+                <span class="prompt-label">💬 频道人设</span>
+              </div>
+              <textarea class="prompt-textarea" rows="3">你是坐山客（Zuoshanke），以广博学识和理性思维为用户提供帮助。用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。</textarea>
+            </div>
+            <div class="prompt-card" style="margin-top:10px;">
+              <div class="prompt-card-header">
+                <span class="prompt-label">🔧 场景人设</span>
+              </div>
+              <textarea class="prompt-textarea" rows="3">你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。</textarea>
+            </div>
+            <div class="gap-x" style="margin-top:12px;">
+              <button class="btn btn-primary">💾 保存人设</button>
+              <button class="btn">↩ 恢复默认</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ Tab 4: 服务状态 ═══ -->
+        <div class="tab-panel" id="tab-service">
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="section-title" style="margin-bottom:0;">💻 本地服务</span>
+            </div>
+            <div class="card-body">
+              <div class="status-grid">
+                <div class="status-item">
+                  <span class="status-label">llama-server</span>
+                  <span class="status-value status-ok">✅ 运行中</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">端口</span>
+                  <span class="status-value">8083</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">模型</span>
+                  <span class="status-value">Qwen3.5-9B-Q4_K_M</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">上下文</span>
+                  <span class="status-value">32768 ctx</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Flash Attention</span>
+                  <span class="status-value">on</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">插槽</span>
+                  <span class="status-value">2 个 · 处理中</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">显存</span>
+                  <span class="status-value">6/12 GB</span>
+                </div>
+              </div>
+              <div class="gap-x" style="margin-top:12px;">
+                <button class="btn">🔄 刷新</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 秘密花园入口 -->
+          <div class="garden-entry" onclick="alert('跳转到秘密花园')">
+            <span style="font-size:16px;">🌸</span>
+            <span style="flex:1;font-size:13px;color:#c9d1d9;letter-spacing:1px;">坐山客的秘密花园</span>
+            <span style="font-size:16px;color:#555;">›</span>
+          </div>
+        </div>
+
+      </div><!-- /settings-body -->
+    </div><!-- /drawer -->
+  </div><!-- /main-content -->
+</div><!-- /mock-app -->
+
+<script>
+function toggleBody(el) {
+  var body = el.nextElementSibling;
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+function toggleDetail(el) {
+  var wrap = el.closest('.route-row-wrap');
+  var detail = wrap.querySelector('.route-detail');
+  var expand = wrap.querySelector('.route-expand');
+  detail.classList.toggle('open');
+  expand.classList.toggle('open');
+}
+document.querySelectorAll('.settings-tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.settings-tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    this.classList.add('active');
+    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+  });
+});
+</script>
+
+</body>
+</html>
