@@ -17,7 +17,7 @@ const CATEGORIES = [
   { key: 'other', icon: '📦', label: '其他' },
 ];
 
-const TOOL_KEYS = ['tools', 'capability-verify', 'memory', 'skills', 'outputs', 'delegate-results'];
+const TOOL_KEYS = ['tools', 'capability-verify', 'memory', 'skills', 'outputs', 'delegate-results', 'settings'];
 
 export function Sidebar() {
   const {
@@ -281,6 +281,13 @@ export function Sidebar() {
           <div key={key} {...commonProps} onClick={() => { setView('delegate-results'); useStore.getState().setCurrentScene(null); }}>
             <span className="nav-icon">🧩</span>
             <span>子 Agent 成果</span>
+          </div>
+        );
+      case 'settings':
+        return (
+          <div key={key} {...commonProps} onClick={() => { setView('settings'); useStore.getState().setCurrentScene(null); }}>
+            <span className="nav-icon">⚙️</span>
+            <span>系统设置</span>
           </div>
         );
       default:

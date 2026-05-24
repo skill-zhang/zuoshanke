@@ -51,7 +51,7 @@ def get_settings(route: str = "channel") -> dict:
         route: routing 中的 key（channel/scene/extraction/medium/heavy）
 
     Returns:
-        {temperature: float, max_tokens: int, repeat_penalty: float, model: str, provider: str}
+        {temperature: float, max_tokens: int, repeat_penalty: float, model: str, provider: str, provider_id: str, model_id: str}
         异常时返回默认值（不影响聊天功能）
     """
     global _settings_cache
@@ -63,6 +63,30 @@ def get_settings(route: str = "channel") -> dict:
             try:
                 s = db.query(Setting).filter(Setting.id == SETTINGS_ID).first()
                 _settings_cache = s.routing if s else DEFAULT_ROUTING
+                # 🆕 自动补全 provider_id/model_id（兼容旧数据）
+                if isinstance(_settings_cache, dict):
+                    try:
+                        from models import AiProvider, AiModel
+                        for cfg in _settings_cache.values():
+                            if isinstance(cfg, dict) and (not cfg.get("provider_id") or not cfg.get("model_id")):
+                                p = db.query(AiProvider).filter(
+                                    (AiProvider.name.ilike(cfg.get("provider", ""))) |
+                                    (AiProvider.name.ilike(f"%{cfg.get('provider', '')}%"))
+                                ).first()
+                                if not p:
+                                    p = db.query(AiProvider).filter(
+                                        AiProvider.provider_type == ("local" if cfg.get("provider") == "local" else "openai-compatible")
+                                    ).first()
+                                if p:
+                                    cfg["provider_id"] = p.id
+                                    m = db.query(AiModel).filter(
+                                        AiModel.provider_id == p.id,
+                                        AiModel.name.ilike(cfg.get("model", ""))
+                                    ).first()
+                                    if m:
+                                        cfg["model_id"] = m.id
+                    except Exception:
+                        pass
             finally:
                 db.close()
         except Exception:
@@ -72,6 +96,164 @@ def get_settings(route: str = "channel") -> dict:
         "temperature": 0.7, "max_tokens": 4096, "repeat_penalty": 1.0,
         "model": "qwen3.5-9b", "provider": "local",
     }))
+
+
+# ═══ 🆕 泛化 LLM 调用 ═══
+
+def _resolve_llm(route_cfg: dict) -> tuple:
+    """从路由配置解析出 LLM 调用的连接信息
+
+    Args:
+        route_cfg: get_settings() 返回的路由配置
+
+    Returns:
+        (base_url: str, api_key: str, model_name: str)
+        失败时基于字符串 fallback
+    """
+    provider_id = route_cfg.get("provider_id", "")
+    model_id = route_cfg.get("model_id", "")
+    fallback_provider = route_cfg.get("provider", "local")
+    fallback_model = route_cfg.get("model", "qwen3.5-9b")
+
+    # 优先从 DB 查找
+    if provider_id and model_id:
+        try:
+            from database import SessionLocal
+            from models import AiProvider, AiModel
+            db = SessionLocal()
+            try:
+                p = db.query(AiProvider).filter(AiProvider.id == provider_id).first()
+                m = db.query(AiModel).filter(AiModel.id == model_id).first()
+                if p and m:
+                    base_url = p.base_url.rstrip("/")
+                    # 标准化：移除某些配置已含的 /v1 后缀（llama-server 等）
+                    if base_url.endswith("/v1"):
+                        base_url = base_url[:-3]
+                    api_key = p.api_key or ""
+                    model_name = m.name
+                    return base_url, api_key, model_name
+            finally:
+                db.close()
+        except Exception:
+            pass
+
+    # Fallback: 字符串方式
+    if fallback_provider == "deepseek":
+        return DEEPSEEK_BASE_URL.rstrip("/"), DEEPSEEK_API_KEY, DEEPSEEK_MODEL_MAP.get(fallback_model, "deepseek-chat")
+    else:
+        fb_url = QWEN_API.rstrip("/")
+        if fb_url.endswith("/v1"):
+            fb_url = fb_url[:-3]
+        return fb_url, "", fallback_model
+
+
+def call_llm(messages: list[dict], route_cfg: dict, temperature: float = 0.7,
+             max_tokens: int | None = None, stream: bool = False) -> str | None:
+    """泛化 LLM 调用 — 通过 provider_id/model_id 自动查找连接信息
+
+    Args:
+        messages: OpenAI 格式消息列表
+        route_cfg: 路由配置（含 provider_id/model_id）
+        temperature: 温度
+        max_tokens: 最大 Token（None = 从 route_cfg 读取）
+        stream: 是否流式（暂只支持非流式返回）
+
+    Returns:
+        回复文本，失败返回 None
+    """
+    base_url, api_key, model_name = _resolve_llm(route_cfg)
+    if not base_url:
+        _ai_log.error(f"[call_llm] 无法解析 provider，route_cfg={route_cfg}")
+        return None
+
+    mt = max_tokens if max_tokens is not None else route_cfg.get("max_tokens", 8192)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": mt,
+        "temperature": temperature,
+    }
+
+    try:
+        resp = requests.post(
+            f"{base_url}/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        _ai_log.error(f"[call_llm] {base_url} {model_name}: {e}")
+        return None
+
+
+def call_llm_stream(messages: list[dict], route_cfg: dict, temperature: float = 0.7,
+                    max_tokens: int | None = None):
+    """泛化 LLM 流式调用，逐 token yield
+
+    Args:
+        messages: OpenAI 格式消息列表
+        route_cfg: 路由配置
+        temperature: 温度
+        max_tokens: 最大 Token
+
+    Yields:
+        str: token 文本
+        None: 出错
+    """
+    base_url, api_key, model_name = _resolve_llm(route_cfg)
+    if not base_url:
+        _ai_log.error(f"[call_llm_stream] 无法解析 provider，route_cfg={route_cfg}")
+        yield None
+        return
+
+    mt = max_tokens if max_tokens is not None else route_cfg.get("max_tokens", 8192)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": mt,
+        "temperature": temperature,
+        "stream": True,
+    }
+
+    try:
+        resp = requests.post(
+            f"{base_url}/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=120,
+            stream=True,
+        )
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode("utf-8").strip()
+            if not line_str.startswith("data: "):
+                continue
+            data_str = line_str[6:]
+            if data_str == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data_str)
+                token = chunk["choices"][0]["delta"].get("content", "")
+                if token:
+                    yield token
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
+    except Exception as e:
+        _ai_log.error(f"[call_llm_stream] {base_url} {model_name}: {e}")
+        yield None
 
 
 SYSTEM_PROMPT = """你是一个专业的 AI 架构顾问和产品经理搭档。在场景工作模式中，帮用户梳理需求、构建 Thinking Map。
@@ -192,46 +374,14 @@ def ai_channel_chat_stream(messages: list[dict], is_default: bool = False,
             print(token, end='', flush=True)
     """
     api_messages = _build_channel_messages(messages, is_default, db=db)
-
-    try:
-        route_cfg = get_settings("channel")
-        resp = requests.post(
-            QWEN_API,
-            json={
-                "model": "qwen",
-                "messages": api_messages,
-                "max_tokens": route_cfg["max_tokens"],
-                "temperature": route_cfg["temperature"],
-                "stream": True,
-            },
-            timeout=120,
-            stream=True,
-        )
-        resp.raise_for_status()
-
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            line_str = line.decode("utf-8").strip()
-            if not line_str.startswith("data: "):
-                continue
-            data_str = line_str[6:]
-            if data_str == "[DONE]":
-                break
-            try:
-                chunk = json.loads(data_str)
-                token = chunk["choices"][0]["delta"].get("content", "")
-                if token:
-                    yield token
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
-    except Exception as e:
-        _ai_log.error(f"[Qwen stream] {e}")
-        yield None
+    route_cfg = get_settings("channel")
+    yield from call_llm_stream(api_messages, route_cfg, temperature=route_cfg.get("temperature", 0.7))
 
 
 def call_qwen_chat(messages: list[dict], temperature: float | None = None, route: str = "scene") -> str | None:
-    """调用 Qwen（非流式），返回完整回复文本
+    """调用 LLM（非流式），返回完整回复文本
+
+    通过 provider_id/model_id 自动路由到正确的 Provider。
 
     Args:
         messages: 消息列表
@@ -239,46 +389,8 @@ def call_qwen_chat(messages: list[dict], temperature: float | None = None, route
         route: 路由名称（channel/scene/extraction/medium/heavy），用于查设置
     """
     route_cfg = get_settings(route)
-    temp = temperature if temperature is not None else route_cfg["temperature"]
-    provider = route_cfg.get("provider", "local")
-    model_name = route_cfg.get("model", "qwen3.5-9b")
-    try:
-        if provider == "deepseek":
-            if not DEEPSEEK_API_KEY:
-                _ai_log.error("[DeepSeek] API key 未配置")
-                return None
-            ds_model = DEEPSEEK_MODEL_MAP.get(model_name, "deepseek-chat")
-            resp = requests.post(
-                f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
-                json={
-                    "model": ds_model,
-                    "messages": messages,
-                    "max_tokens": route_cfg["max_tokens"],
-                    "temperature": temp,
-                },
-                timeout=120,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-        else:
-            resp = requests.post(
-                QWEN_API,
-                json={
-                    "model": "qwen",
-                    "messages": messages,
-                    "max_tokens": route_cfg["max_tokens"],
-                    "temperature": temp,
-                },
-                timeout=120,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        _ai_log.error(f"[{provider} chat] {e}")
-        return None
+    temp = temperature if temperature is not None else route_cfg.get("temperature", 0.7)
+    return call_llm(messages, route_cfg, temperature=temp)
 
 
 # ── web_search 兜底判断（模型驱动） ──
@@ -325,7 +437,9 @@ def should_web_search(text: str) -> bool:
 
 
 def _stream_qwen(messages: list[dict], temperature: float | None = None, route: str = "scene"):
-    """通用流式调用（支持 local Qwen 或 DeepSeek 云 API），逐 token yield。
+    """通用流式调用，逐 token yield。
+
+    通过 provider_id/model_id 自动路由到正确的 Provider。
 
     Args:
         messages: 消息列表
@@ -337,67 +451,8 @@ def _stream_qwen(messages: list[dict], temperature: float | None = None, route: 
         None: 出错时 yield None（调用方应停止迭代）
     """
     route_cfg = get_settings(route)
-    temp = temperature if temperature is not None else route_cfg["temperature"]
-    provider = route_cfg.get("provider", "local")
-
-    try:
-        if provider == "deepseek":
-            # ── DeepSeek 云 API 流式调用 ──
-            model_name = route_cfg.get("model", "deepseek-v4-flash")
-            ds_model = DEEPSEEK_MODEL_MAP.get(model_name, "deepseek-chat")
-            resp = requests.post(
-                f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": ds_model,
-                    "messages": messages,
-                    "max_tokens": route_cfg["max_tokens"],
-                    "temperature": temp,
-                    "stream": True,
-                },
-                timeout=120,
-                stream=True,
-            )
-            resp.raise_for_status()
-        else:
-            # ── 本地 Qwen 流式调用 ──
-            resp = requests.post(
-                QWEN_API,
-                json={
-                    "model": "qwen",
-                    "messages": messages,
-                    "max_tokens": route_cfg["max_tokens"],
-                    "temperature": temp,
-                    "stream": True,
-                },
-                timeout=120,
-                stream=True,
-            )
-            resp.raise_for_status()
-
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            line_str = line.decode("utf-8").strip()
-            if not line_str.startswith("data: "):
-                continue
-            data_str = line_str[6:]
-            if data_str == "[DONE]":
-                break
-            try:
-                chunk = json.loads(data_str)
-                token = chunk["choices"][0]["delta"].get("content", "")
-                if token:
-                    yield token
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
-    except Exception as e:
-        _log_msg = f"[{'DeepSeek' if provider == 'deepseek' else 'Qwen'} stream error] {e}"
-        print(_log_msg)
-        yield None
+    temp = temperature if temperature is not None else route_cfg.get("temperature", 0.7)
+    yield from call_llm_stream(messages, route_cfg, temperature=temp)
 
 
 def build_tree_context(db: Session, tmap: ThinkingMap) -> str:

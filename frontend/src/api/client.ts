@@ -605,6 +605,8 @@ export const deleteToolSkill = (name: string) =>
 export interface RouteConfig {
   model: string;
   provider: string;
+  provider_id?: string;
+  model_id?: string;
   temperature: number;
   max_tokens: number;
   repeat_penalty: number;
@@ -854,4 +856,55 @@ export interface SceneSelfMapData {
 
 export const fetchSceneSelfMap = (sceneId: string) =>
   request<SceneSelfMapData>(`/scenes/${encodeURIComponent(sceneId)}/self-map`);
+
+// ═══ AI Provider ═══
+export interface AiProviderData {
+  id: string;
+  name: string;
+  base_url: string;
+  api_key: string;
+  provider_type: string;
+  is_active: boolean;
+  models: AiModelData[];
+}
+
+export interface AiModelData {
+  id: string;
+  provider_id: string;
+  name: string;
+  display_name: string | null;
+  temperature: number;
+  max_tokens: number;
+  context_length: number;
+  repeat_penalty: number;
+  vision: boolean;
+  function_calling: boolean;
+  sort_order: number;
+}
+
+export const listProviders = () =>
+  request<{ providers: AiProviderData[] }>('/providers');
+
+export const getProvider = (id: string) =>
+  request<{ provider: AiProviderData }>('/providers/' + encodeURIComponent(id));
+
+export const createProvider = (data: { name: string; base_url: string; api_key?: string; provider_type?: string }) =>
+  request<{ provider: AiProviderData }>('/providers', { method: 'POST', body: JSON.stringify(data) });
+
+export const updateProvider = (id: string, data: Record<string, any>) =>
+  request<{ provider: AiProviderData }>('/providers/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(data) });
+
+export const deleteProvider = (id: string) =>
+  request<{ ok: boolean }>('/providers/' + encodeURIComponent(id), { method: 'DELETE' });
+
+export const createModel = (providerId: string, data: Record<string, any>) =>
+  request<{ model: AiModelData }>('/providers/' + encodeURIComponent(providerId) + '/models', { method: 'POST', body: JSON.stringify(data) });
+
+export const updateModel = (providerId: string, modelId: string, data: Record<string, any>) =>
+  request<{ model: AiModelData }>('/providers/' + encodeURIComponent(providerId) + '/models/' + encodeURIComponent(modelId), { method: 'PUT', body: JSON.stringify(data) });
+
+export const deleteModel = (providerId: string, modelId: string) =>
+  request<{ ok: boolean }>('/providers/' + encodeURIComponent(providerId) + '/models/' + encodeURIComponent(modelId), { method: 'DELETE' });
+
+
 

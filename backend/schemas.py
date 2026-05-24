@@ -239,6 +239,8 @@ class RouteConfig(BaseModel):
     """单个路由的配置"""
     model: str
     provider: str
+    provider_id: str = ""  # 🆕 关联 AiProvider.id
+    model_id: str = ""     # 🆕 关联 AiModel.id
     temperature: float
     max_tokens: int
     repeat_penalty: float
@@ -268,6 +270,8 @@ class RoutingUpdate(BaseModel):
     """某个路由的更新（部分字段）"""
     model: Optional[str] = None
     provider: Optional[str] = None
+    provider_id: Optional[str] = None  # 🆕
+    model_id: Optional[str] = None     # 🆕
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     repeat_penalty: Optional[float] = None

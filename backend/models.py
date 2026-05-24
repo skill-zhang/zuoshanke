@@ -172,11 +172,11 @@ class Message(Base):
 SETTINGS_ID = "zuoshanke-v1"
 
 DEFAULT_ROUTING = {
-    "channel":    {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.7, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
-    "scene":      {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
-    "extraction": {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.1, "max_tokens": 2048,  "context_length": 1048576, "repeat_penalty": 1.05},
-    "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
-    "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "temperature": 0.5, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
+    "channel":    {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.7, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
+    "scene":      {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
+    "extraction": {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.1, "max_tokens": 2048,  "context_length": 1048576, "repeat_penalty": 1.05},
+    "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
+    "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-pro",   "temperature": 0.5, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
 }
 
 DEFAULT_SYSTEM_PROMPTS = {
@@ -523,6 +523,47 @@ class ConfigEntry(Base):
 # - action_edges
 # - action_execution_logs
 # - cross_refs
+
+
+# ═══ 🆕 AI Provider ═══
+class AiProvider(Base):
+    """AI Provider — 管理 API 凭据和连接信息"""
+    __tablename__ = "ai_providers"
+
+    id = Column(String(32), primary_key=True)
+    name = Column(String(100), nullable=False)
+    base_url = Column(String(500), nullable=False)
+    api_key = Column(String(500), nullable=True)
+    provider_type = Column(String(20), default="openai-compatible")  # openai-compatible | local
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    models = relationship("AiModel", cascade="all, delete-orphan", back_populates="provider")
+
+
+class AiModel(Base):
+    """AI 模型 — 绑定到 Provider，带默认参数和能力声明"""
+    __tablename__ = "ai_models"
+
+    id = Column(String(32), primary_key=True)
+    provider_id = Column(String(32), ForeignKey("ai_providers.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    display_name = Column(String(100), nullable=True)
+    # 默认参数
+    temperature = Column(Float, default=0.7)
+    max_tokens = Column(Integer, default=8192)
+    context_length = Column(Integer, default=32768)
+    repeat_penalty = Column(Float, default=1.05)
+    # 能力标记
+    vision = Column(Boolean, default=False)
+    function_calling = Column(Boolean, default=True)
+    # 排序
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    provider = relationship("AiProvider", back_populates="models")
 
 
 # ═══ 🆕 子 Agent 执行结果 ═══

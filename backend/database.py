@@ -197,3 +197,58 @@ def init_db():
             print("✅ 默认系统设置已创建")
     finally:
         db.close()
+
+    # 种子数据：默认 Provider 和模型（从环境变量导入）
+    db = SessionLocal()
+    try:
+        from models import AiProvider, AiModel
+        existing = db.query(AiProvider).first()
+        if not existing:
+            # DeepSeek
+            deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "") or os.environ.get("DEEPSEEK_KEY", "")
+            ds = AiProvider(
+                id="pd-deepseek",
+                name="DeepSeek",
+                base_url=(os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/"),
+                api_key=deepseek_key,
+                provider_type="openai-compatible",
+            )
+            db.add(ds)
+            db.flush()
+            db.add(AiModel(id="pm-deepseek-v4-flash",   provider_id=ds.id, name="deepseek-v4-flash",   display_name="DeepSeek v4 Flash", temperature=0.7, max_tokens=8192,  context_length=1048576, repeat_penalty=1.05, vision=True,  function_calling=True,  sort_order=1))
+            db.add(AiModel(id="pm-deepseek-v4-pro",     provider_id=ds.id, name="deepseek-v4-pro",     display_name="DeepSeek v4 Pro",   temperature=0.5, max_tokens=8192,  context_length=1048576, repeat_penalty=1.05, vision=True,  function_calling=True,  sort_order=2))
+            db.add(AiModel(id="pm-deepseek-chat",       provider_id=ds.id, name="deepseek-chat",       display_name="DeepSeek Chat",    temperature=0.7, max_tokens=4096,  context_length=131072,  repeat_penalty=1.05, vision=False, function_calling=True,  sort_order=3))
+            db.add(AiModel(id="pm-deepseek-reasoner",   provider_id=ds.id, name="deepseek-reasoner",   display_name="DeepSeek Reasoner", temperature=0.0, max_tokens=8192,  context_length=65536,   repeat_penalty=1.05, vision=False, function_calling=True,  sort_order=4))
+
+            # OpenAI (如果配置了 API Key)
+            openai_key = os.environ.get("OPENAI_API_KEY", "") or os.environ.get("OPENAI_KEY", "")
+            if openai_key:
+                oa = AiProvider(
+                    id="pd-openai",
+                    name="OpenAI",
+                    base_url=(os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/"),
+                    api_key=openai_key,
+                    provider_type="openai-compatible",
+                )
+                db.add(oa)
+                db.flush()
+                db.add(AiModel(id="pm-gpt-4o",      provider_id=oa.id, name="gpt-4o",      display_name="GPT-4o",       temperature=0.7, max_tokens=16384, context_length=128000, repeat_penalty=1.05, vision=True,  function_calling=True, sort_order=1))
+                db.add(AiModel(id="pm-gpt-4o-mini",  provider_id=oa.id, name="gpt-4o-mini",  display_name="GPT-4o Mini",   temperature=0.7, max_tokens=16384, context_length=128000, repeat_penalty=1.05, vision=True,  function_calling=True, sort_order=2))
+                db.add(AiModel(id="pm-o3-mini",      provider_id=oa.id, name="o3-mini",      display_name="o3 Mini",      temperature=1.0, max_tokens=102400, context_length=200000, repeat_penalty=1.05, vision=False, function_calling=True, sort_order=3))
+
+            # 本地 Provider（始终创建）
+            local = AiProvider(
+                id="pd-local",
+                name="本地 Qwen",
+                base_url="http://localhost:8083/v1",
+                api_key="",
+                provider_type="local",
+            )
+            db.add(local)
+            db.flush()
+            db.add(AiModel(id="pm-qwen-9b", provider_id=local.id, name="Qwen3.5-9B", display_name="Qwen3.5-9B", temperature=0.7, max_tokens=4096, context_length=32768, repeat_penalty=1.05, vision=True, function_calling=True, sort_order=1))
+
+            db.commit()
+            print("✅ 默认 Provider 和模型已创建")
+    finally:
+        db.close()

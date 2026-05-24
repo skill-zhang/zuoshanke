@@ -22,7 +22,7 @@ import {
   activateSession,  // 🆕 Schema v1.1: Session 管理
 } from '../api/client';
 
-export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'delegate-results' | 'secret-garden';
+export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'delegate-results' | 'secret-garden' | 'settings';
 
 interface AppState {
   view: ViewPage;

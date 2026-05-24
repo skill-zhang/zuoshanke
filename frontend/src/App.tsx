@@ -6,6 +6,7 @@ import { ChatView } from './components/ChatView';
 import { PlazaView } from './components/PlazaView';
 import { WorkshopView } from './components/WorkshopView';
 import { ToolsView } from './components/ToolsView';
+import { SettingsView } from './components/SettingsView';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
@@ -297,6 +298,8 @@ export default function App() {
           <DelegateResultsView />
         ) : view === 'secret-garden' ? (
           <SecretGarden />
+        ) : view === 'settings' ? (
+          <SettingsView />
         ) : (
           <ChatView />
         )}

@@ -18,6 +18,9 @@ from schemas import SettingsOut, SettingsUpdate, ServiceStatusOut, RouteConfig, 
 
 router = APIRouter(tags=["系统设置"])
 
+# 已知路由键
+KNOWN_ROUTES = {"channel", "scene", "extraction", "medium", "heavy"}
+
 
 # ── 内存缓存 ──
 _settings_cache: dict | None = None
@@ -51,7 +54,40 @@ def get_cached_settings(db: Session) -> dict:
             "features": s.features or {},
             "updated_at": s.updated_at.isoformat() if s.updated_at else None,
         }
+    # 🆕 对旧数据自动补全 provider_id/model_id
+    _enrich_routing(db, _settings_cache["routing"])
+    # 🆕 清理未知路由键
+    _settings_cache["routing"] = {k: v for k, v in _settings_cache["routing"].items() if k in KNOWN_ROUTES}
     return _settings_cache
+
+
+def _enrich_routing(db: Session, routing: dict):
+    """自动补全路由中缺失的 provider_id 和 model_id"""
+    try:
+        from models import AiProvider, AiModel
+    except ImportError:
+        return
+    for route_cfg in routing.values():
+        if not route_cfg.get("provider_id") or not route_cfg.get("model_id"):
+            provider_str = route_cfg.get("provider", "")
+            # 先按名称匹配，再按 provider_type 兜底
+            p = db.query(AiProvider).filter(
+                (AiProvider.name.ilike(provider_str)) |
+                (AiProvider.name.ilike(f"%{provider_str}%"))
+            ).first()
+            if not p:
+                # 兜底：provider_type='local' 或 provider_type='openai-compatible' 的第一个
+                p = db.query(AiProvider).filter(
+                    AiProvider.provider_type == (provider_str if provider_str in ("local",) else "openai-compatible")
+                ).first()
+            if p:
+                route_cfg["provider_id"] = p.id
+                m = db.query(AiModel).filter(
+                    AiModel.provider_id == p.id,
+                    AiModel.name.ilike(route_cfg.get("model", ""))
+                ).first()
+                if m:
+                    route_cfg["model_id"] = m.id
 
 
 def _model_validate_routing(routing: dict) -> dict:
@@ -72,7 +108,12 @@ def get_settings(db: Session = Depends(get_db)):
 
     routing = {}
     for key, cfg in cached["routing"].items():
-        routing[key] = RouteConfig(**cfg)
+        if key not in KNOWN_ROUTES:
+            continue
+        try:
+            routing[key] = RouteConfig(**cfg)
+        except Exception:
+            continue
 
     return SettingsOut(
         routing=routing,
@@ -100,6 +141,8 @@ def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
         # 重建整个 routing dict（避免 SQLAlchemy JSON mutation tracking 问题）
         new_routing = dict(s.routing)
         for route_key, update in data.routing.items():
+            if route_key not in KNOWN_ROUTES:
+                continue  # 忽略未知路由键
             update_dict = update.model_dump(exclude_none=True)
             if update_dict:
                 existing = dict(new_routing.get(route_key, {}))
@@ -134,7 +177,12 @@ def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
     cached = get_cached_settings(db)
     routing = {}
     for key, cfg in cached["routing"].items():
-        routing[key] = RouteConfig(**cfg)
+        if key not in KNOWN_ROUTES:
+            continue
+        try:
+            routing[key] = RouteConfig(**cfg)
+        except Exception:
+            continue
 
     return SettingsOut(
         routing=routing,
