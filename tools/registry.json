@@ -1105,6 +1105,72 @@
       "returns": "索引状态（indexed_count, total_messages, last_indexed_id）",
       "category": "tools",
       "verified": true
+    },
+    {
+      "name": "http_request",
+      "description": "发送 HTTP 请求到任意 URL，支持 GET/POST/PUT/DELETE",
+      "file": "tools/http_client.py",
+      "function": "http_request",
+      "parameters": {
+        "url": {
+          "type": "string",
+          "description": "请求地址"
+        },
+        "method": {
+          "type": "string",
+          "description": "HTTP 方法 (GET/POST/PUT/DELETE)",
+          "optional": true
+        },
+        "headers": {
+          "type": "object",
+          "description": "自定义请求头",
+          "optional": true
+        },
+        "body": {
+          "type": "string",
+          "description": "请求体",
+          "optional": true
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "超时秒数",
+          "optional": true
+        }
+      },
+      "returns": "{status_code, headers, body, success, error?}",
+      "category": "tools",
+      "verified": true
+    },
+    {
+      "name": "check_services",
+      "description": "一键检查后端(:8000)/前端(:5173)/Qwen(:8083)/SearXNG(:8081) 服务状态",
+      "file": "tools/service_health.py",
+      "function": "check_services",
+      "parameters": {},
+      "returns": "[{name, port, status, response_time_ms}]",
+      "category": "tools",
+      "verified": true
+    },
+    {
+      "name": "run_tests",
+      "description": "运行 backend/tests/ 下的测试用例",
+      "file": "tools/batch_test.py",
+      "function": "run_tests",
+      "parameters": {
+        "pattern": {
+          "type": "string",
+          "description": "文件名过滤（glob 模式，如 test_auth*）",
+          "optional": true
+        },
+        "filter": {
+          "type": "string",
+          "description": "方法名过滤（如 test_login）",
+          "optional": true
+        }
+      },
+      "returns": "{total, passed, failed, errors, details}",
+      "category": "tools",
+      "verified": true
     }
   ]
 }
