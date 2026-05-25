@@ -61,3 +61,19 @@ scene_history = q.order_by(Message.created_at.asc()).all()
 - 设计：`docs/design/schema-v1.0.md` §4.6, §6.1
 - 实现：`backend/agent_core/context_composer.py` `_build_history_layer()`
 - 调用：`backend/router/scene_stream.py:417-426`
+
+## 附：DB backfill 污染清理（2026-05-28）
+
+旧版 `_backfill_null_session_messages()` 代码（已于 v4 session isolation fix 中移除）在运行期间将 NULL-session 的旧消息归属到了第一个激活的 session。DB 中残留 4 个场景 × 31 条消息的 `created_at < session.created_at` 的异常数据。
+
+清理 SQL：
+```sql
+UPDATE messages SET session_id = NULL
+WHERE id IN (
+    SELECT m.id FROM messages m
+    JOIN web_sessions s ON m.session_id = s.id
+    WHERE m.created_at < s.created_at
+);
+```
+
+清理后这些消息不再进入 LLM context（session_id=NULL 不被 `q.filter(Message.session_id == data.session_id)` 匹配），仅在 UI 消息列表中可见。

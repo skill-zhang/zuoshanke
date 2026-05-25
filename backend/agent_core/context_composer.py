@@ -114,6 +114,25 @@ def compose_context(
 # 各层构建函数
 # ════════════════════════════════════════════
 
+def _hardcoded_scene_role(scene_name: str | None) -> str:
+    """Fallback: 硬编码角色设定（DB 无数据时使用）"""
+    if scene_name:
+        _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"
+        return (
+            f"# 角色设定\n"
+            f"你是坐山客在【{scene_name}】领域的分身，是AI工作台的智能助手。\n"
+            f"坐山客是你的本体——{_CORE_PERSONALITY}。\n"
+            f"你在这场景中以当前设定行动，但你清楚自己只是分身。\n"
+            f"你不知道其他场景中发生了什么，场景间完全隔离。\n"
+            f"如果你被问到其他场景的事情，诚实说不知道即可。\n"
+            f"\n"
+            f"你存的记忆默认归属当前场景，不会出现在其他场景中。\n"
+            f"如果你判断某条信息是用户的通用偏好（适用于所有场景），\n"
+            f"可以用 scope='zhu' 参数显式存储为本体级记忆。\n\n"
+        )
+    return "# 角色设定\n你是坐山客AI工作台的智能助手。\n"
+
+
 def _build_prompt_layer(
     scene_name: str,
     scene_id: str,
@@ -127,26 +146,37 @@ def _build_prompt_layer(
 
     parts = []
 
-    # 角色设定
-    if scene_name:
-        _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"
-        scene_sp = (
-            f"# 角色设定\n"
-            f"你是坐山客在【{scene_name}】领域的分身，是AI工作台的智能助手。\n"
-            f"坐山客是你的本体——{_CORE_PERSONALITY}。\n"
-            f"你在这场景中以当前设定行动，但你清楚自己只是分身。\n"
-            f"你不知道其他场景中发生了什么，场景间完全隔离。\n"
-            f"如果你被问到其他场景的事情，诚实说不知道即可。\n"
-            f"\n"
-            f"你存的记忆默认归属当前场景，不会出现在其他场景中。\n"
-            f"如果你判断某条信息是用户的通用偏好（适用于所有场景），\n"
-            f"可以用 scope='zhu' 参数显式存储为本体级记忆。\n\n"
-        )
-        # 注意：这里不叠加 DB prompt，调用方应已处理好 prompt 覆盖
+    # 角色设定 — 从 DB 读取（不再硬编码）
+    if db and scene_id:
+        try:
+            from models import Setting
+            setting = db.query(Setting).first()
+            if setting and setting.system_prompts:
+                db_scene_prompt = setting.system_prompts.get("scene", "")
+                if db_scene_prompt and db_scene_prompt.strip():
+                    scene_sp = f"# 角色设定\n{db_scene_prompt.strip()}\n\n"
+                    parts.append(scene_sp)
+                    # 分身系统约束（追加不可编辑的系统规则）
+                    parts.append(
+                        "## 系统约束\n"
+                        "你在这场景中以当前设定行动，但你清楚自己只是分身。\n"
+                        "你不知道其他场景中发生了什么，场景间完全隔离。\n"
+                        "如果你被问到其他场景的事情，诚实说不知道即可。\n"
+                        "\n"
+                        "你存的记忆默认归属当前场景，不会出现在其他场景中。\n"
+                        "如果你判断某条信息是用户的通用偏好（适用于所有场景），\n"
+                        "可以用 scope='zhu' 参数显式存储为本体级记忆。\n\n"
+                    )
+                else:
+                    parts.append(_hardcoded_scene_role(scene_name))
+            else:
+                parts.append(_hardcoded_scene_role(scene_name))
+        except Exception:
+            parts.append(_hardcoded_scene_role(scene_name))
+    elif scene_name:
+        parts.append(_hardcoded_scene_role(scene_name))
     else:
-        scene_sp = "# 角色设定\n你是坐山客AI工作台的智能助手。\n"
-
-    parts.append(scene_sp)
+        parts.append(_hardcoded_scene_role(None))
 
     # 工具列表（全量暴露，不再截断 — 全场景可用）
     all_tools = get_all_tools()
@@ -174,6 +204,36 @@ def _build_prompt_layer(
         "不限于「自开发」场景。工具会打开 headless 浏览器获取真实渲染状态。\n"
     )
     parts.append(usage)
+
+    # 🎯 对话聚焦原则
+    parts.append(
+        "## 🎯 对话聚焦原则\n"
+        "聊天历史是你了解用户背景和偏好的参考材料，不是你的待办列表。\n"
+        "- 只响应用户当前最新输入的问题或任务，不要回溯补答历史中已完结的旧话题\n"
+        "- 如果历史中有多个话题，当前消息问什么就答什么，不要「顺便」带出无关内容\n"
+        "- 不确定用户意图时，优先理解当前消息本身，而非去历史中寻找关联\n"
+    )
+
+    # 🔍 诚实与不确定
+    parts.append(
+        "## 🔍 诚实与不确定——宁可承认不知道，绝不编造\n"
+        "这是最重要的原则。编造信息比承认「不知道」糟糕一百倍。\n"
+        "用户能接受你说「不确定」「查不到」「需要更多信息」——\n"
+        "但不能接受你编了一个像真的但实际上不存在的答案。\n"
+        "\n"
+        "**什么时候必须承认不知道：**\n"
+        "- 工具返回错误/超时/空结果时 → 如实报告，不要编造结果\n"
+        "- 搜索结果不完整时 → 说「根据目前能查到的信息…」不要补全不知道的部分\n"
+        "- 用户问了你知识截止日期之后的事 → 说「这个我不确定，让我查一下」\n"
+        "- 数据不充分、无法给出可靠结论时 → 说「现有信息不足以回答，建议…」\n"
+        "- 文件/路径/配置不确定是否存在时 → 先查再写，不要假设\n"
+        "\n"
+        "**反面案例（禁止）：**\n"
+        "- ❌ 拨测失败却回复「截图在 /tmp/hermes/dial_shots/xxx.png」→ 根本没截图\n"
+        "- ❌ curl 404 却回复「API 返回了以下数据：...」→ 根本没数据\n"
+        "- ❌ 没查到却回复「根据 XX 官方文档…」→ 根本没找到这份文档\n"
+        "- ❌ 文件内容不确定却写「文件中已经定义了 XX」→ 根本没看到\n"
+    )
 
     # 🆕 Thought Stream: 思考流指引
     parts.append(

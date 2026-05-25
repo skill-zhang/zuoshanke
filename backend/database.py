@@ -189,7 +189,7 @@ def init_db():
             setting = models.Setting(
                 id=models.SETTINGS_ID,
                 routing=models.DEFAULT_ROUTING.copy(),
-                system_prompts=models.DEFAULT_SYSTEM_PROMPTS.copy(),
+                system_prompts=models._load_default_prompts().copy(),
                 features={"pdf_as_image": False, "vision_enabled": False},
             )
             db.add(setting)

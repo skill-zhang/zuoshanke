@@ -652,6 +652,8 @@ export const getSettings = () => request<SettingsData>('/settings');
 export const updateSettings = (data: Record<string, any>) =>
   request<SettingsData>('/settings', { method: 'PATCH', body: JSON.stringify(data) });
 
+export const getDefaultPrompts = () => request<{ channel: string; scene: string }>('/settings/defaults');
+
 export const getServiceStatus = () => request<ServiceStatus>('/settings/service');
 
 // ═══ 类别管理 ═══

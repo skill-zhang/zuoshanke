@@ -179,12 +179,12 @@ DEFAULT_ROUTING = {
     "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-pro",   "temperature": 0.5, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
 }
 
-DEFAULT_SYSTEM_PROMPTS = {
-    "channel": "你是坐山客（Zuoshanke），以广博学识和理性思维为用户提供帮助。"
-               "用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。",
-    "scene": "你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。"
-             "你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。",
-}
+def _load_default_prompts():
+    from prompts import load_default_prompts
+    return load_default_prompts()
+
+# 延迟初始化：模块首次被 import 时从 default-prompts.md 加载
+DEFAULT_SYSTEM_PROMPTS = _load_default_prompts()
 
 
 class Setting(Base):
@@ -192,7 +192,7 @@ class Setting(Base):
 
     id = Column(String, primary_key=True)  # 固定 "zuoshanke-v1" 单行
     routing = Column(JSON, nullable=False, default=lambda: DEFAULT_ROUTING.copy())
-    system_prompts = Column(JSON, nullable=False, default=lambda: DEFAULT_SYSTEM_PROMPTS.copy())
+    system_prompts = Column(JSON, nullable=False, default=lambda: _load_default_prompts().copy())
     features = Column(JSON, nullable=False, default=lambda: {"pdf_as_image": False, "vision_enabled": False})
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

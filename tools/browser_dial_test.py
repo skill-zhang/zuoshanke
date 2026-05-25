@@ -152,6 +152,18 @@ async def _dial_test_coro(url: str, viewport: str = "1440x900", screenshot: bool
             "text": f"JS异常: {err}",
         }))
 
+        # Track HTTP status and redirects
+        response_info = {"status": None, "url_final": url, "redirected": False}
+        async def _on_response(resp):
+            if resp.url == url or resp.url == response_info["url_final"]:
+                response_info["status"] = resp.status
+        async def _on_request(req):
+            if req.is_navigation_request() and req.url != url:
+                response_info["url_final"] = req.url
+                response_info["redirected"] = True
+        page.on("response", _on_response)
+        page.on("request", _on_request)
+
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=20000)
             # 额外等 JS 渲染（前端 websocket 会阻止 networkidle）
@@ -164,11 +176,64 @@ async def _dial_test_coro(url: str, viewport: str = "1440x900", screenshot: bool
                 "url": url, "viewport": viewport,
                 "error": f"页面加载失败: {nav_err}",
                 "duration_ms": int((time.time() - start) * 1000),
+                "_instruction": (
+                    "⚠️ 拨测失败。请如实告知用户：浏览器无法加载此页面。"
+                    "不要编造任何 DOM 结构、CSS 样式、Console 输出或截图路径。"
+                    "你唯一能做的就是告知失败原因，并建议用户检查 URL 是否正确、服务是否运行。"
+                ),
             }, ensure_ascii=False)
 
         dom = _extract_dom_snapshot(page)
         console_logs = console_entries
         network = _collect_network_logs(page)
+
+        # ── 内容完整性检测 ──
+        warnings = []
+        page_title = await page.title()
+        final_url = page.url
+        http_status = response_info["status"]
+
+        # 检测1: HTTP 非 2xx
+        if http_status and (http_status < 200 or http_status >= 300):
+            warnings.append(f"HTTP {http_status} — 页面返回非正常状态码，内容可能为错误页")
+
+        # 检测2: 被重定向到不同域名
+        from urllib.parse import urlparse
+        if response_info["redirected"] and urlparse(final_url).netloc != urlparse(url).netloc:
+            warnings.append(f"页面被重定向到: {final_url}")
+
+        # 检测3: 标题包含登录/错误关键词
+        lower_title = page_title.lower()
+        auth_keywords = ["login", "sign in", "登录", "验证", "captcha", "403", "404", "500", "error", "blocked", "denied"]
+        matched_auth = [kw for kw in auth_keywords if kw in lower_title]
+        if matched_auth:
+            warnings.append(f"页面标题包含: {', '.join(matched_auth)} — 可能遇到登录验证或拦截页")
+
+        # 检测4: DOM 内容极少（< 10 个元素）
+        dom_resolved = await dom if asyncio.iscoroutine(dom) else dom
+        if isinstance(dom_resolved, dict):
+            total_elements = dom_resolved.get("total_elements", 0)
+            body_text = dom_resolved.get("body", "")
+            if total_elements < 10:
+                warnings.append(f"DOM 仅含 {total_elements} 个元素 — 页面内容异常稀少，可能未完成渲染或被拦截")
+            # 检测5: body 文本包含登录特征
+            login_texts = ["用户名", "密码", "password", "username", "验证码", "sign in", "log in"]
+            body_lower = body_text.lower() if isinstance(body_text, str) else ""
+            matched_login = [t for t in login_texts if t in body_lower]
+            if matched_login:
+                warnings.append(f"页面内容包含登录相关文本: {', '.join(matched_login)}")
+
+        # ── 构建 _instruction ──
+        if warnings:
+            instruction = (
+                "⚠️ 页面虽然返回了 HTTP 200，但内容可能不是用户期望的目标页面。"
+                "原因可能是：网站需要登录验证、被拦截、或 SPA 未完成渲染。\n"
+                "请如实告知用户你看到了什么（以及更重要的是——没看到什么），"
+                "不要假设页面内容是正常的。如果没有获取到用户想要的信息，直接说出来。\n"
+                "检测到的异常：" + "; ".join(warnings)
+            )
+        else:
+            instruction = "✅ 拨测成功。以下数据可直接用于回复。"
 
         perf = {}
         try:
@@ -194,15 +259,20 @@ async def _dial_test_coro(url: str, viewport: str = "1440x900", screenshot: bool
         duration_ms = int((time.time() - start) * 1000)
         report = {
             "url": url,
+            "final_url": final_url,
+            "http_status": http_status,
             "viewport": viewport,
-            "title": await page.title(),
+            "title": page_title,
             "duration_ms": duration_ms,
-            "dom_snapshot": await dom if asyncio.iscoroutine(dom) else dom,
+            "dom_snapshot": dom_resolved,
             "console_logs": console_logs,
             "network": await network if asyncio.iscoroutine(network) else network,
             "performance": perf,
             "screenshot_path": screenshot_path,
+            "_instruction": instruction,
         }
+        if warnings:
+            report["_warnings"] = warnings
         return json.dumps(report, ensure_ascii=False, default=str)
     finally:
         await page.close()
@@ -223,12 +293,16 @@ async def _dial_style_coro(url: str, selectors: list[str], viewport: str = "1440
             return json.dumps({
                 "error": f"页面加载失败: {nav_err}",
                 "duration_ms": int((time.time() - start) * 1000),
+                "_instruction": "⚠️ 拨测失败，无法获取样式。请如实告知用户，不要编造任何 CSS 数值。",
             }, ensure_ascii=False)
 
         results = {}
         for sel in selectors:
             try:
                 els = await page.query_selector_all(sel)
+                if not els:
+                    results[sel] = [{"error": f"选择器 '{sel}' 未匹配到任何元素"}]
+                    continue
                 styles = []
                 for el in els[:5]:
                     try:
@@ -250,11 +324,24 @@ async def _dial_style_coro(url: str, selectors: list[str], viewport: str = "1440
             except Exception as e:
                 results[sel] = [{"error": str(e)}]
 
+        # 检测结果是否全部为空
+        all_empty = all(
+            not v or all(isinstance(s, dict) and "error" in s for s in v)
+            for v in results.values()
+        )
+        instruction = (
+            "❌ 所有选择器均未匹配到元素。请如实告知用户：页面上没有找到指定的元素。"
+            "不要编造任何 font-size、color 等 CSS 数值。"
+        ) if all_empty else ""
+
         duration_ms = int((time.time() - start) * 1000)
-        return json.dumps({
+        report = {
             "url": url, "selectors": selectors,
             "duration_ms": duration_ms, "styles": results,
-        }, ensure_ascii=False, default=str)
+        }
+        if instruction:
+            report["_instruction"] = instruction
+        return json.dumps(report, ensure_ascii=False, default=str)
     finally:
         await page.close()
         await browser.close()
@@ -274,6 +361,7 @@ async def _dial_assert_coro(url: str, rules: list[dict], viewport: str = "1440x9
             return json.dumps({
                 "error": f"页面加载失败: {nav_err}",
                 "duration_ms": int((time.time() - start) * 1000),
+                "_instruction": "⚠️ 拨测失败，无法执行断言。请如实告知用户，不要编造任何断言结果。",
             }, ensure_ascii=False)
 
         report = []

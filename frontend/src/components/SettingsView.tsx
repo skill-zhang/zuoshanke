@@ -5,7 +5,7 @@ import {
   SettingsData, ServiceStatus, RouteConfig,
   listProviders, createProvider, updateProvider, deleteProvider,
   createModel, updateModel, deleteModel,
-  getSettings, updateSettings, getServiceStatus,
+  getSettings, updateSettings, getServiceStatus, getDefaultPrompts,
   AiProviderData, AiModelData,
 } from '../api/client';
 import { showPrompt, showConfirm, showAlert } from '../stores/dialogStore';
@@ -234,12 +234,13 @@ export function SettingsView() {
     finally { setPromptSaving(false); }
   };
   const resetPrompt = async (field: 'channel' | 'scene') => {
-    const defaults: Record<string, string> = {
-      channel: '你是坐山客（Zuoshanke），以广博学识和理性思维为用户提供帮助。用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。',
-      scene: '你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。',
-    };
-    if (field === 'channel') { setEditedCP(defaults.channel); }
-    else { setEditedSP(defaults.scene); }
+    try {
+      const defaults = await getDefaultPrompts();
+      if (field === 'channel') setEditedCP(defaults.channel);
+      else setEditedSP(defaults.scene);
+    } catch (e) {
+      showAlert('无法获取默认模板');
+    }
   };
 
   // ── Features ──

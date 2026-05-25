@@ -284,3 +284,10 @@ def get_service_status():
         pass
 
     return result
+
+
+@router.get("/api/settings/defaults")
+def get_default_prompts():
+    """返回频道/场景人设的默认模板（从 config/default-prompts.md 读取）"""
+    from prompts import load_default_prompts
+    return load_default_prompts()
