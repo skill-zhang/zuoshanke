@@ -16,24 +16,7 @@ import sys
 from typing import Optional
 
 # ── 基础工具（永远注入） ──
-BASE_TOOLS = [
-    {
-        "name": "web_fetch",
-        "description": "抓取指定 URL 的网页文本内容",
-        "parameters": {
-            "url": {"type": "string", "description": "网页 URL"}
-        },
-        "returns": "网页正文文本",
-        "category": "search",
-    },
-    {
-        "name": "get_current_time",
-        "description": "获取当前日期和时间",
-        "parameters": {},
-        "returns": "当前日期和时间字符串",
-        "category": "system",
-    },
-]
+BASE_TOOLS: list[dict] = []
 
 # ── 动态工具缓存 ──
 _registry_cache = None

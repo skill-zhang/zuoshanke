@@ -1,6 +1,16 @@
 {
   "tools": [
     {
+      "name": "get_current_time",
+      "description": "获取当前日期和时间（Asia/Shanghai时区）",
+      "file": "tools/get_current_time.py",
+      "function": "get_current_time",
+      "parameters": {},
+      "returns": "JSON {datetime, date, time, weekday, timestamp, timezone}",
+      "category": "system",
+      "verified": true
+    },
+    {
       "name": "get_weather",
       "description": "获取城市实时天气及未来预报（3-7天）",
       "file": "tools/weather.py",
@@ -136,6 +146,26 @@
         "triggers": [],
         "requires_city": false
       }
+    },
+    {
+      "name": "web_fetch",
+      "description": "抓取指定URL的网页文本内容，自动去除HTML标签/脚本/样式，提取纯文本正文。返回标题+正文（最多3000字符）",
+      "file": "tools/web_fetch.py",
+      "function": "web_fetch",
+      "parameters": {
+        "url": {
+          "type": "string",
+          "description": "网页URL（http/https）"
+        },
+        "max_chars": {
+          "type": "integer",
+          "description": "返回文本最大字符数，默认3000",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, url, title, text, length}",
+      "category": "search",
+      "verified": true
     },
     {
       "name": "todo_list",
