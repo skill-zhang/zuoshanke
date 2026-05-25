@@ -447,6 +447,8 @@ export function ChatView() {
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageLenRef = useRef(0);
+  const wasAtBottomRef = useRef(true);       // 用户是否在底部（更新前快照）
+  const initialScrollDoneRef = useRef(false); // 首次加载是否已完成滚底
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
   // ═══ 参数调测 ═══
@@ -542,7 +544,9 @@ export function ChatView() {
   const scrollToBottom = useCallback((smooth = true) => {
     const container = messagesContainerRef.current;
     if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+      requestAnimationFrame(() => {
+        container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+      });
       setShowBackToBottom(false);
       setUnreadCount(0);
     }
@@ -558,7 +562,17 @@ export function ChatView() {
   const prevLenRef = useRef(0);
   useEffect(() => {
     if (displayMessages.length === 0) return;
-    if (isAtBottom()) {
+
+    // 首次加载消息（从空→有内容）：强制滚底
+    if (!initialScrollDoneRef.current && displayMessages.length > 0) {
+      initialScrollDoneRef.current = true;
+      requestAnimationFrame(() => scrollToBottom(false));
+      prevLenRef.current = displayMessages.length;
+      return;
+    }
+
+    // 用户在底部 → 自动滚底（用 ref 快照而非实时 isAtBottom）
+    if (wasAtBottomRef.current) {
       scrollToBottom(false);
     } else if (displayMessages.length > prevLenRef.current) {
       // 有新增消息且不在底部 → 显示浮标
@@ -566,7 +580,7 @@ export function ChatView() {
       setUnreadCount(prev => prev + 1);
     }
     prevLenRef.current = displayMessages.length;
-  }, [displayMessages, isAtBottom, scrollToBottom]);
+  }, [displayMessages, scrollToBottom]);
 
   // ═══ 发送消息时强制滚底 — 用户自己发的消息必须能看到 ═══
   const prevGeneratingRef = useRef(false);
@@ -582,6 +596,9 @@ export function ChatView() {
   const handleScroll = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
+
+    // 记录用户是否在底部（内容更新前快照）
+    wasAtBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
 
     // 向上滚到顶部 → 加载更早消息
     if (container.scrollTop < 80) {

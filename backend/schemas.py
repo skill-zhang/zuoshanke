@@ -255,6 +255,7 @@ class Features(BaseModel):
     """特性开关"""
     pdf_as_image: bool = False
     vision_enabled: bool = False
+    message_load_count: int = 4  # 每次加载的聊天记录条数
 
 class SettingsOut(BaseModel):
     """系统设置（返回）"""

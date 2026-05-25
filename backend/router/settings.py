@@ -44,7 +44,7 @@ def get_cached_settings(db: Session) -> dict:
         _settings_cache = {
             "routing": DEFAULT_ROUTING,
             "system_prompts": DEFAULT_SYSTEM_PROMPTS,
-            "features": {"pdf_as_image": False, "vision_enabled": False},
+            "features": {"pdf_as_image": False, "vision_enabled": False, "message_load_count": 4},
             "updated_at": None,
         }
     else:

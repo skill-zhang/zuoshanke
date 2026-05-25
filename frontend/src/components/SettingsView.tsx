@@ -24,6 +24,7 @@ const TABS = [
   { key: 'routing', label: '🔀 路由配置' },
   { key: 'prompts', label: '📝 系统人设' },
   { key: 'service', label: '💻 服务状态' },
+  { key: 'general', label: '⚙ 通用配置' },
 ];
 
 function maskKey(key: string) {
@@ -76,6 +77,26 @@ export function SettingsView() {
   const [editedSP, setEditedSP] = useState<string | undefined>();
   const [promptSaving, setPromptSaving] = useState(false);
   const [expandedStatus, setExpandedStatus] = useState<string | null>(null);
+  // ── Features / 通用配置 ──
+  const [featuresEdit, setFeaturesEdit] = useState<{ message_load_count: number } | null>(null);
+  const [featuresSaving, setFeaturesSaving] = useState(false);
+  // ── Inline API Key editing ──
+  const [editingApiKeys, setEditingApiKeys] = useState<Record<string, string>>({});
+  const startEditApiKey = (pid: string, currentKey: string) => {
+    setEditingApiKeys(prev => ({ ...prev, [pid]: currentKey || '' }));
+  };
+  const cancelEditApiKey = (pid: string) => {
+    setEditingApiKeys(prev => { const n = { ...prev }; delete n[pid]; return n; });
+  };
+  const saveApiKey = async (pid: string) => {
+    const newKey = editingApiKeys[pid]?.trim();
+    if (newKey === undefined) return;
+    try {
+      await updateProvider(pid, { api_key: newKey });
+      setProviders(prev => prev.map(p => p.id === pid ? { ...p, api_key: newKey } : p));
+      cancelEditApiKey(pid);
+    } catch (e) { showAlert('保存失败'); }
+  };
 
   // ── Load ──
   const loadP = useCallback(async () => {
@@ -221,6 +242,18 @@ export function SettingsView() {
     else { setEditedSP(defaults.scene); }
   };
 
+  // ── Features ──
+  const saveFeatures = async () => {
+    if (!featuresEdit || !settings) return;
+    setFeaturesSaving(true);
+    try {
+      const updated = await updateSettings({ features: featuresEdit });
+      setSettings(updated);
+      setFeaturesEdit(null);
+    } catch (e) { showAlert('保存失败'); }
+    finally { setFeaturesSaving(false); }
+  };
+
   // ── Render ──
   return (
     <div className="settings-view">
@@ -272,8 +305,18 @@ export function SettingsView() {
                     </div>
                     <div className="sv-provider-url-row">
                       <span>🔑 API Key</span>
-                      <span className="sv-provider-api-key">{p.api_key ? maskKey(p.api_key) : <span className="sv-no-key">（无需 API Key）</span>}</span>
-                      {p.api_key && <span className="btn btn-sm btn-ghost" style={{ padding: '2px 6px', fontSize: 12 }}>更换</span>}
+                      {editingApiKeys[p.id] !== undefined ? (
+                        <>
+                          <input className="sv-api-key-input" value={editingApiKeys[p.id]} onChange={e => setEditingApiKeys(prev => ({ ...prev, [p.id]: e.target.value }))} placeholder="输入新的 API Key" type="password" autoFocus />
+                          <span className="btn btn-sm btn-primary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => saveApiKey(p.id)}>保存</span>
+                          <span className="btn btn-sm btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => cancelEditApiKey(p.id)}>取消</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="sv-provider-api-key">{p.api_key ? maskKey(p.api_key) : <span className="sv-no-key">（无需 API Key）</span>}</span>
+                          {p.api_key && <span className="btn btn-sm btn-ghost" style={{ padding: '2px 6px', fontSize: 12 }} onClick={() => startEditApiKey(p.id, p.api_key!)}>更换</span>}
+                        </>
+                      )}
                     </div>
                     <div className="sv-provider-models-section">
                       <div className="sv-provider-models-title">
@@ -561,6 +604,50 @@ export function SettingsView() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ═══ Tab 5: 通用配置 ═══ */}
+        {activeTab === 'general' && (
+          <div className="sv-tab-panel">
+            <div className="sv-desc-row">
+              <span className="sv-desc">通用功能配置项。</span>
+            </div>
+
+            {settingsLoading ? (
+              <div className="sv-loading">加载中…</div>
+            ) : !settings ? (
+              <div className="sv-empty">无法加载设置</div>
+            ) : (
+              <div className="sv-general-section">
+                <div className="sv-general-item">
+                  <div className="sv-general-item-label">
+                    <span className="sv-general-item-title">每次加载的聊天记录条数</span>
+                    <span className="sv-general-item-desc">频道和场景中每次加载消息的数量，默认 4 条。</span>
+                  </div>
+                  <div className="sv-general-item-input">
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="1"
+                      max="200"
+                      value={featuresEdit?.message_load_count ?? settings.features.message_load_count}
+                      onChange={e => setFeaturesEdit({ message_load_count: parseInt(e.target.value) || 4 })}
+                    />
+                  </div>
+                </div>
+                <div className="sv-general-actions">
+                  {featuresEdit && (
+                    <>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setFeaturesEdit(null)}>取消</button>
+                      <button className="btn btn-sm btn-primary" onClick={saveFeatures} disabled={featuresSaving}>
+                        {featuresSaving ? '保存中…' : '💾 保存'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

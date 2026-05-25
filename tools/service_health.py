@@ -14,7 +14,7 @@ import concurrent.futures
 
 
 SERVICES = [
-    {"name": "后端", "port": 8000, "url": "http://localhost:8000/health"},
+    {"name": "后端", "port": 8000, "url": "http://localhost:8000/api/health"},
     {"name": "前端", "port": 5173, "url": "http://localhost:5173"},
     {"name": "Qwen", "port": 8083, "url": "http://localhost:8083/health"},
     {"name": "SearXNG", "port": 8081, "url": "http://localhost:8081"},

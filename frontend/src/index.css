@@ -3318,6 +3318,12 @@ body {
   color: #8b949e; background: #161b22; padding: 2px 8px; border-radius: 4px;
   letter-spacing: 2px;
 }
+.sv-api-key-input {
+  font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px;
+  color: #c9d1d9; background: #0d1117; border: 1px solid #30363d;
+  border-radius: 4px; padding: 3px 8px; outline: none; width: 200px;
+}
+.sv-api-key-input:focus { border-color: #58a6ff; }
 .sv-no-key { font-size: 12px; color: #484f58; letter-spacing: 0; }
 .sv-provider-models-section { margin-top: 8px; }
 .sv-provider-models-title {
@@ -3505,18 +3511,23 @@ body {
 .sv-status-card-action { font-size: 11px; color: #8b949e; cursor: pointer; }
 .sv-status-card-action:hover { color: #58a6ff; }
 
-/* 展开详情面板 */
+/* 展开详情面板 — 跨两列铺满 */
 .sv-status-detail-panel { display: none; }
 .sv-status-detail-panel.open {
-  display: block; padding: 12px 16px;
-  background: #0d1117; border: 1px solid #30363d; border-top: 0;
-  border-radius: 0 0 8px 8px; margin-top: -1px;
+  display: block; padding: 0 20px 16px;
+  background: #0d1117; border: 1px solid #30363d;
+  border-radius: 8px; grid-column: 1 / -1; margin-top: 4px;
 }
 .sv-status-detail-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px;
 }
 .sv-status-detail-item {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #21262d;
+}
+.sv-status-detail-item:last-child {
+  border-bottom: none;
 }
 .sd-label { font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: 0.5px; }
 .sd-value { font-size: 12px; color: #c9d1d9; }

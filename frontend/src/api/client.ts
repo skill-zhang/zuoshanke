@@ -621,6 +621,7 @@ export interface SystemPrompts {
 export interface Features {
   pdf_as_image: boolean;
   vision_enabled: boolean;
+  message_load_count: number;
 }
 
 export interface SettingsData {

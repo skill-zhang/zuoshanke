@@ -35,9 +35,9 @@ export function Sidebar() {
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
   const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
   const [catManageOpen, setCatManageOpen] = useState(false);
-  // ── 区域折叠状态：默认只展开「讨论·频道」 ──
+  // ── 区域折叠状态：默认只展开「你的伙伴」 ──
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(['plaza', 'workshop', 'system-tools'])
+    () => new Set(['messages', 'plaza', 'workshop', 'system-tools'])
   );
   // ── 系统工具拖拽排序 ──
   const [toolOrder, setToolOrder] = useState<string[]>(() => {
@@ -292,6 +292,43 @@ export function Sidebar() {
     <>
     <div className="sidebar">
       <div className="sidebar-list">
+        {/* ═══ 你的作伴 ═══ */}
+        <div className="sidebar-section">
+          <div className={`sidebar-section-header${collapsedSections.has('companion') ? ' collapsed' : ''}`}
+            onClick={() => toggleSection('companion')}>
+            <span className="sec-arrow">▼</span>
+            你的伙伴
+          </div>
+        </div>
+        <div className={`sidebar-section-children${collapsedSections.has('companion') ? ' collapsed' : ''}`}>
+          {(() => {
+            const defaultCh = channels.find(c => c.is_default);
+            const selfDevScene = workshopScenes.find(s => s.name === '坐山客自开发');
+            return (
+              <>
+                {defaultCh && (
+                  <div
+                    className={`sidebar-item indent${view === 'chat' && !currentScene && currentChannel?.id === defaultCh.id ? ' active' : ''}`}
+                    onClick={() => handleEnterChannel(defaultCh.id)}
+                  >
+                    <span className="sidebar-item-icon">💬</span>
+                    <span className="sidebar-item-name">闲聊</span>
+                  </div>
+                )}
+                {selfDevScene && (
+                  <div
+                    className={`sidebar-item indent${currentScene?.id === selfDevScene.id && view === 'chat' ? ' active' : ''}`}
+                    onClick={() => handleEnterScene(selfDevScene)}
+                  >
+                    <span className="sidebar-item-icon">⚒️</span>
+                    <span className="sidebar-item-name">坐山客自开发</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+
         {/* ═══ 讨论 · 频道 ═══ */}
         <div className="sidebar-section">
           <div className={`sidebar-section-header${collapsedSections.has('messages') ? ' collapsed' : ''}`}
@@ -302,7 +339,7 @@ export function Sidebar() {
           </div>
         </div>
         <div className={`sidebar-section-children${collapsedSections.has('messages') ? ' collapsed' : ''}`}>
-          {channels.map((ch) => (
+          {channels.filter(c => !c.is_default).map((ch) => (
             <div
               key={ch.id}
               className={`sidebar-item indent${isChannelActive(ch.id) ? ' active' : ''}`}
@@ -440,6 +477,7 @@ export function Sidebar() {
                   </div>
                   <div className={`sidebar-children${isCollapsed ? ' collapsed' : ''}`}>
                     {workshopScenes
+                      .filter(s => s.name !== '坐山客自开发')
                       .filter(s => s.category === cat.key)
                       .map(s => {
                         const isPublished = s.version !== '0.0';

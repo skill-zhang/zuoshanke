@@ -24,6 +24,14 @@ import {
 
 export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'delegate-results' | 'secret-garden' | 'settings';
 
+/** 从 settings 读取每次加载的聊天记录条数（默认 4） */
+function getMsgLimit(): number {
+  try {
+    const s = useStore.getState().settingsData;
+    return s?.features?.message_load_count ?? 4;
+  } catch { return 4; }
+}
+
 interface AppState {
   view: ViewPage;
   setView: (v: ViewPage) => void;
@@ -423,7 +431,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       set({ messagesLoading: true });
       const sessionId = get().currentSessionId;
-      const result = await listSceneMessages(sceneId, sessionId || undefined, 50);
+      const result = await listSceneMessages(sceneId, sessionId || undefined, getMsgLimit());
       set({
         messages: result.messages,
         hasOlderMessages: result.has_more,
@@ -442,7 +450,7 @@ export const useStore = create<AppState>((set, get) => ({
       set({ messagesLoading: true });
       const oldestId = state.messages[0].id;
       const sessionId = state.currentSessionId;
-      const result = await listSceneMessages(sceneId, sessionId || undefined, 50, oldestId);
+      const result = await listSceneMessages(sceneId, sessionId || undefined, getMsgLimit(), oldestId);
       set({
         messages: [...result.messages, ...state.messages],
         hasOlderMessages: result.has_more,
@@ -703,7 +711,7 @@ export const useStore = create<AppState>((set, get) => ({
   loadChannelMessages: async (channelId) => {
     try {
       set({ channelMessagesLoading: true });
-      const result = await listChannelMessages(channelId, 50);
+      const result = await listChannelMessages(channelId, getMsgLimit());
       set({
         channelMessages: result.messages,
         channelHasOlder: result.has_more,
@@ -721,7 +729,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       set({ channelMessagesLoading: true });
       const oldestId = state.channelMessages[0].id;
-      const result = await listChannelMessages(channelId, 50, oldestId);
+      const result = await listChannelMessages(channelId, getMsgLimit(), oldestId);
       set({
         channelMessages: [...result.messages, ...state.channelMessages],
         channelHasOlder: result.has_more,
