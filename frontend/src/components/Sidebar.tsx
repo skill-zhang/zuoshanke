@@ -1,7 +1,7 @@
 /** 📋 侧边栏 — 频道列表 + 场景广场 + 工坊（分类折叠） */
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores/appStore';
-import { listScenes, updateScene, deleteScene, Scene, createScene, listMemories, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
+import { listScenes, updateScene, deleteScene, Scene, createScene, listMemoryGroups, renameCategory, createCategory, deleteCategory, listCategories, listTools, listSkills } from '../api/client';
 import { ChannelSvg } from './Logo';
 import { showPrompt, showConfirm, showAlert } from '../stores/dialogStore';
 import { SelfMapView } from './SelfMapView';
@@ -33,7 +33,8 @@ export function Sidebar() {
 
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set(['ecommerce', 'work', 'learn', 'create', 'finance', 'media', 'other']));
-  const [memories, setMemories] = useState<{ key: string; priority_level: string }[]>([]);
+  // 记忆分组数量（记忆管理页的卡片数 = 已生成记忆的分组数量）
+  const [memoryGroupCount, setMemoryGroupCount] = useState(0);
   const [catManageOpen, setCatManageOpen] = useState(false);
   // ── 区域折叠状态：默认只展开「你的伙伴」 ──
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
@@ -91,9 +92,9 @@ export function Sidebar() {
     }
   }, [view]);
 
-  // 加载记忆数量（用于 badge）
+  // 加载记忆分组数量（记忆管理页卡片数 — 每次切视图刷新）
   useEffect(() => {
-    listMemories().then(res => setMemories(res.data)).catch(() => {});
+    listMemoryGroups().then(res => { if (res.success) setMemoryGroupCount(res.data.length); }).catch(() => {});
   }, [view]);  // 每次切视图刷新（记忆管理全页可增删改）
 
   const closeMenu = () => setMenuOpen(null);
@@ -258,7 +259,7 @@ export function Sidebar() {
           <div key={key} {...commonProps} onClick={() => { setView('memory'); useStore.getState().setCurrentScene(null); }}>
             <span className="nav-icon">🧠</span>
             <span>记忆管理</span>
-            <span className="badge">{memories.length}</span>
+            <span className="badge">{memoryGroupCount}</span>
           </div>
         );
       case 'skills':
