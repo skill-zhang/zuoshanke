@@ -1,10 +1,13 @@
 """场景流式消息 — stream_scene_message + Agent Loop 引擎"""
 import json
+import logging
 import os
 import re
 import time
 import uuid
 from typing import List, Optional
+
+_log = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,7 +16,7 @@ from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
 from models import Scene, ThinkingMap, ThinkNode, Message, SceneAsset, PriorityQueue, ProjectOutput, FileSnapshot
 from schemas import MessageOut, MessageCreate, SceneExportOut
-from ai_engine import call_deepseek_chat, extract_and_classify, get_settings
+from ai_engine import call_deepseek_chat, call_llm, extract_and_classify, get_settings
 from agent_core.token_counter import (
     estimate_messages_tokens, get_context_length_from_route,
     context_usage_str, progress_bar,
@@ -39,20 +42,20 @@ def _ensure_web_session(db, context_type: str, context_id: str, context_name: st
         WebSession.context_id == context_id,
         WebSession.status == "active",
     ).first()
-    if ws:
-        return ws
-    ws = WebSession(
-        id=make_id("ws"),
-        context_type=context_type,
-        context_id=context_id,
-        context_name=context_name,
-        status="active",
-        started_at=utcnow(),
-        last_active_at=utcnow(),
-    )
-    db.add(ws)
-    db.commit()
-    db.refresh(ws)
+    if not ws:
+        ws = WebSession(
+            id=make_id("ws"),
+            context_type=context_type,
+            context_id=context_id,
+            context_name=context_name,
+            status="active",
+            started_at=utcnow(),
+            last_active_at=utcnow(),
+        )
+        db.add(ws)
+        db.commit()
+        db.refresh(ws)
+
     return ws
 
 
@@ -323,6 +326,64 @@ def start_async_converge_check(scene_id: str):
     t.start()
 
 
+# ═══════════════════════════════════════════
+# Thought Stream: 即时确认 + 限流
+# ═══════════════════════════════════════════
+
+class ThoughtThrottle:
+    """思考消息限流器——防止 LLM 话痨刷屏"""
+
+    def __init__(self, max_total=20, min_interval=3.0, throttle_after=15, throttle_rate=5):
+        self.count = 0
+        self.last_time = 0.0
+        self.max_total = max_total
+        self.min_interval = min_interval
+        self.throttle_after = throttle_after
+        self.throttle_rate = throttle_rate
+
+    def allow(self, loop_round: int) -> bool:
+        if self.count >= self.max_total:
+            return False
+        now = time.time()
+        if now - self.last_time < self.min_interval:
+            return False
+        if self.count >= self.throttle_after:
+            if loop_round % self.throttle_rate != 0:
+                return False
+        self.count += 1
+        self.last_time = now
+        return True
+
+
+def _generate_ack(user_message: str) -> str | None:
+    """生成即时确认回执。用 flash 模型，<1 秒返回。简单查询返回 None 跳过确认。"""
+    ack_prompt = """你是坐山客。用户刚发来一条消息。
+请用一句话自然地回应，告诉用户你收到了并且正在思考。
+不要提前分析或回答用户的问题。
+风格：自然、简短（10字以内）、带一点个性。
+
+即使消息是知识问答类（不是任务指令），也请回复确认。
+只有对极简消息（如"好""嗯""谢谢"）才回复空字符串跳过。"""
+
+    try:
+        route_cfg = get_settings("scene")
+        response = call_llm(
+            messages=[
+                {"role": "system", "content": ack_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            route_cfg=route_cfg,
+            temperature=0.7,
+            max_tokens=50,
+        )
+        if response:
+            content = response.strip()
+            return content if content else None
+    except Exception as e:
+        _log.warning(f"[ack] 即时确认失败: {e}")
+    return None
+
+
 # ═══ 场景流式 ═══
 
 @router.post("/api/scenes/{scene_id}/stream")
@@ -356,11 +417,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         # 2. 历史消息（session 隔离）
         q = db.query(Message).filter(Message.scene_id == scene_id)
         if data.session_id:
-            from sqlalchemy import or_
-            q = q.filter(or_(
-                Message.session_id == data.session_id,
-                Message.session_id.is_(None),
-            ))
+            q = q.filter(Message.session_id == data.session_id)
         scene_history = q.order_by(Message.created_at.desc()).limit(20).all()
         scene_history.reverse()
         history_messages = [
@@ -428,6 +485,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             tool_callbacks=tool_callbacks or None,  # 🆕 工具回调
         )
 
+        # ── Thought Stream: 即时确认 ──
+        ack = _generate_ack(data.content)
+        if ack:
+            yield sse_event("thought", content=ack, phase="ack", mood="")
+
         model_name = "DeepSeek Flash"
         full_reply = ""
 
@@ -459,12 +521,25 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # ── 流式收 Agent Loop 回复 ──
         agent_tool_results = []
+        thought_throttle = ThoughtThrottle()
+        loop_round = 0
         try:
             for event in agent_stream:
                 etype = event["type"]
                 if etype == "tool_start":
+                    # 🆕 Think 工具：转为 thought 事件（带限流）
+                    if event["tool"] == "think":
+                        args = event.get("args", {})
+                        if thought_throttle.allow(loop_round):
+                            yield sse_event("thought",
+                                content=args.get("content", ""),
+                                phase="",
+                                mood="",
+                            )
+                        loop_round += 1
+                        continue  # 不当作普通 tool_call
                     # 🆕 Clarify 工具：发射询问事件给前端（在工具阻塞前）
-                    if event["tool"] == "clarify":
+                    elif event["tool"] == "clarify":
                         args = event.get("args", {})
                         yield sse_event("zhu:clarify",
                             question=args.get("question", ""),
@@ -484,7 +559,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                         _zhu.observe_fenshen_event("fenshen:analyzing", scene.name)
                     except Exception:
                         pass
+                    loop_round += 1  # 🆕 Thought Stream 限流计数
                 elif etype == "tool_done":
+                    # 🆕 Think 工具：跳过 tool_done 事件（已在 tool_start 转为 thought）
+                    if event["tool"] == "think":
+                        continue
                     # 🆕 Delegate 完成：发射子任务结果
                     if event["tool"] == "delegate_task":
                         result_raw = event.get("result", "")

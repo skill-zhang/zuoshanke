@@ -58,7 +58,6 @@ def _get_or_create_web_session(
             session.context_name = context_name
         db.commit()
         db.refresh(session)
-        _backfill_null_session_messages(db, context_type, context_id, session.id)
         return session
 
     # 创建新 session
@@ -74,41 +73,7 @@ def _get_or_create_web_session(
     db.add(session)
     db.commit()
     db.refresh(session)
-    _backfill_null_session_messages(db, context_type, context_id, session.id)
     return session
-
-
-def _backfill_null_session_messages(db, context_type: str, context_id: str, session_id: str):
-    """将旧的无 session_id 消息归属到当前 session（一次性 backfill）
-
-    同时继承已销毁 session 的消息，避免 session 超时销毁后消息丢失。
-    """
-    if context_type != "scene":
-        return
-    from sqlalchemy import or_
-    from models import Message, WebSession
-    # 找无归属 + 已销毁 session 的旧消息
-    destroyed_sids = [
-        r[0] for r in db.query(WebSession.id).filter(
-            WebSession.context_id == context_id,
-            WebSession.status == "destroyed",
-        ).all()
-    ]
-    filters = [Message.scene_id == context_id]
-    if destroyed_sids:
-        filters.append(or_(
-            Message.session_id.is_(None),
-            Message.session_id.in_(destroyed_sids),
-        ))
-    else:
-        filters.append(Message.session_id.is_(None))
-    tagged = db.query(Message).filter(*filters).update({"session_id": session_id})
-    if tagged:
-        db.commit()
-        import logging
-        logging.getLogger(__name__).info(
-            f"[session] backfill: 将 {tagged} 条消息归属到 {session_id}"
-        )
 
 
 def _find_active_web_session(db: DBSession, context_type: str, context_id: str) -> WebSession | None:
@@ -240,6 +205,9 @@ def list_web_sessions(context_type: str | None = None, status: str | None = None
 def destroy_stale_web_sessions(db: DBSession) -> int:
     """销毁所有超过 SESSION_TIMEOUT_HOURS 的活跃 Web session
 
+    销毁前触发记忆提取，将未提取的消息打标 memory_extracted=True，
+    确保旧对话的信息被持久化，同时后续新 session 的 context 不混入旧消息。
+
     Returns: 销毁的 session 数量
     """
     from datetime import datetime, timedelta
@@ -248,14 +216,42 @@ def destroy_stale_web_sessions(db: DBSession) -> int:
         WebSession.status == "active",
         WebSession.last_active_at < cutoff,
     ).all()
+    if not stale:
+        return 0
+
+    # 记忆提取：销毁前处理未提取的消息
+    from models import Message
+    from agent_core.memory_extractor import extract_from_conversation, save_extracted_memories
+    for s in stale:
+        if s.context_type != "scene":
+            continue
+        try:
+            unprocessed = db.query(Message).filter(
+                Message.scene_id == s.context_id,
+                Message.session_id == s.id,
+                Message.memory_extracted == False,
+                Message.role.in_(["user", "ai"]),
+            ).order_by(Message.created_at.asc()).limit(50).all()
+            if len(unprocessed) >= 2:
+                msgs_dict = [{"role": m.role, "content": m.content} for m in unprocessed]
+                entries = extract_from_conversation(msgs_dict, scene_name=s.context_name or "")
+                if entries:
+                    save_extracted_memories(db, entries, s.context_id, scene_name=s.context_name or "")
+                # 打标
+                for m in unprocessed:
+                    m.memory_extracted = True
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    # 标记销毁
     now = datetime.utcnow()
     for s in stale:
         s.status = "destroyed"
         s.ended_at = now
         s.duration_seconds = int((now - s.started_at).total_seconds()) if s.started_at else 0
         s.updated_at = now
-    if stale:
-        db.commit()
+    db.commit()
     return len(stale)
 
 

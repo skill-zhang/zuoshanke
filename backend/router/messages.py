@@ -71,15 +71,11 @@ def list_scene_messages(
     before_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """获取场景消息，分页返回。不传 before_id 取最新 limit 条"""
-    q = db.query(Message).filter(Message.scene_id == scene_id)
-    if session_id:
-        from sqlalchemy import or_
-        q = q.filter(or_(
-            Message.session_id == session_id,
-            Message.session_id.is_(None),
-        ))
+    """获取场景消息，分页返回（UI展示用，不受session隔离，显示全部历史消息）
 
+    不传 before_id 取最新 limit 条。
+    """
+    q = db.query(Message).filter(Message.scene_id == scene_id)
     total = q.count()
 
     # 取消息（ASC 顺序）
