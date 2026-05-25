@@ -58,6 +58,7 @@ def _get_or_create_web_session(
             session.context_name = context_name
         db.commit()
         db.refresh(session)
+        _backfill_null_session_messages(db, context_type, context_id, session.id)
         return session
 
     # 创建新 session
@@ -73,7 +74,41 @@ def _get_or_create_web_session(
     db.add(session)
     db.commit()
     db.refresh(session)
+    _backfill_null_session_messages(db, context_type, context_id, session.id)
     return session
+
+
+def _backfill_null_session_messages(db, context_type: str, context_id: str, session_id: str):
+    """将旧的无 session_id 消息归属到当前 session（一次性 backfill）
+
+    同时继承已销毁 session 的消息，避免 session 超时销毁后消息丢失。
+    """
+    if context_type != "scene":
+        return
+    from sqlalchemy import or_
+    from models import Message, WebSession
+    # 找无归属 + 已销毁 session 的旧消息
+    destroyed_sids = [
+        r[0] for r in db.query(WebSession.id).filter(
+            WebSession.context_id == context_id,
+            WebSession.status == "destroyed",
+        ).all()
+    ]
+    filters = [Message.scene_id == context_id]
+    if destroyed_sids:
+        filters.append(or_(
+            Message.session_id.is_(None),
+            Message.session_id.in_(destroyed_sids),
+        ))
+    else:
+        filters.append(Message.session_id.is_(None))
+    tagged = db.query(Message).filter(*filters).update({"session_id": session_id})
+    if tagged:
+        db.commit()
+        import logging
+        logging.getLogger(__name__).info(
+            f"[session] backfill: 将 {tagged} 条消息归属到 {session_id}"
+        )
 
 
 def _find_active_web_session(db: DBSession, context_type: str, context_id: str) -> WebSession | None:
@@ -207,13 +242,13 @@ def destroy_stale_web_sessions(db: DBSession) -> int:
 
     Returns: 销毁的 session 数量
     """
-    from datetime import datetime, timedelta, timezone
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=SESSION_TIMEOUT_HOURS)
+    from datetime import datetime, timedelta
+    cutoff = datetime.utcnow() - timedelta(hours=SESSION_TIMEOUT_HOURS)
     stale = db.query(WebSession).filter(
         WebSession.status == "active",
         WebSession.last_active_at < cutoff,
     ).all()
-    now = utcnow()
+    now = datetime.utcnow()
     for s in stale:
         s.status = "destroyed"
         s.ended_at = now
@@ -227,7 +262,7 @@ def destroy_stale_web_sessions(db: DBSession) -> int:
 def destroy_stale_gateway_sessions(db: DBSession) -> int:
     """销毁所有超过 SESSION_TIMEOUT_HOURS 的活跃 Gateway session"""
     from datetime import datetime, timedelta, timezone
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=SESSION_TIMEOUT_HOURS)
+    cutoff = datetime.utcnow() - timedelta(hours=SESSION_TIMEOUT_HOURS)
     stale = db.query(GatewaySession).filter(
         GatewaySession.status == "active",
         GatewaySession.last_active_at < cutoff,
