@@ -75,6 +75,7 @@ export function SettingsView() {
   const [editedCP, setEditedCP] = useState<string | undefined>();
   const [editedSP, setEditedSP] = useState<string | undefined>();
   const [promptSaving, setPromptSaving] = useState(false);
+  const [expandedStatus, setExpandedStatus] = useState<string | null>(null);
 
   // ── Load ──
   const loadP = useCallback(async () => {
@@ -196,23 +197,36 @@ export function SettingsView() {
   };
 
   // ── Prompts ──
-  const savePrompts = async () => {
+  const [editingCP, setEditingCP] = useState(false);
+  const [editingSP, setEditingSP] = useState(false);
+  const saveSinglePrompt = async (field: 'channel' | 'scene') => {
     setPromptSaving(true);
     try {
       const sp: Record<string, string> = {};
-      if (editedCP !== undefined) sp.channel = editedCP.trim();
-      if (editedSP !== undefined) sp.scene = editedSP.trim();
-      if (Object.keys(sp).length > 0) setSettings(await updateSettings({ system_prompts: sp }));
-      setEditedCP(undefined); setEditedSP(undefined);
-    } catch (e: any) { showAlert('保存失败: ' + (e.message || '')); }
-    setPromptSaving(false);
+      if (field === 'channel' && editedCP !== undefined) sp.channel = editedCP.trim();
+      if (field === 'scene' && editedSP !== undefined) sp.scene = editedSP.trim();
+      await updateSettings({ system_prompts: sp });
+      setSettings(s => s ? { ...s, system_prompts: { ...s.system_prompts, ...sp } } : s);
+      if (field === 'channel') setEditingCP(false);
+      else setEditingSP(false);
+    } catch (e) { showAlert('保存失败'); }
+    finally { setPromptSaving(false); }
+  };
+  const resetPrompt = async (field: 'channel' | 'scene') => {
+    const defaults: Record<string, string> = {
+      channel: '你是坐山客（Zuoshanke），以广博学识和理性思维为用户提供帮助。用Markdown格式回复，风格：专业、有洞察力，像一位见多识广的科技顾问。',
+      scene: '你是坐山客在某个领域的专业分身，是用户的AI工作伙伴。你可以调用工具获取实时信息（搜索、代码执行、文件操作等），也可以直接回答用户的问题。',
+    };
+    if (field === 'channel') { setEditedCP(defaults.channel); }
+    else { setEditedSP(defaults.scene); }
   };
 
   // ── Render ──
   return (
     <div className="settings-view">
-      {/* Header */}
-      <div className="sv-header">
+      <div className="sv-container">
+        {/* Header */}
+        <div className="sv-header">
         <div className="sv-title">⚙ 系统设置</div>
         <div className="sv-tabs">
           {TABS.map(t => (
@@ -424,21 +438,33 @@ export function SettingsView() {
                 <div className="sv-prompt-card">
                   <div className="sv-prompt-header">
                     <span className="sv-prompt-label">💬 频道人设</span>
+                    {!editingCP && <span className="btn btn-sm btn-ghost" onClick={() => setEditingCP(true)}>✏️ 编辑</span>}
                   </div>
-                  <textarea className="sv-prompt-textarea" value={editedCP ?? settings.system_prompts.channel} onChange={e => setEditedCP(e.target.value)} rows={4} />
+                  <textarea className="sv-prompt-textarea" value={editedCP ?? settings.system_prompts.channel}
+                    onChange={e => setEditedCP(e.target.value)} rows={4} readOnly={!editingCP} />
+                  {editingCP && (
+                    <div className="sv-prompt-actions">
+                      <span className="btn btn-sm btn-ghost" onClick={() => { setEditingCP(false); setEditedCP(undefined); }}>取消</span>
+                      <span className="btn btn-sm btn-ghost" onClick={() => resetPrompt('channel')}>恢复默认</span>
+                      <span className="btn btn-sm btn-primary" onClick={() => saveSinglePrompt('channel')} disabled={promptSaving}>{promptSaving ? '保存中…' : '保存'}</span>
+                    </div>
+                  )}
                 </div>
-                <div className="sv-prompt-card">
+                <div className="sv-prompt-card" style={{ marginTop: 12 }}>
                   <div className="sv-prompt-header">
                     <span className="sv-prompt-label">🔧 场景人设</span>
+                    {!editingSP && <span className="btn btn-sm btn-ghost" onClick={() => setEditingSP(true)}>✏️ 编辑</span>}
                   </div>
-                  <textarea className="sv-prompt-textarea" value={editedSP ?? settings.system_prompts.scene} onChange={e => setEditedSP(e.target.value)} rows={4} />
+                  <textarea className="sv-prompt-textarea" value={editedSP ?? settings.system_prompts.scene}
+                    onChange={e => setEditedSP(e.target.value)} rows={4} readOnly={!editingSP} />
+                  {editingSP && (
+                    <div className="sv-prompt-actions">
+                      <span className="btn btn-sm btn-ghost" onClick={() => { setEditingSP(false); setEditedSP(undefined); }}>取消</span>
+                      <span className="btn btn-sm btn-ghost" onClick={() => resetPrompt('scene')}>恢复默认</span>
+                      <span className="btn btn-sm btn-primary" onClick={() => saveSinglePrompt('scene')} disabled={promptSaving}>{promptSaving ? '保存中…' : '保存'}</span>
+                    </div>
+                  )}
                 </div>
-                {(editedCP !== undefined || editedSP !== undefined) && (
-                  <div className="sv-route-actions" style={{ marginTop: 8 }}>
-                    <button className="btn btn-sm btn-primary" onClick={savePrompts} disabled={promptSaving}>{promptSaving ? '保存中…' : '💾 保存人设'}</button>
-                    <button className="btn btn-sm btn-ghost" onClick={() => { setEditedCP(undefined); setEditedSP(undefined); }}>↩ 撤销</button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -448,79 +474,103 @@ export function SettingsView() {
         {activeTab === 'service' && (
           <div className="sv-tab-panel">
             <div className="sv-status-header-row">
-              <span className="sv-desc">查看后端服务运行状态</span>
-              <span className="btn btn-sm btn-ghost" onClick={loadStatus}>🔄 刷新</span>
+              <span className="sv-desc">系统各服务运行状态概览。</span>
+              <span className="btn btn-sm btn-outline" onClick={loadStatus}>🔄 刷新</span>
             </div>
 
             <div className="sv-status-grid">
-              <div className="sv-status-card">
-                <div className="sv-status-left">
-                  <div className="sv-status-name">llama-server</div>
-                  <div className="sv-status-detail">端口 {serviceStatus?.port || 8083}</div>
-                </div>
-                <div className="sv-status-right">
-                  <span className={`sv-status-badge ${serviceStatus?.llama_server === 'running' ? 'badge-ok' : 'badge-err'}`}>
-                    {serviceStatus?.llama_server === 'running' ? '运行中' : serviceStatus?.llama_server === 'error' ? '异常' : '已停止'}
-                  </span>
-                  <span className="sv-status-action">›</span>
-                </div>
-              </div>
-              <div className="sv-status-card">
-                <div className="sv-status-left">
-                  <div className="sv-status-name">模型</div>
-                  <div className="sv-status-detail">{serviceStatus?.model_name || '-'}</div>
-                </div>
-                <div className="sv-status-right">
-                  <span className={`sv-status-badge ${serviceStatus?.model_name ? 'badge-ok' : 'badge-warn'}`}>
-                    {serviceStatus?.model_name ? '已加载' : '未就绪'}
-                  </span>
-                </div>
-              </div>
-              <div className="sv-status-card">
-                <div className="sv-status-left">
-                  <div className="sv-status-name">上下文</div>
-                  <div className="sv-status-detail">{serviceStatus?.context_size || '-'} ctx</div>
-                </div>
-                <div className="sv-status-right">
-                  <span className="sv-status-badge badge-ok">{serviceStatus?.context_size || '-'}</span>
-                </div>
-              </div>
-              <div className="sv-status-card">
-                <div className="sv-status-left">
-                  <div className="sv-status-name">Flash Attention</div>
-                  <div className="sv-status-detail">{serviceStatus?.flash_attention || 'auto'}</div>
-                </div>
-                <div className="sv-status-right">
-                  <span className="sv-status-badge badge-ok">{serviceStatus?.flash_attention || 'auto'}</span>
-                </div>
-              </div>
-              <div className="sv-status-card">
-                <div className="sv-status-left">
-                  <div className="sv-status-name">插槽</div>
-                  <div className="sv-status-detail">{serviceStatus?.slots || 0} 个{serviceStatus?.processing ? ' · 处理中' : ''}</div>
-                </div>
-                <div className="sv-status-right">
-                  <span className="sv-status-badge badge-ok">{serviceStatus?.slots || 0}</span>
-                </div>
-              </div>
-              {serviceStatus?.vram_used_mb && (
-                <div className="sv-status-card">
-                  <div className="sv-status-left">
-                    <div className="sv-status-name">显存</div>
-                    <div className="sv-status-detail">{Math.round(serviceStatus.vram_used_mb / 1024)} / {Math.round((serviceStatus.vram_total_mb || 12226) / 1024)} GB</div>
+              {/* 💻 本地 Qwen */}
+              <div className="sv-status-card-wrap">
+                <div className="sv-status-card" onClick={() => setExpandedStatus(expandedStatus === 'qwen' ? null : 'qwen')}>
+                  <div className="sv-status-card-left">
+                    <span className="sv-status-card-name">💻 本地 Qwen</span>
+                    <span className="sv-status-card-detail">
+                      {serviceStatus?.llama_server === 'running' ? 'llama-server · 端口 ' + (serviceStatus?.port || 8083) :
+                       serviceStatus?.llama_server === 'error' ? '服务异常' : '已停止'}
+                    </span>
                   </div>
-                  <div className="sv-status-right">
-                    <span className="sv-status-badge badge-ok">{Math.round(serviceStatus.vram_used_mb / serviceStatus.vram_total_mb! * 100)}%</span>
+                  <div className="sv-status-card-right">
+                    <span className={`sv-status-card-badge ${serviceStatus?.llama_server === 'running' ? 'badge-ok' : serviceStatus?.llama_server === 'error' ? 'badge-err' : 'badge-warn'}`}>
+                      ● {serviceStatus?.llama_server === 'running' ? '运行中' : serviceStatus?.llama_server === 'error' ? '异常' : '已停止'}
+                    </span>
+                    <span className="sv-status-card-action">{expandedStatus === 'qwen' ? '收起' : '详情'}</span>
                   </div>
                 </div>
-              )}
-            </div>
+                <div className={`sv-status-detail-panel${expandedStatus === 'qwen' ? ' open' : ''}`}>
+                  <div className="sv-status-detail-grid">
+                    <div className="sv-status-detail-item"><span className="sd-label">服务</span><span className="sd-value">llama-server</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">端口</span><span className="sd-value">{serviceStatus?.port || 8083}</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">模型</span><span className="sd-value">{serviceStatus?.model_name || '-'}</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">上下文</span><span className="sd-value">{serviceStatus?.context_size || '-'} ctx</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">Flash Attention</span><span className="sd-value">{serviceStatus?.flash_attention || 'auto'}</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">插槽</span><span className="sd-value">{serviceStatus?.slots || 0} 个{serviceStatus?.processing ? ' · 处理中' : ''}</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">显存</span><span className="sd-value">{serviceStatus?.vram_used_mb ? Math.round(serviceStatus.vram_used_mb / 1024) + ' / ' + Math.round((serviceStatus.vram_total_mb || 12226) / 1024) + ' GB' : '-'}</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">操作</span><span className="sd-value"><span className="btn btn-sm btn-ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={loadStatus}>🔄 刷新</span></span></div>
+                  </div>
+                </div>
+              </div>
 
-            <div className="sv-status-legend">
-              <div>llama-server 运行正常 · 4 插槽 · 显存 8/12 GB</div>
+              {/* 🤖 DeepSeek API */}
+              <div className="sv-status-card-wrap">
+                <div className={`sv-status-card${expandedStatus === 'deepseek' ? ' active' : ''}`} onClick={() => setExpandedStatus(expandedStatus === 'deepseek' ? null : 'deepseek')}>
+                  <div className="sv-status-card-left">
+                    <span className="sv-status-card-name">🤖 DeepSeek API</span>
+                    <span className="sv-status-card-detail">
+                      {providers.find(p => p.name.includes('DeepSeek'))?.base_url ? '已配置' : '未配置'}
+                    </span>
+                  </div>
+                  <div className="sv-status-card-right">
+                    <span className={`sv-status-card-badge ${providers.find(p => p.name.includes('DeepSeek'))?.api_key ? 'badge-ok' : 'badge-err'}`}>
+                      ● {providers.find(p => p.name.includes('DeepSeek'))?.api_key ? '在线' : '未配置'}
+                    </span>
+                    <span className="sv-status-card-action">{expandedStatus === 'deepseek' ? '收起' : '详情'}</span>
+                  </div>
+                </div>
+                <div className={`sv-status-detail-panel${expandedStatus === 'deepseek' ? ' open' : ''}`}>
+                  {(() => {
+                    const dsp = providers.find(p => p.name.includes('DeepSeek'));
+                    return (
+                      <div className="sv-status-detail-grid">
+                        <div className="sv-status-detail-item"><span className="sd-label">Base URL</span><span className="sd-value">{dsp?.base_url || '-'}</span></div>
+                        <div className="sv-status-detail-item"><span className="sd-label">模型数</span><span className="sd-value">{dsp?.models?.length || 0} 个</span></div>
+                        <div className="sv-status-detail-item"><span className="sd-label">API Key</span><span className="sd-value">{dsp?.api_key ? maskKey(dsp.api_key) : '未配置'}</span></div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* 🗄 数据库 */}
+              <div className="sv-status-card-wrap">
+                <div className={`sv-status-card${expandedStatus === 'db' ? ' active' : ''}`} onClick={() => setExpandedStatus(expandedStatus === 'db' ? null : 'db')}>
+                  <div className="sv-status-card-left">
+                    <span className="sv-status-card-name">🗄 数据库</span>
+                    <span className="sv-status-card-detail">SQLite · 后端运行中</span>
+                  </div>
+                  <div className="sv-status-card-right">
+                    <span className="sv-status-card-badge badge-ok">● 已连接</span>
+                    <span className="sv-status-card-action">{expandedStatus === 'db' ? '收起' : '详情'}</span>
+                  </div>
+                </div>
+                <div className={`sv-status-detail-panel${expandedStatus === 'db' ? ' open' : ''}`}>
+                  <div className="sv-status-detail-grid">
+                    <div className="sv-status-detail-item"><span className="sd-label">类型</span><span className="sd-value">SQLite (WAL)</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">后端状态</span><span className="sd-value" style={{ color: '#3fb950' }}>运行中</span></div>
+                    <div className="sv-status-detail-item"><span className="sd-label">操作</span><span className="sd-value"><span className="btn btn-sm btn-ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={loadStatus}>🔄 刷新</span></span></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
+
+        {/* 🌸 秘密花园入口 */}
+        <div className="sv-garden-entry" onClick={() => setView('secret-garden')}>
+          <span className="sv-garden-icon">🌸</span>
+          <span className="sv-garden-text">秘密花园</span>
+          <span className="sv-garden-desc">专属的私密空间 · 路由在花园内配置</span>
+          <span className="sv-garden-arrow">→</span>
+        </div>
 
       </div>
 
@@ -552,6 +602,7 @@ export function SettingsView() {
           </div>
           <div className="modal-actions"><button className="btn" onClick={() => setModelModal(false)} disabled={modelSaving}>取消</button><button className="btn btn-primary" onClick={saveModel} disabled={modelSaving || !modelForm.name.trim()}>{modelSaving ? '保存中…' : '保存'}</button></div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -65,7 +65,7 @@ export function Topbar({ extraTitle }: TopbarProps) {
       )}
 
       <button className="btn settings-btn" title="系统设置" onClick={() => {
-        useStore.getState().openSettingsDrawer();
+        useStore.getState().setView('settings');
       }}>
         ⚙
       </button>

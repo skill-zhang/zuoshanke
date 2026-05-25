@@ -1070,6 +1070,41 @@
       "returns": "更新结果（状态 + 操作类型 + 节点数）",
       "category": "data",
       "verified": true
+    },
+    {
+      "name": "extract_text_from_image",
+      "description": "从图片中识别文字（OCR），支持中文和英文。需要系统安装 tesseract-ocr，文件需是 png/jpg/jpeg 格式。返回值含 text 和 success 标记。",
+      "file": "tools/extract_document.py",
+      "function": "extract_text_from_image",
+      "parameters": {
+        "file_path": {
+          "type": "string",
+          "description": "图片文件路径（支持 ~ 展开，png/jpg/jpeg）"
+        }
+      },
+      "returns": "OCR 结果（{success, text} 或 {success, error}）",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "rebuild_fts_index",
+      "description": "重建会话搜索的 FTS5 全文索引。当搜索返回结果不准确或索引可能损坏时调用。会删除旧索引后重建。",
+      "file": "tools/session_search.py",
+      "function": "rebuild_fts_index",
+      "parameters": {},
+      "returns": "重建是否成功（True/False）",
+      "category": "tools",
+      "verified": true
+    },
+    {
+      "name": "get_index_status",
+      "description": "查看 FTS5 全文搜索索引状态——已索引消息数、总消息数、最后索引的消息 ID。",
+      "file": "tools/session_search.py",
+      "function": "get_index_status",
+      "parameters": {},
+      "returns": "索引状态（indexed_count, total_messages, last_indexed_id）",
+      "category": "tools",
+      "verified": true
     }
   ]
 }

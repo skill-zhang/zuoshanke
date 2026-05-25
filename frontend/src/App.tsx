@@ -7,7 +7,7 @@ import { PlazaView } from './components/PlazaView';
 import { WorkshopView } from './components/WorkshopView';
 import { ToolsView } from './components/ToolsView';
 import { SettingsView } from './components/SettingsView';
-import { SettingsDrawer } from './components/SettingsDrawer';
+
 import { MemoryView } from './components/MemoryView';
 import { SkillsView } from './components/SkillsView';
 import { CapabilityVerify } from './components/CapabilityVerify';
@@ -310,7 +310,6 @@ export default function App() {
         <span>|</span> API: http://localhost:8000
       </div>
 
-      <SettingsDrawer />
       <Dialog />
       <ClarifyDialog />
       <CommandApprovalDialog />

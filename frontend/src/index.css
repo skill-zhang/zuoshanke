@@ -3245,7 +3245,12 @@ body {
 
 /* ═══ SettingsView 全屏设置页（对齐原型 v2） ═══ */
 .settings-view {
-  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  flex: 1; display: flex; flex-direction: column; overflow-y: auto;
+  align-items: center;
+}
+.sv-container {
+  width: 80%; max-width: 1100px; flex: 1; display: flex;
+  flex-direction: column;
 }
 .sv-header {
   padding: 20px 24px 0; display: flex; flex-direction: column; gap: 16px;
@@ -3262,12 +3267,8 @@ body {
 .sv-tab:hover { color: #c9d1d9; }
 .sv-tab.active { color: #e6edf3; font-weight: 500; border-bottom-color: #f0883e; }
 .sv-body {
-  flex: 1; overflow-y: auto; padding: 20px 24px;
+  padding: 20px 24px;
 }
-.sv-body::-webkit-scrollbar { width: 8px; }
-.sv-body::-webkit-scrollbar-track { background: transparent; }
-.sv-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
-.sv-body::-webkit-scrollbar-thumb:hover { background: #484f58; }
 
 /* 共用 */
 .sv-tab-panel { display: flex; flex-direction: column; gap: 16px; }
@@ -3465,41 +3466,73 @@ body {
   resize: vertical; font-family: inherit; outline: none; min-height: 60px;
 }
 .sv-prompt-textarea:focus { border-color: #58a6ff; }
+.sv-prompt-textarea[readonly] { cursor: default; }
+.sv-prompt-textarea[readonly]:focus { border-color: #30363d; }
+.sv-prompt-actions {
+  display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;
+}
 
-/* 💻 服务状态 */
+/* 💻 服务状态（卡片版，对齐原型 v2） */
 .sv-status-header-row {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
 }
 .sv-status-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 }
+.sv-status-card-wrap { display: contents; }
 .sv-status-card {
   background: #161b22; border: 1px solid #30363d; border-radius: 8px;
   padding: 16px; display: flex; justify-content: space-between; align-items: flex-start;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s; cursor: pointer;
 }
 .sv-status-card:hover { border-color: #484f58; }
-.sv-status-left { display: flex; flex-direction: column; gap: 4px; }
-.sv-status-name {
+.sv-status-card.active { border-color: #58a6ff; }
+.sv-status-card-left { display: flex; flex-direction: column; gap: 4px; }
+.sv-status-card-name {
   font-size: 14px; font-weight: 500; color: #e6edf3;
   display: flex; align-items: center; gap: 8px;
 }
-.sv-status-detail { font-size: 11px; color: #8b949e; }
-.sv-status-right {
+.sv-status-card-detail { font-size: 11px; color: #8b949e; }
+.sv-status-card-right {
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
-.sv-status-badge {
+.sv-status-card-badge {
   padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
 }
 .badge-ok { background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.2); }
 .badge-err { background: rgba(248,81,73,0.12); color: #f85149; border: 1px solid rgba(248,81,73,0.2); }
 .badge-warn { background: rgba(210,153,34,0.12); color: #d29922; border: 1px solid rgba(210,153,34,0.2); }
-.sv-status-action { font-size: 11px; color: #8b949e; cursor: pointer; }
-.sv-status-action:hover { color: #58a6ff; }
-.sv-status-legend {
-  padding: 10px 14px; background: #161b22; border-radius: 6px; border: 1px solid #21262d;
-  font-size: 11px; color: #8b949e; line-height: 1.6;
+.sv-status-card-action { font-size: 11px; color: #8b949e; cursor: pointer; }
+.sv-status-card-action:hover { color: #58a6ff; }
+
+/* 展开详情面板 */
+.sv-status-detail-panel { display: none; }
+.sv-status-detail-panel.open {
+  display: block; padding: 12px 16px;
+  background: #0d1117; border: 1px solid #30363d; border-top: 0;
+  border-radius: 0 0 8px 8px; margin-top: -1px;
 }
+.sv-status-detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px;
+}
+.sv-status-detail-item {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sd-label { font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: 0.5px; }
+.sd-value { font-size: 12px; color: #c9d1d9; }
+
+/* 🌸 秘密花园入口 */
+.sv-garden-entry {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 12px 16px; border: 1px solid rgba(107,158,255,0.12);
+  border-radius: 8px; background: rgba(107,158,255,0.03);
+  transition: all 0.2s; margin-top: 16px;
+}
+.sv-garden-entry:hover { background: rgba(107,158,255,0.08); border-color: rgba(107,158,255,0.3); }
+.sv-garden-icon { font-size: 18px; }
+.sv-garden-text { font-size: 13px; color: #c9d1d9; font-weight: 500; }
+.sv-garden-desc { font-size: 11px; color: #8b949e; }
+.sv-garden-arrow { margin-left: auto; font-size: 13px; color: #58a6ff; }
 
 /* Toggle 开关（model modal 用） */
 .sv-toggle {
