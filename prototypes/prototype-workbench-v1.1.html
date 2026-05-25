@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 工作台</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --card-bg: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --text-faint: #484f58;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --gold: #d29922;
+    --purple: #a371f7;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ═══ Main ═══ */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 3px 32px 110px;
+    display: flex; flex-direction: column;
+  }
+  .main::-webkit-scrollbar { width: 8px; }
+  .main::-webkit-scrollbar-track { background: transparent; }
+  .main::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+
+  /* ═══ Greeting ═══ */
+  .greeting {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .greeting-left h1 {
+    font-size: 28px; font-weight: 600; color: var(--text);
+    margin-bottom: 4px;
+  }
+  .greeting-left .sub {
+    font-size: 13px; color: var(--text-dim);
+  }
+  .greeting-right {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .greeting-right .time {
+    font-size: 14px; color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    margin-right: 8px;
+  }
+
+  /* ═══ Card Grid ═══ */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  /* ═══ Card ═══ */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #454d59; }
+
+  .card-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 500;
+  }
+  .card-header .icon { font-size: 15px; }
+  .card-header .actions { margin-left: auto; display: flex; gap: 6px; }
+  .card-header .actions button {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 13px; padding: 2px 6px; border-radius: 4px;
+  }
+  .card-header .actions button:hover { color: var(--text); background: #21262d; }
+
+  .card-body { padding: 16px; }
+
+  /* ═══ Weather Card ═══ */
+  .weather-main {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .weather-icon { font-size: 48px; line-height: 1; }
+  .weather-info .temp { font-size: 36px; font-weight: 300; line-height: 1.1; }
+  .weather-info .desc { font-size: 13px; color: var(--text-dim); }
+  .weather-info .location { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+  .weather-details {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .weather-details .detail {
+    display: flex; justify-content: space-between;
+    font-size: 12px;
+  }
+  .weather-details .detail .label { color: var(--text-dim); }
+  .weather-details .detail .val { color: var(--text); font-weight: 500; }
+
+  /* ═══ Todo Card ═══ */
+  .todo-list { display: flex; flex-direction: column; gap: 8px; }
+  .todo-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; background: #0d1117;
+    border-radius: var(--radius-sm); font-size: 13px;
+  }
+  .todo-item .check {
+    width: 16px; height: 16px; border-radius: 4px;
+    border: 2px solid var(--border); flex-shrink: 0; cursor: pointer;
+  }
+  .todo-item.done .check { background: var(--green); border-color: var(--green); }
+  .todo-item.done .check::after {
+    content: '✓'; color: #fff; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .todo-item.done .text { color: var(--text-faint); text-decoration: line-through; }
+  .todo-item .text { flex: 1; color: var(--text); }
+  .todo-item .priority {
+    font-size: 11px; padding: 1px 6px; border-radius: 3px; font-weight: 500;
+  }
+  .priority.high { color: var(--red); background: rgba(248,81,73,0.1); }
+  .priority.medium { color: var(--gold); background: rgba(210,153,34,0.1); }
+  .priority.low { color: var(--green); background: rgba(63,185,80,0.1); }
+
+  .todo-stats {
+    display: flex; gap: 12px; margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim);
+  }
+  .todo-stats span strong { color: var(--text); }
+
+  /* ═══ Fenshen Card ═══ */
+  .fenshen-list { display: flex; flex-direction: column; gap: 10px; }
+  .fenshen-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px; background: #0d1117; border-radius: var(--radius-sm);
+  }
+  .fenshen-item .avatar {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--purple), var(--blue));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+  .fenshen-item .info { flex: 1; min-width: 0; }
+  .fenshen-item .name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .fenshen-item .task { font-size: 12px; color: var(--text-dim); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fenshen-item .meta {
+    display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-faint);
+  }
+  .fenshen-item .status-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 3px;
+  }
+  .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.idle { background: var(--gold); }
+
+  /* ═══ Placeholder Card ═══ */
+  .card-placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 40px 20px; text-align: center; gap: 8px;
+  }
+  .card-placeholder .icon { font-size: 32px; opacity: 0.4; }
+  .card-placeholder .title { font-size: 14px; color: var(--text-dim); }
+  .card-placeholder .hint { font-size: 12px; color: var(--text-faint); }
+
+  /* ═══ Quick Buttons ═══ */
+  .quick-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .quick-btn:hover { border-color: #c8a84e; }
+  .quick-btn .icon { font-size: 15px; }
+  .quick-btn.primary {
+    background: linear-gradient(135deg, #e6c84a 0%, #c8a84e 50%, #a08030 100%);
+    color: #0d1117;
+    border-color: #c8a84e;
+    font-weight: 600;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .quick-btn.primary:hover { opacity: 0.9; border-color: #ffd700; }
+
+  /* ═══ Floating Chat Bar ═══ */
+  .float-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--card-bg);
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; gap: 10px;
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .float-bar.collapsed { transform: translateY(calc(100% - 6px)); }
+  .float-bar-toggle {
+    position: absolute;
+    top: -28px; left: 50%; transform: translateX(-50%);
+    width: 48px; height: 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border); border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-faint); font-size: 11px;
+    transition: color 0.2s;
+  }
+  .float-bar-toggle:hover { color: var(--text); }
+  .float-bar-input {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    min-height: 48px;
+    line-height: 1.6;
+  }
+  .float-bar-input:focus { border-color: #c8a84e; }
+  .float-bar-input::placeholder { color: var(--text-faint); }
+  .float-bar-send {
+    background: linear-gradient(135deg, #e6c84a 0%, #c8a84e 50%, #a08030 100%);
+    color: #0d1117;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .float-bar-send:hover { opacity: 0.9; }
+  .float-bar-hint {
+    font-size: 12px; color: var(--text-faint); white-space: nowrap;
+  }
+
+  /* ═══ Responsive ═══ */
+  @media (max-width: 760px) {
+    .card-grid { grid-template-columns: 1fr; }
+    .main { padding: 3px 16px 110px; }
+  }
+
+  .dim { color: var(--text-dim); }
+  .faint { color: var(--text-faint); }
+
+  /* ═══ Avatar ═══ */
+  .avatar-area {
+    position: fixed;
+    top: 0; left: 0; width: 100%;
+    z-index: 100;
+    display: flex; justify-content: center;
+    pointer-events: none;
+  }
+  .avatar-container {
+    position: relative;
+    width: 70px; height: 66px;
+    pointer-events: auto; cursor: pointer;
+  }
+  .avatar-canvas {
+    width: 56px; height: 56px;
+    position: absolute;
+    top: -3px; left: 50%; transform: translateX(-50%);
+    filter: drop-shadow(0 2px 16px rgba(0,212,255,0.12));
+    transition: filter 0.3s;
+  }
+  .avatar-canvas:hover { filter: drop-shadow(0 2px 28px rgba(0,212,255,0.25)); }
+  .avatar-canvas svg { width: 100%; height: 100%; }
+  .avatar-bubble {
+    position: absolute;
+    top: 10px; left: calc(100% + 8px);
+    background: #1a2332;
+    border: 1px solid rgba(0,212,255,0.33);
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: #c9d1d9;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-4px) scale(0.92);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .avatar-container:hover .avatar-bubble { opacity: 1; transform: translateX(0) scale(1); }
+  .avatar-bubble::before {
+    content: '';
+    position: absolute;
+    left: -5px; top: 8px;
+    border: 5px solid transparent;
+    border-right-color: #1a2332;
+  }
+  .avatar-dot {
+    display: inline-block;
+    width: 5px; height: 5px; border-radius: 50%;
+    margin-right: 4px;
+    background: var(--green);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.3); }
+  }
+  .avatar-label {
+    position: absolute;
+    top: 52px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; color: #484f58;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    white-space: nowrap;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  .avatar-container:hover .avatar-label { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══ Avatar ═══ -->
+<div class="avatar-area">
+  <div class="avatar-container">
+    <div class="avatar-canvas">
+      <svg viewBox="10 0 52 50" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.09"/>
+          <stop offset="60%" stop-color="#00d4ff" stop-opacity="0.025"/>
+          <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="skinTone" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#2a2a3e"/>
+          <stop offset="50%" stop-color="#1e1e32"/>
+          <stop offset="100%" stop-color="#1a1a2e"/>
+        </linearGradient>
+        <linearGradient id="hairGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#1a1a2e"/>
+          <stop offset="50%" stop-color="#16213e"/>
+          <stop offset="100%" stop-color="#0f3460"/>
+        </linearGradient>
+        <linearGradient id="hairStreak" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#00d4ff"/>
+          <stop offset="100%" stop-color="#7b2ff7"/>
+        </linearGradient>
+        <linearGradient id="visorGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.3"/>
+          <stop offset="50%" stop-color="#00d4ff" stop-opacity="0.06"/>
+          <stop offset="100%" stop-color="#00d4ff" stop-opacity="0.18"/>
+        </linearGradient>
+        <filter id="neonGlow"><feGaussianBlur stdDeviation="0.8"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="softGlow"><feGaussianBlur stdDeviation="0.5"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <circle cx="36" cy="28" r="28" fill="url(#bgGlow)"/>
+      <path d="M14 42 L10 44 L12 50 L16 54 L56 54 L60 50 L62 44 L58 42" fill="#1a2332" stroke="#1e2a3a" stroke-width="0.8"/>
+      <path d="M26 34 Q22 32 24 28 L48 28 Q50 32 46 34 Z" fill="#1a2332" stroke="#1e2a3a" stroke-width="0.6"/>
+      <polygon points="34,40 36,38 38,40 36,42" fill="none" stroke="#00d4ff" stroke-width="0.6" opacity="0.45" filter="url(#softGlow)"/>
+      <line x1="36" y1="38" x2="36" y2="54" stroke="#1e2a3a" stroke-width="1"/>
+      <ellipse cx="36" cy="20" rx="10" ry="10.5" fill="url(#skinTone)" stroke="#2d3748" stroke-width="0.6"/>
+      <path d="M25 16 Q25 6 30 4 Q33 2 36 3 Q39 2 42 4 Q47 6 47 16 Q43 10 36 9 Q29 10 25 16 Z" fill="url(#hairGrad)"/>
+      <path d="M26 14 Q24 10 27 8 Q29 7 31 8 Q29 10 28 13 Z" fill="url(#hairGrad)"/>
+      <path d="M31 4 Q31 2 32 1 L33 4 Z" fill="url(#hairGrad)"/>
+      <path d="M36 3 Q36 1 37 0 L38 3 Z" fill="url(#hairGrad)"/>
+      <path d="M29 13 Q30 9 33 8" fill="none" stroke="url(#hairStreak)" stroke-width="1.5" stroke-linecap="round" filter="url(#softGlow)"/>
+      <path d="M37 10 Q39 7 42 7" fill="none" stroke="url(#hairStreak)" stroke-width="0.8" stroke-linecap="round" opacity="0.5" filter="url(#softGlow)"/>
+      <path d="M24 16 Q28 14 36 14 Q44 14 48 16 L48 20 Q44 22 36 22 Q28 22 24 20 Z" fill="url(#visorGrad)" stroke="#00d4ff" stroke-width="0.7" opacity="0.7"/>
+      <circle cx="36" cy="18" r="1.3" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
+      <path d="M31 17 Q33 16 35 17" fill="none" stroke="#00d4ff" stroke-width="1" stroke-linecap="round"/>
+      <path d="M37 17 Q39 16 41 17" fill="none" stroke="#00d4ff" stroke-width="1" stroke-linecap="round"/>
+      <path d="M33 24 Q36 25.5 39 24" fill="none" stroke="#3d4a5c" stroke-width="0.7" stroke-linecap="round"/>
+    </svg>
+    </div>
+    <div class="avatar-bubble">
+      <span class="avatar-dot"></span>在线待命
+    </div>
+    <div class="avatar-label">idle</div>
+  </div>
+</div>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+
+  <!-- Greeting -->
+  <div class="greeting">
+    <div class="greeting-left">
+      <h1 id="greeting-text">下午好 ☀️</h1>
+      <div class="sub">2026年5月25日 星期一 · 北京 晴 26°C</div>
+    </div>
+    <div class="greeting-right">
+      <span class="time" id="clock">--</span>
+      <button class="quick-btn"><span class="icon">➕</span> 新建场景</button>
+      <button class="quick-btn primary">进入坐山客空间 →</button>
+    </div>
+  </div>
+
+  <!-- Card Grid -->
+  <div class="card-grid">
+
+    <!-- 🌤️ 天气 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">🌤️</span> 今日天气
+        <div class="actions">
+          <button title="切换城市">📍 北京</button>
+          <button title="刷新">🔄</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="weather-main">
+          <div class="weather-icon">☀️</div>
+          <div class="weather-info">
+            <div class="temp">26°<span class="faint" style="font-size:18px;">C</span></div>
+            <div class="desc">晴朗 · 体感 24°</div>
+            <div class="location">📍 北京 · 朝阳区</div>
+          </div>
+        </div>
+        <div class="weather-details">
+          <div class="detail"><span class="label">💧 湿度</span><span class="val">45%</span></div>
+          <div class="detail"><span class="label">🌬 风力</span><span class="val">西北 3级</span></div>
+          <div class="detail"><span class="label">🌅 日出</span><span class="val">05:12</span></div>
+          <div class="detail"><span class="label">🌇 日落</span><span class="val">19:28</span></div>
+          <div class="detail"><span class="label">🌡 最高</span><span class="val">31°</span></div>
+          <div class="detail"><span class="label">🌡 最低</span><span class="val">18°</span></div>
+          <div class="detail"><span class="label">👁 能见度</span><span class="val">12km</span></div>
+          <div class="detail"><span class="label">☂ 降水</span><span class="val">5%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ✅ 待办 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">✅</span> 今日待办
+        <div class="actions">
+          <button title="添加">＋</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="todo-list">
+          <div class="todo-item">
+            <div class="check"></div>
+            <span class="text">完成 Dashboard 原型设计</span>
+            <span class="priority high">高</span>
+          </div>
+          <div class="todo-item done">
+            <div class="check"></div>
+            <span class="text">修复 SettingsView 分隔线样式</span>
+            <span class="priority medium">中</span>
+          </div>
+          <div class="todo-item">
+            <div class="check"></div>
+            <span class="text">检查 zuoshanke DB 备份状态</span>
+            <span class="priority medium">中</span>
+          </div>
+          <div class="todo-item">
+            <div class="check"></div>
+            <span class="text">整理本周 git commit 记录</span>
+            <span class="priority low">低</span>
+          </div>
+        </div>
+        <div class="todo-stats">
+          <span>共 <strong>4</strong> 项</span>
+          <span>进行中 <strong>3</strong></span>
+          <span>已完成 <strong>1</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🧠 分身进展 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">🧠</span> 分身任务进展
+        <div class="actions">
+          <button title="刷新">🔄</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="fenshen-list">
+          <div class="fenshen-item">
+            <div class="status-dot active"></div>
+            <div class="avatar">🛠</div>
+            <div class="info">
+              <div class="name">坐山客自开发</div>
+              <div class="task">重构 Agent Loop 工具调用链路 — 第 3/5 步</div>
+              <div class="meta">
+                <span>🔄 循环 12</span><span>📊 8 工具调用</span><span>⏱ 3分钟前</span>
+              </div>
+            </div>
+          </div>
+          <div class="fenshen-item">
+            <div class="status-dot active"></div>
+            <div class="avatar">📝</div>
+            <div class="info">
+              <div class="name">文档撰写助手</div>
+              <div class="task">生成 API 接口文档 — 执行中…</div>
+              <div class="meta">
+                <span>🔄 循环 5</span><span>📊 3 工具调用</span><span>⏱ 1分钟前</span>
+              </div>
+            </div>
+          </div>
+          <div class="fenshen-item">
+            <div class="status-dot idle"></div>
+            <div class="avatar">🐛</div>
+            <div class="info">
+              <div class="name">Bug 猎手</div>
+              <div class="task">扫描前端 JS 异常 — 等待触发</div>
+              <div class="meta">
+                <span>💤 空闲中</span><span>⏱ 15分钟前</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 📈 股票 — 占位 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">📈</span> 我的关注
+        <div class="actions">
+          <button title="配置">⚙</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-placeholder">
+          <div class="icon">📈</div>
+          <div class="title">股票行情</div>
+          <div class="hint">配置你关注的股票代码<br>实时查看行情数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 📰 资讯 — 占位 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">📰</span> 今日资讯
+        <div class="actions">
+          <button title="配置">⚙</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-placeholder">
+          <div class="icon">📰</div>
+          <div class="title">资讯聚合</div>
+          <div class="hint">订阅你关注的 RSS 源<br>AI 自动摘要关键信息</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🎯 快捷场景 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">🎯</span> 常用场景
+        <div class="actions">
+          <button title="管理">⚙</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="fenshen-list">
+          <div class="fenshen-item" style="cursor:pointer;">
+            <div class="avatar">💻</div>
+            <div class="info">
+              <div class="name">坐山客自开发</div>
+              <div class="task" style="color:var(--text-dim);">主开发场景 · 上次活跃 3分钟前</div>
+            </div>
+          </div>
+          <div class="fenshen-item" style="cursor:pointer;">
+            <div class="avatar">🌐</div>
+            <div class="info">
+              <div class="name">Web 前端助手</div>
+              <div class="task" style="color:var(--text-dim);">前端开发 · 上次活跃 1小时前</div>
+            </div>
+          </div>
+          <div class="fenshen-item" style="cursor:pointer;">
+            <div class="avatar">📊</div>
+            <div class="info">
+              <div class="name">数据分析</div>
+              <div class="task" style="color:var(--text-dim);">数据处理 · 上次活跃 昨天</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ Floating Chat Bar ═══ -->
+<div class="float-bar" id="floatBar">
+  <div class="float-bar-toggle" id="floatBarToggle" title="收起/展开">▲</div>
+  <input class="float-bar-input" type="text" placeholder="💬 跟坐山客说你想看什么...（例如：加一个 Github Trending 卡片）" id="floatInput" />
+  <button class="float-bar-send" id="floatSend">发送</button>
+  <span class="float-bar-hint">⌘K 唤起</span>
+</div>
+
+<script>
+// Live clock
+function updateClock() {
+  const now = new Date();
+  const el = document.getElementById('clock');
+  if (el) el.textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// Dynamic greeting
+function updateGreeting() {
+  const h = new Date().getHours();
+  const g = document.getElementById('greeting-text');
+  let emoji, text;
+  if (h < 6)       { emoji = '🌙'; text = '夜深了'; }
+  else if (h < 9)  { emoji = '🌅'; text = '早上好'; }
+  else if (h < 12) { emoji = '☀️'; text = '上午好'; }
+  else if (h < 14) { emoji = '☀️'; text = '中午好'; }
+  else if (h < 18) { emoji = '🌤️'; text = '下午好'; }
+  else             { emoji = '🌆'; text = '晚上好'; }
+  if (g) g.textContent = text + ' ' + emoji;
+}
+updateGreeting();
+
+// Float bar toggle
+const floatBar = document.getElementById('floatBar');
+const floatToggle = document.getElementById('floatBarToggle');
+let barExpanded = true;
+floatToggle.addEventListener('click', () => {
+  barExpanded = !barExpanded;
+  floatBar.classList.toggle('collapsed', !barExpanded);
+  floatToggle.textContent = barExpanded ? '▲' : '▼';
+});
+
+// Send placeholder animation
+const floatSend = document.getElementById('floatSend');
+const floatInput = document.getElementById('floatInput');
+floatSend.addEventListener('click', () => {
+  if (!floatInput.value.trim()) return;
+  const original = floatInput.placeholder;
+  floatInput.placeholder = '✅ 已收到！坐山客正在为你策展工作台...';
+  floatInput.value = '';
+  floatInput.disabled = true;
+  floatSend.disabled = true;
+  setTimeout(() => {
+    floatInput.placeholder = original;
+    floatInput.disabled = false;
+    floatSend.disabled = false;
+  }, 2000);
+});
+floatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') floatSend.click();
+});
+
+// ⌘K / Ctrl+K to focus float bar
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    if (!barExpanded) floatToggle.click();
+    floatInput.focus();
+  }
+});
+</script>
+
+</body>
+</html>
