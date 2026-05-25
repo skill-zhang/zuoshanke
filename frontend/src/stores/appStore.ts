@@ -517,6 +517,22 @@ export const useStore = create<AppState>((set, get) => ({
               message: event.message,
             }],
           }));
+        // 🆕 Thought Stream: 思考流事件
+        } else if (event.type === 'thought') {
+          const thoughtId = 'thought-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+          set(state => ({
+            messages: [...state.messages, {
+              id: thoughtId,
+              scene_id: sceneId,
+              channel_id: null,
+              session_id: null,
+              role: 'thought' as any,
+              content: event.content,
+              map_ref: null,
+              model: null,
+              created_at: new Date().toISOString(),
+            }],
+          }));
         } else if (event.type === 'model_info') {
           set({ currentModelName: event.model, contextUsage: null, capacityWarning: null });
         } else if (event.type === 'context_info') {
@@ -562,6 +578,15 @@ export const useStore = create<AppState>((set, get) => ({
                 : m
             ),
           }));
+          // 🆕 Schema v1.1: Token 用量核算
+          if (event.usage && currentSessionId) {
+            try {
+              const { accumulateTokens } = await import('../api/client');
+              await accumulateTokens(currentSessionId, event.usage);
+            } catch (e) {
+              console.warn('[store] accumulateTokens failed:', e);
+            }
+          }
           // 流式完成后刷新 Thinking Map
           get().loadThinkingMap(sceneId);
         } else if (event.type === 'child:started') {

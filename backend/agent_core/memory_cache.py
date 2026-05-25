@@ -243,15 +243,31 @@ class MemoryCache:
                             query: str = "",
                             scope: str = "zhu",
                             context_id: Optional[str] = None) -> list[dict]:
-        """返回该 scope 全部记忆（已按 weight 降序）。
+        """返回该 scope 的记忆，按 query 相关性 + weight 综合排序。
 
-        query 保留仅用于未来 embedding 扩展，目前不做语义匹配。
+        无 query 时按 weight 降序返回全部。
+        有 query 时计算关键词重叠分（与 weight 加权），截取前 10 条。
         """
         key = self._make_key(scope, context_id)
         bucket = self._by_scope.get(key)
         if not bucket:
             return []
-        return [cm.to_dict() for cm in bucket.memories]
+
+        if query and bucket.memories:
+            # 🆕 Schema v1.0: 语义匹配 — 关键词重叠 + weight 加权排序
+            query_words = set(query.lower().split())
+            def relevance_score(mem: CachedMemory) -> float:
+                content = (mem.key + " " + mem.content).lower()
+                mem_words = set(content.split())
+                overlap = len(query_words & mem_words)
+                # 重叠分 0-1（归一化），组合到 weight 上
+                overlap_ratio = overlap / max(len(query_words), 1)
+                return mem.cached_weight * (1.0 + overlap_ratio * 2.0)
+
+            scored = sorted(bucket.memories, key=relevance_score, reverse=True)
+            return [m.to_dict() for m in scored[:10]]
+
+        return [m.to_dict() for m in bucket.memories]
 
     # ── 写穿透回调 ────────────────────────────────────
 

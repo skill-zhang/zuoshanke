@@ -81,13 +81,14 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"FTS5 索引预热跳过: {e}")
 
-    # 空闲场景记忆提取调度（后台线程）— 已关闭，每5分钟无差别提取太激进
-    # 需要时取消注释即可恢复
-    # try:
-    #     from agent_core.idle_extractor import start_idle_extraction_scheduler
-    #     start_idle_extraction_scheduler()
-    # except Exception as e:
-    #     log.warning(f"空闲提取调度启动失败: {e}")
+    # 🆕 Schema v1.1: 记忆提取兜底调度（session 状态驱动，每60s扫描destroyed session）
+    # 主链路: visibilitychange → destroy_stale_*_sessions() 内联提取
+    # 兜底: 本调度器扫描 destroyed session 的未提取消息 → 补提
+    try:
+        from agent_core.idle_extractor import start_idle_extraction_scheduler
+        start_idle_extraction_scheduler()
+    except Exception as e:
+        log.warning(f"记忆提取兜底调度启动失败: {e}")
 
     # 🆕 Schema v0.81: 数据库迁移
     try:

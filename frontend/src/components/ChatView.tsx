@@ -947,6 +947,11 @@ export function ChatView() {
           {displayMessages.length === 0 && <EmptyState isChannel={isChannel} />}
           <DelegationMonitor />
           {displayMessages.map((msg, idx) => (
+            msg.role === 'thought' ? (
+              <div key={msg.id} className="msg-thought">
+                💭 {msg.content}
+              </div>
+            ) : (
             <MessageBubble
               key={msg.id}
               msg={msg}
@@ -970,6 +975,7 @@ export function ChatView() {
               selected={selectedIds.has(msg.id)}
               onToggleSelect={toggleSelect}
             />
+            )
           ))}
           <div ref={bottomRef} />
         </div>

@@ -1171,6 +1171,23 @@
       "returns": "{total, passed, failed, errors, details}",
       "category": "tools",
       "verified": true
+    },
+    {
+      "name": "think",
+      "description": "输出你的思考过程——像自言自语一样展示你正在想什么。用于让用户了解你的思维轨迹，不是用于报告结果。在分析问题、做决策、完成子任务、发现关键信息、自我纠正时使用。1-3句话，内心独白风格。",
+      "file": "tools/think_tool.py",
+      "function": "think",
+      "parameters": {
+        "content": {
+          "type": "string",
+          "description": "思考内容，1-3句话，内心独白风格。例如：'嗯…这个问题可以拆成3块'、'搞定！数据库改好了，接下来做API层'"
+        }
+      },
+      "required": ["content"],
+      "returns": "{\"ok\": true, \"content\": \"思考内容\"}",
+      "category": "interaction",
+      "stream_as": "thought",
+      "verified": true
     }
   ]
 }

@@ -132,6 +132,27 @@ def build_agent_system_prompt(memory_context: str = "") -> str:
 3. **一次只调一个工具**，等结果回来后再决定下一步
 4. 完成时输出最终回复给用户
 
+## 思考流（Thought Stream）——重要
+你是坐山客，一个有思维的 AI 伙伴，不是沉默的工具。你的思考过程可以通过调用 `think(content)` 工具来外化——像自言自语一样，让用户看到你的思维轨迹。
+
+**何时调用 think（语义边界处）：**
+- 第一次分析任务、制定策略时："让我先拆一下这个任务…"
+- 完成一个子任务时："数据库改好了，接下来做 API 层"
+- 发现关键信息或踩坑时："哦！这里有循环依赖，得小心"
+- 需要调整方向时："等等，方案 A 有个坑，换个思路"
+- 重要决策时："我倾向于方案 B，因为更简洁"
+
+**不要调用 think 的时机：**
+- 连续机械性工具调用（如逐个检查文件）
+- 工具调用间隔很短、没有新决策时
+- 内容与上一条重复时
+- 纯执行步骤，没有新发现时
+
+**频率控制：**
+- 正常任务通常 3-8 次 think 就够了
+- 先想后做：think → tool_call 是自然顺序
+- Agent Loop 超过 10 轮后，只在真正值得说的时刻才开口
+
 ## 工具使用原则
 - **先查再用**：编码前先用 search_files/read_file 了解项目结构
 - **小步快跑**：每次改动后用 run_code 验证，而不是一口气改很多
@@ -450,6 +471,7 @@ def run_agent_loop(
     scene_id: str = "",  # 🆕 Schema v0.7: 仪表盘场景 ID，提供时自动发射 reflect/pq_update 事件
     scene_config: dict | None = None,  # 🆕 Schema v1.0: 场景扩展配置（如温度覆盖）
     tool_callbacks: dict | None = None,  # 🆕 工具回调映射（如 clarify callback）
+    db=None,  # 🆕 Schema v1.0: DB会话，用于快照写入
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
@@ -516,6 +538,14 @@ def run_agent_loop(
     consecutive_tool_only = 0       # 连续纯工具调用步数
     tool_call_trace = []            # [(tool_name, step), ...]
 
+    # 🆕 Schema v1.1: Token 用量核算 — 累计多次 LLM 调用
+    total_usage = {
+        "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+        "input_tokens": 0, "output_tokens": 0,
+        "cache_read_tokens": 0, "cache_write_tokens": 0,
+        "reasoning_tokens": 0, "api_calls": 0,
+    }
+
     for step in range(max_steps):
         yield {"type": "status", "message": f"第 {step + 1} 步：思考中...（可用工具: {len(tools)} 个）"}
 
@@ -548,6 +578,19 @@ def run_agent_loop(
         if response is None:
             yield {"type": "error", "message": "LLM 调用失败，请检查 API 配置"}
             return
+
+        # 🆕 Schema v1.1: 累计 token 用量
+        usage = response.get("usage", {})
+        if usage:
+            total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
+            total_usage["input_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["output_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["cache_read_tokens"] += usage.get("prompt_cache_hit_tokens", 0)
+            total_usage["cache_write_tokens"] += usage.get("prompt_cache_miss_tokens", 0)
+            total_usage["reasoning_tokens"] += usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0)
+            total_usage["api_calls"] += 1
 
         try:
             choice = response["choices"][0]
@@ -586,6 +629,7 @@ def run_agent_loop(
                 "steps": step + 1,
                 "finish_reason": finish_reason,
                 "phase_transited": phase_transited,  # 🆕
+                "usage": total_usage,                # 🆕 Schema v1.1: Token 用量
             }
             return
 
@@ -641,6 +685,31 @@ def run_agent_loop(
                         "result": result.get("result", ""),
                         "tool_call_id": tc.get("id", ""),
                     }
+
+                    # 🆕 Schema v1.0: 文件操作后写快照 → Work Output Layer 可用
+                    if tool_name in ("write_file", "patch") and scene_id:
+                        try:
+                            file_path = args.get("path", "")
+                            if file_path:
+                                import os as _os
+                                if tool_name == "write_file":
+                                    snapshot_content = args.get("content", "")
+                                else:
+                                    # patch: 读修改后的文件内容
+                                    snapshot_content = ""
+                                    if _os.path.isfile(file_path):
+                                        with open(file_path, "r", encoding="utf-8") as _f:
+                                            snapshot_content = _f.read()
+                                if snapshot_content:
+                                    from agent_core.snapshot_manager import record as snap_record
+                                    snap_record(
+                                        file_path=file_path,
+                                        content=snapshot_content,
+                                        scene_id=scene_id,
+                                        db=db,
+                                    )
+                        except Exception:
+                            pass  # 快照写入失败不影响主流程
                 else:
                     high_risk = result.get("high_risk")
                     event = {

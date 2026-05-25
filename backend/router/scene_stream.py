@@ -418,10 +418,10 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         q = db.query(Message).filter(Message.scene_id == scene_id)
         if data.session_id:
             q = q.filter(Message.session_id == data.session_id)
-        scene_history = q.order_by(Message.created_at.desc()).limit(20).all()
-        scene_history.reverse()
+        # Schema v1.0: 全文加载 — 当前 session 全部消息，不做截断
+        scene_history = q.order_by(Message.created_at.asc()).all()
         history_messages = [
-            {"role": m.role, "content": m.content}
+            {"role": m.role, "content": m.content, "priority": m.priority or "normal"}
             for m in scene_history if m.id != user_msg.id
         ]
 
@@ -483,6 +483,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             scene_id=scene_id,  # 🆕 Schema v0.7
             scene_config=scene.scene_config or {},
             tool_callbacks=tool_callbacks or None,  # 🆕 工具回调
+            db=db,  # 🆕 Schema v1.0: 快照写入
         )
 
         # ── Thought Stream: 即时确认 ──
@@ -521,6 +522,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
         # ── 流式收 Agent Loop 回复 ──
         agent_tool_results = []
+        agent_usage = {}  # 🆕 Schema v1.1: 默认空（兜底 agent loop 未返回 usage）
         thought_throttle = ThoughtThrottle()
         loop_round = 0
         try:
@@ -613,6 +615,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     yield sse_event("token", token=text)
                 elif etype == "done":
                     full_reply = event.get("summary", full_reply)
+                    agent_usage = event.get("usage", {})  # 🆕 Schema v1.1: Token 用量
                     break
                 elif etype == "error":
                     _log.error(f"[scene agent loop] {event['message']}")
@@ -660,7 +663,8 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             new_db.refresh(ai_msg)
             yield sse_event("done", id=ai_msg.id, role="ai", content=full_reply,
                             created_at=iso_utc(ai_msg.created_at),
-                            changes=[], model=model_name)
+                            changes=[], model=model_name,
+                            usage=agent_usage)  # 🆕 Schema v1.1: Token 用量
 
             # 🆕 检测 AI 回复中的 HTML 代码块 → 自动保存为产出成果
             try:

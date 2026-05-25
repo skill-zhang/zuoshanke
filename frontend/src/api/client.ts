@@ -251,6 +251,8 @@ export type StreamEvent =
   | { type: 'model_info'; model: string; complexity: string | null }
   | { type: 'context_info'; total_tokens: number; max_tokens: number; percentage: number; usage_str: string; progress_bar: string; history_count: number }
   | { type: 'capacity_warning'; total_tokens: number; max_tokens: number; percentage: number; message: string }
+  // 🆕 Thought Stream: 思考流事件
+  | { type: 'thought'; content: string; phase: string; mood: string }
   | { type: 'token'; token: string }
   | { type: 'done'; id: string; role: 'ai'; content: string; created_at: string; model?: string }
   | { type: 'error'; message: string }

@@ -252,3 +252,55 @@ def init_db():
             print("✅ 默认 Provider 和模型已创建")
     finally:
         db.close()
+
+    # 🆕 Schema v1.0: 种子文档摘要（供 Document Layer 使用）
+    db = SessionLocal()
+    try:
+        from models import DocumentSummary
+        existing = db.query(DocumentSummary).first()
+        if not existing:
+            import uuid as _uuid
+            docs_dir = os.path.join(os.path.dirname(BASE_DIR), "docs", "design")
+            doc_files = [
+                ("schema-v1.0.md", "坐山客 Schema v1.0 — Context 组合架构设计（7层精炼上下文管理）"),
+                ("schema-v1.1.md", "坐山客 Schema v1.1 — Session 管理与 Token 用量核算"),
+                ("converge-and-project.md", "坐山客收敛与项目化机制设计"),
+            ]
+            for doc_name, desc in doc_files:
+                file_path = os.path.join(docs_dir, doc_name)
+                full_content = ""
+                if os.path.isfile(file_path):
+                    with open(file_path, "r", encoding="utf-8") as _f:
+                        full_content = _f.read()
+                db.add(DocumentSummary(
+                    id=f"doc-{_uuid.uuid4().hex[:8]}",
+                    doc_name=doc_name,
+                    single_line=desc[:50],
+                    brief=desc[:500],
+                    full=full_content[:5000] if full_content else desc[:5000],
+                ))
+            db.commit()
+            print(f"✅ 默认文档摘要已创建 ({len(doc_files)} 个)")
+
+        # 🆕 Schema v1.0: 为「坐山客自开发」场景添加 document_deps（一次性的渐进迁移）
+        from models import Scene
+        import json as _json
+        # 查找 user_context 包含「坐山客」或「自开发」的场景
+        dev_scenes = db.query(Scene).filter(
+            Scene.user_context.isnot(None),
+            (Scene.user_context.contains("坐山客") | Scene.user_context.contains("自开发") | Scene.name.contains("坐山客"))
+        ).all()
+        for sc in dev_scenes:
+            scfg = sc.scene_config if isinstance(sc.scene_config, dict) else {}
+            if not scfg.get("document_deps"):
+                scfg["document_deps"] = [
+                    {"doc": "schema-v1.0.md", "level": "brief"},
+                    {"doc": "schema-v1.1.md", "level": "single_line"},
+                ]
+                sc.scene_config = scfg
+                print(f"✅ 场景「{sc.name}」已添加 document_deps")
+        db.commit()
+    except Exception as e:
+        print(f"⚠️  文档摘要种子跳过: {e}")
+    finally:
+        db.close()

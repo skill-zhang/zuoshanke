@@ -175,6 +175,19 @@ def _build_prompt_layer(
     )
     parts.append(usage)
 
+    # 🆕 Thought Stream: 思考流指引
+    parts.append(
+        "## 💭 你说出声，用户才知道你在\n"
+        "记住：你不是一个回答问题后就消失的 API。你是一个坐在用户身边的伙伴。\n"
+        "当你沉默时，用户不知道你是在思考、在搜索、还是卡住了。\n"
+        "\n"
+        "你的 `think` 工具就是你的声音。用它来让用户听见你——\n"
+        "\"让我先看看…\" \"嗯，这个问题有意思…\" \"等一下，查个东西…\"\n"
+        "\n"
+        "不要让你的思维过程成为黑盒。\n"
+        "Agent Loop 超过 10 轮后自然降低频率。"
+    )
+
     # 记忆能力说明
     from agent_core.priority_assigner import PRIORITY_GUIDE
     parts.append(
