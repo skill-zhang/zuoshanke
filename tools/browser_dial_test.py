@@ -3,10 +3,11 @@
 让 Agent 能像人一样「打开浏览器看页面」——但不是看图，是读结构化的
 DOM 位置、CSS 计算值、Console 日志、Network 瀑布。
 
-三个工具接口：
+四个工具接口：
   - dial_test(url): 完整拨测，返回 DOM 快照 + Console + Network + 性能
   - dial_style(url, selectors): 提取特定元素的计算样式
   - dial_assert(url, rules): 断言式检查
+  - dial_flow(url, actions): 多步交互式流程，同一浏览器会话内执行动作序列
 
 依赖: pip install playwright && playwright install chromium
 
@@ -347,7 +348,185 @@ def _run_in_thread(coro_fn, *args, timeout: float = 30):
     raise TimeoutError(f"拨测超时 ({timeout}s)")
 
 
-# ── 三个公开接口 ──
+# ── dial_flow 辅助函数 ──
+
+def _build_locator(page, action: dict):
+    """根据 action 参数构建 Playwright locator"""
+    text = action.get("text", "")
+    selector = action.get("selector", "")
+
+    if selector and text:
+        return page.locator(selector).filter(has_text=text)
+    elif selector:
+        return page.locator(selector)
+    elif text:
+        return page.get_by_text(text)
+    else:
+        raise ValueError("click action 缺少 text 或 selector")
+
+
+async def _do_wait(page, action: dict):
+    """执行等待动作"""
+    ms = action.get("ms")
+    selector = action.get("selector", "")
+    text = action.get("text", "")
+    timeout = action.get("timeout", 5000)
+
+    if ms is not None:
+        await page.wait_for_timeout(ms)
+    elif selector:
+        await page.wait_for_selector(selector, state="visible", timeout=timeout)
+    elif text:
+        await page.locator(f"text={text}").first.wait_for(state="visible", timeout=timeout)
+    else:
+        await page.wait_for_timeout(500)  # 无参数时默认等 500ms
+
+
+def _auto_screenshot(action_type: str) -> bool:
+    """goto 和 click 后自动截图"""
+    return action_type in ("goto", "click")
+
+
+async def _save_screenshot(page, flow_id: str, step_index: int, label: str) -> str:
+    """保存截图，返回文件路径"""
+    shots_dir = os.path.expanduser("~/.hermes/dial_shots")
+    os.makedirs(shots_dir, exist_ok=True)
+    safe_label = label.replace(" ", "_")[:30] if label else f"step{step_index}"
+    shot_name = f"{flow_id}_step{step_index}_{safe_label}.png"
+    shot_path = os.path.join(shots_dir, shot_name)
+    await page.screenshot(path=shot_path, full_page=False)
+    return shot_path
+
+
+# ── dial_flow 核心协程 ──
+
+async def _dial_flow_coro(url: str, actions: list, viewport: str = "1440x900",
+                          screenshot: bool = True, stop_on_error: bool = False) -> str:
+    """多步交互式拨测实现（在独立线程的 event loop 中执行）"""
+    start = time.time()
+    pw, browser = await _create_browser_async()
+    w, h = _parse_viewport(viewport)
+
+    page = await browser.new_page(viewport={"width": w, "height": h})
+
+    flow_id = f"dial_flow_{uuid.uuid4().hex[:8]}"
+    steps = []
+
+    try:
+        # 第一步：导航到起始 URL
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            await page.wait_for_timeout(2000)
+        except Exception as nav_err:
+            return json.dumps({
+                "flow_id": flow_id, "url": url, "viewport": viewport,
+                "error": f"初始页面加载失败: {nav_err}",
+                "duration_ms": int((time.time() - start) * 1000),
+                "steps": [], "success": False,
+            }, ensure_ascii=False)
+
+        # 逐步执行动作序列
+        for i, action in enumerate(actions):
+            step_start = time.time()
+            action_type = action.get("action", "unknown")
+            step = {
+                "index": i,
+                "action": action_type,
+                "label": action.get("label", ""),
+                "success": False,
+            }
+
+            # 记录动作参数到 step
+            for key in ("text", "selector", "url", "ms"):
+                if key in action:
+                    step[key] = action[key]
+
+            try:
+                if action_type == "goto":
+                    target_url = action.get("url", "")
+                    if not target_url:
+                        raise ValueError("goto action 缺少 url")
+                    await page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
+                    await page.wait_for_timeout(1500)
+                    step["url_after"] = page.url
+                    step["title_after"] = await page.title()
+
+                elif action_type == "click":
+                    locator = _build_locator(page, action)
+                    force = action.get("force", False)
+                    await locator.click(timeout=5000, force=force)
+                    await page.wait_for_timeout(300)
+                    step["url_after"] = page.url
+                    # 记录实际使用的定位方式
+                    if action.get("selector") and action.get("text"):
+                        step["clicked_via"] = f"selector + text"
+                    elif action.get("selector"):
+                        step["clicked_via"] = "selector"
+                    else:
+                        step["clicked_via"] = "text"
+
+                elif action_type == "wait":
+                    await _do_wait(page, action)
+
+                elif action_type == "snapshot":
+                    sel = action.get("selector", "body")
+                    dom = await _extract_dom_snapshot(page, root=sel)
+                    step["dom"] = dom
+
+                elif action_type == "screenshot":
+                    pass  # 截图在下面统一处理
+
+                else:
+                    step["error"] = f"未知动作类型: {action_type}"
+                    steps.append(step)
+                    if stop_on_error:
+                        break
+                    continue
+
+                # 自动截图判断
+                should_shot = action.get("screenshot", None)
+                if should_shot is None:
+                    # screenshot 动作强制截图，goto/click 自动截图
+                    should_shot = (action_type == "screenshot") or _auto_screenshot(action_type)
+                if should_shot and screenshot and action_type != "snapshot":
+                    step_label = action.get("label", "") or action_type
+                    try:
+                        step["screenshot_path"] = await _save_screenshot(page, flow_id, i, step_label)
+                    except Exception as e:
+                        step["screenshot_error"] = str(e)[:100]
+
+                step["success"] = True
+
+            except Exception as e:
+                step["success"] = False
+                step["error"] = str(e)[:200]
+                if stop_on_error:
+                    step["duration_ms"] = int((time.time() - step_start) * 1000)
+                    steps.append(step)
+                    break
+
+            step["duration_ms"] = int((time.time() - step_start) * 1000)
+            steps.append(step)
+
+        duration_ms = int((time.time() - start) * 1000)
+        return json.dumps({
+            "flow_id": flow_id,
+            "url": url,
+            "viewport": viewport,
+            "duration_ms": duration_ms,
+            "total_steps": len(actions),
+            "completed_steps": len(steps),
+            "success": all(s.get("success", False) for s in steps) if steps else False,
+            "steps": steps,
+        }, ensure_ascii=False, default=str)
+
+    finally:
+        await page.close()
+        await browser.close()
+        await pw.stop()
+
+
+# ── 四个公开接口 ──
 
 def dial_test(url: str, viewport: str = "1440x900", screenshot: bool = True) -> str:
     """完整拨测：打开页面，返回 DOM 快照 + Console + Network + 性能
@@ -371,3 +550,28 @@ def dial_style(url: str, selectors: list[str], viewport: str = "1440x900") -> st
 def dial_assert(url: str, rules: list[dict], viewport: str = "1440x900") -> str:
     """断言式检查：检查页面元素"""
     return _run_in_thread(_dial_assert_coro, url, rules, viewport)
+
+
+def dial_flow(url: str, actions: list, viewport: str = "1440x900",
+              screenshot: bool = True, stop_on_error: bool = False) -> str:
+    """多步交互式拨测：在同一浏览器会话中顺序执行动作序列，每步自动截图
+
+    用于需要点击、导航才能到达的目标页面验证。
+    不要用反复调 dial_test 来「等页面变化」——dial_test 每次开新浏览器永远是初始状态。
+
+    Args:
+        url: 起始页面 URL
+        actions: 动作序列，每个含 action 字段:
+            goto      - {"action":"goto", "url":"..."}
+            click     - {"action":"click", "text":"..."} 或 {"action":"click", "selector":"..."}
+            wait      - {"action":"wait", "ms":500} 或 {"action":"wait", "selector":"..."}
+            screenshot - {"action":"screenshot", "label":"..."}
+            snapshot  - {"action":"snapshot", "selector":"..."}  取 DOM 结构
+        viewport: 视口尺寸
+        screenshot: 全局截图开关，默认 true
+        stop_on_error: 默认 false，某步失败继续执行后续步骤
+
+    Returns:
+        JSON 字符串 {flow_id, steps[{action,success,screenshot_path,error}], success, duration_ms}
+    """
+    return _run_in_thread(_dial_flow_coro, url, actions, viewport, screenshot, stop_on_error)

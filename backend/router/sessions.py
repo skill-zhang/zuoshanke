@@ -44,7 +44,12 @@ class TouchSessionRequest(BaseModel):
 def _get_or_create_web_session(
     db: DBSession, context_type: str, context_id: str, context_name: str | None = None
 ) -> WebSession:
-    """获取或创建 Web session（每个上下文唯一一个活跃 session）"""
+    """获取或创建 Web session（每个上下文唯一一个活跃 session）
+
+    优先复用活跃 session；若无活跃 session，尝试复活已销毁的同上下文 session
+    （UNIQUE(context_type, context_id) 约束导致不能创建重复行）；都无则新建。
+    """
+    # 1. 找活跃 session
     session = db.query(WebSession).filter(
         WebSession.context_type == context_type,
         WebSession.context_id == context_id,
@@ -60,7 +65,25 @@ def _get_or_create_web_session(
         db.refresh(session)
         return session
 
-    # 创建新 session
+    # 2. 不超过 UNIQUE 约束：找已销毁的同上下文 session 并复活
+    destroyed = db.query(WebSession).filter(
+        WebSession.context_type == context_type,
+        WebSession.context_id == context_id,
+    ).first()
+
+    if destroyed:
+        destroyed.status = "active"
+        destroyed.started_at = utcnow()
+        destroyed.last_active_at = utcnow()
+        destroyed.ended_at = None
+        destroyed.duration_seconds = None
+        if context_name:
+            destroyed.context_name = context_name
+        db.commit()
+        db.refresh(destroyed)
+        return destroyed
+
+    # 3. 完全新建
     session = WebSession(
         id=make_id("ws"),
         context_type=context_type,

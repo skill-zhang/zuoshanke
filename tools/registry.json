@@ -823,7 +823,7 @@
     },
     {
       "name": "browser_dial_test",
-      "description": "浏览器拨测——打开指定URL，返回完整页面状态报告：DOM快照（位置/尺寸/CSS/溢出）、Console日志、Network瀑布。返回结构化JSON供AI分析。用于验证前端页面渲染正确性。LLM自行拼接localhost地址。",
+      "description": "浏览器单页快照——打开指定URL，返回完整页面状态报告：DOM快照（位置/尺寸/CSS/溢出）、Console日志、Network瀑布。返回结构化JSON供AI分析。用于验证前端页面渲染正确性。LLM自行拼接localhost地址。⚠️ 每次调用打开全新浏览器，永远是初始状态。需要点击、导航等多步交互请用dial_flow。",
       "file": "tools/browser_dial_test.py",
       "function": "dial_test",
       "parameters": {
@@ -897,6 +897,41 @@
         }
       },
       "returns": "断言结果JSON",
+      "category": "browser",
+      "verified": true
+    },
+    {
+      "name": "dial_flow",
+      "description": "多步交互式浏览器拨测。在同一浏览器会话中按顺序执行一系列动作（导航goto、点击click、等待wait、截图screenshot、DOM快照snapshot），goto和click后自动截图。用于需要点击/导航才能到达的目标页面验证。⚠️ 不要用反复调dial_test来「等页面变化」——dial_test每次开新浏览器永远是初始状态。多步交互必须用dial_flow一次性动作序列完成。",
+      "file": "tools/browser_dial_test.py",
+      "function": "dial_flow",
+      "parameters": {
+        "url": {
+          "type": "string",
+          "description": "起始页面URL（如 http://localhost:5173）"
+        },
+        "actions": {
+          "type": "array",
+          "items": {"type": "object"},
+          "description": "动作序列。每个含action字段：goto(url)/click(text或selector)/wait(ms或selector或text)/screenshot(label)/snapshot(selector)。goto和click后自动截图，可用screenshot:false禁用。"
+        },
+        "viewport": {
+          "type": "string",
+          "description": "视口尺寸 宽x高，默认 1440x900",
+          "optional": true
+        },
+        "screenshot": {
+          "type": "boolean",
+          "description": "全局截图开关，默认true。false时不自动截图。",
+          "optional": true
+        },
+        "stop_on_error": {
+          "type": "boolean",
+          "description": "默认false。true时第一步失败即停止后续步骤。",
+          "optional": true
+        }
+      },
+      "returns": "JSON报告 {flow_id, steps[{action,success,screenshot_path,error,dom}], success, duration_ms}",
       "category": "browser",
       "verified": true
     },
