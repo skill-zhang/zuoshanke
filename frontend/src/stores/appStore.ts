@@ -210,15 +210,18 @@ export const useStore = create<AppState>((set, get) => ({
   toggleAgentHidden: () => set((s) => ({ agentHidden: !s.agentHidden })),
 
   currentScene: null,
-  setCurrentScene: (s) => {
-    // 切场景时不触发记忆提取，只保留页面关闭（visibilitychange）触发
-    set({ currentScene: s, messages: [], messageTotalCount: 0, hasOlderMessages: false, contextUsage: null, capacityWarning: null });
+  setCurrentScene: async (s) => {
+    // 切场景时重置消息 + session，避免旧 session 污染上下文
+    set({ currentScene: s, messages: [], messageTotalCount: 0, hasOlderMessages: false, contextUsage: null, capacityWarning: null, currentSessionId: null });
     if (s) {
       get().loadUserContext(s.id);
-      // 🆕 Schema v1.1: 激活 session（异步，不阻塞 UI）
-      activateSession('scene', s.id, s.name).catch(e =>
-        console.error('[store] activateSession failed:', e)
-      );
+      try {
+        // 🆕 Schema v1.1: 激活 session，必须存 session_id 否则 session 隔离不生效
+        const session = await activateSession('scene', s.id, s.name);
+        set({ currentSessionId: session.id });
+      } catch (e) {
+        console.error('[store] setCurrentScene activateSession failed:', e);
+      }
     }
   },
   userContext: '',

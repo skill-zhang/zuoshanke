@@ -405,6 +405,7 @@ export function ChatView() {
     deleteMsg, regenerateMsg, newSceneSession,
     batchDeleteMsgs, clearSceneMsgs, clearChannelHistory,
     sessions, loadSceneSessions, loadSceneMessages, switchSceneSession,
+    currentSessionId,
     loadOlderMessages, loadOlderChannelMessages,
     hasOlderMessages, channelHasOlder,
     messagesLoading, channelMessagesLoading,
@@ -528,17 +529,23 @@ export function ChatView() {
     };
   }, []);
 
-  // 在场景切换时加载会话列表 + 刷新消息
+  // 在场景切换时加载会话列表
   useEffect(() => {
     if (currentScene) {
       loadSceneSessions(currentScene.id);
-      loadSceneMessages(currentScene.id);
     } else {
       setSelectMode(false);
       setSelectedIds(new Set());
       setShowSessionPanel(false);
     }
   }, [currentScene?.id]);
+
+  // 场景消息加载：等待 session ready 后才加载，避免无 session 过滤混入旧消息
+  useEffect(() => {
+    if (currentScene && currentSessionId) {
+      loadSceneMessages(currentScene.id);
+    }
+  }, [currentScene?.id, currentSessionId]);
 
   // ═══ 自动滚动 — 初始化定位到底部，新消息来时仅在底部时自动滚动 ═══
   const scrollToBottom = useCallback((smooth = true) => {

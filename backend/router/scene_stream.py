@@ -356,7 +356,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         # 2. 历史消息（session 隔离）
         q = db.query(Message).filter(Message.scene_id == scene_id)
         if data.session_id:
-            q = q.filter(Message.session_id == data.session_id)
+            from sqlalchemy import or_
+            q = q.filter(or_(
+                Message.session_id == data.session_id,
+                Message.session_id.is_(None),
+            ))
         scene_history = q.order_by(Message.created_at.desc()).limit(20).all()
         scene_history.reverse()
         history_messages = [

@@ -74,7 +74,11 @@ def list_scene_messages(
     """获取场景消息，分页返回。不传 before_id 取最新 limit 条"""
     q = db.query(Message).filter(Message.scene_id == scene_id)
     if session_id:
-        q = q.filter(Message.session_id == session_id)
+        from sqlalchemy import or_
+        q = q.filter(or_(
+            Message.session_id == session_id,
+            Message.session_id.is_(None),
+        ))
 
     total = q.count()
 
