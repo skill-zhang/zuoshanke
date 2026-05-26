@@ -17,7 +17,9 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 # ── 导入 backend 模型 ──
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _base)  # 项目根 → 找到 backend 包
+sys.path.insert(0, os.path.join(_base, "backend"))  # models.py 内部 `from database import Base` 需要
 from backend.database import SessionLocal
 from backend.models import PendingUserTrait, UserProfile
 
