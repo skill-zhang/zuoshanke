@@ -21,12 +21,8 @@
 """
 
 import json
-from datetime import datetime, timezone
+import re
 from typing import Any, Optional
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def compose_context(
@@ -343,19 +339,17 @@ def _build_profile_layer(db, user_content: str) -> str:
     """Profile Layer — 🆕 Schema v1.4 用户画像（正式库结构化偏好）
 
     P0 + P1 始终注入，P2 按话题匹配后选择性注入。
-    追踪注入次数（total_injections + last_injected_at）。
+    ⚠️ 只读操作 —— 不修改数据库，不追踪注入次数（tracking 由上层异步处理）
     """
     if db is None:
         return ""
     try:
         from models import UserProfile
-        from sqlalchemy import desc
 
         profiles = db.query(UserProfile).filter(
             UserProfile.is_active == True,
         ).order_by(
             UserProfile.priority.asc(),  # P0 > P1 > P2 > P3
-            desc(UserProfile.total_injections),
         ).all()
 
         if not profiles:
@@ -380,9 +374,6 @@ def _build_profile_layer(db, user_content: str) -> str:
         if important:
             lines.append("")
             for p in important:
-                p.total_injections = (p.total_injections or 0) + 1
-                p.last_injected_at = _utcnow()
-                # 自动将 source_scenes 中的场景名转为提示
                 scenes = ", ".join(p.source_scenes or []) if p.source_scenes else ""
                 source = f"（{scenes}）" if scenes else ""
                 lines.append(f"- {_pri_icon(p.priority)} {p.content} {source}")
@@ -392,22 +383,15 @@ def _build_profile_layer(db, user_content: str) -> str:
             lines.append("---")
             lines.append("")
             for p in topical:
-                p.total_injections = (p.total_injections or 0) + 1
-                p.last_injected_at = _utcnow()
                 lines.append(f"- {p.content}")
 
         if len(lines) == 1:
             return ""  # 只有 header，没有内容
 
-        # 批量写入注入计数
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-
         return "\n".join(lines)
 
     except Exception as e:
+        _log.warning(f"构建画像层失败: {e}")
         return ""
 
 
@@ -418,7 +402,6 @@ def _pri_icon(priority: str) -> str:
 
 def _extract_keywords(text: str, max_words: int = 5) -> list:
     """从画像内容中提取核心关键词用于话题匹配"""
-    import re
     # 去除非中英文和数字的字符，取前几个有意义的词
     cleaned = re.findall(r'[\u4e00-\u9fff\w]+', text)
     # 去重保留顺序

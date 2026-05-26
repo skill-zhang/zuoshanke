@@ -4,6 +4,7 @@
 """
 import json
 import logging
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -367,6 +368,14 @@ def _run_llm_dedup(pending: list, db: Session) -> dict:
                     "merged_into": existing_key,
                 }, synchronize_session=False)
                 stats["merged_into_existing"] += len(pending_ids)
+            else:
+                # LLM 幻觉：key 不存在或被软删 → 降级为 discard
+                _log.warning(f"merge_into_existing 目标不存在: key={existing_key}, "
+                            f"pending_ids={pending_ids}, 已降级为 discard")
+                db.query(PendingUserTrait).filter(
+                    PendingUserTrait.id.in_(pending_ids),
+                ).update({"status": "rejected"}, synchronize_session=False)
+                stats["discarded"] += len(pending_ids)
 
         else:  # merge 或 new_profile
             content = group.get("content", "")
@@ -598,7 +607,6 @@ def _parse_llm_json(text: str) -> Optional[dict]:
         pass
 
     # 策略2：提取 {} 块（LLM 有时会在 JSON 前后加说明文字）
-    import re
     brace_match = re.search(r'\{[\s\S]*\}', text)
     if brace_match:
         candidate = brace_match.group()
@@ -628,7 +636,6 @@ def _make_profile_id() -> str:
 
 def _content_to_key(content: str) -> str:
     """从内容生成唯一 key"""
-    import re
     # 取前6个中文字符或前20个字符，降级为 ID 前缀
     cleaned = re.sub(r"[^\u4e00-\u9fff\w]", "", content)[:20]
     if not cleaned:
