@@ -15,11 +15,12 @@ router = APIRouter(prefix="/api/providers", tags=["AI Provider"])
 # ─── Schemas ───
 
 def provider_to_dict(p: AiProvider) -> dict:
+    from secret_redact import _mask_secret
     return {
         "id": p.id,
         "name": p.name,
         "base_url": p.base_url,
-        "api_key": p.api_key if p.api_key else "",
+        "api_key": _mask_secret(p.api_key) if p.api_key else "",
         "provider_type": p.provider_type,
         "is_active": p.is_active,
         "models": [model_to_dict(m) for m in (p.models or [])],
