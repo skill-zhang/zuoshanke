@@ -662,6 +662,76 @@ export const getDefaultPrompts = () => request<{ channel: string; scene: string 
 
 export const getServiceStatus = () => request<ServiceStatus>('/settings/service');
 
+// ═══ 用户画像 ═══
+export interface UserProfile {
+  id: string;
+  key: string;
+  content: string;
+  category: string;
+  priority: string;
+  tags: string[];
+  source_scenes: string[];
+  merged_from: string[];
+  is_active: boolean;
+  deprecated_by: string | null;
+  total_injections: number;
+  last_injected_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PendingTrait {
+  id: string;
+  content: string;
+  source_scene: string | null;
+  source_scene_id: string | null;
+  confidence: string;
+  context_snippet: string | null;
+  status: string;
+  created_at: string | null;
+}
+
+export interface ProfilesResponse {
+  success: boolean;
+  profiles: Record<string, UserProfile[]>;
+  total: number;
+}
+
+export interface ProfileProcessResponse {
+  success: boolean;
+  message: string;
+  stats?: { pending_count: number; merged: number; new_profiles: number; discarded: number; merged_into_existing: number; };
+}
+
+export const listProfiles = (category?: string, activeOnly?: boolean) => {
+  const qs = new URLSearchParams();
+  if (category) qs.set('category', category);
+  if (activeOnly !== undefined) qs.set('active_only', String(activeOnly));
+  const q = qs.toString();
+  return request<ProfilesResponse>(`/user-profile${q ? '?' + q : ''}`);
+};
+
+export const getProfile = (key: string) =>
+  request<{ success: boolean; data: UserProfile }>('/user-profile/' + encodeURIComponent(key));
+
+export const updateProfile = (key: string, data: { content?: string; category?: string; priority?: string; tags?: string[]; is_active?: boolean }) =>
+  request<{ success: boolean; data: UserProfile }>('/user-profile/' + encodeURIComponent(key), { method: 'PUT', body: JSON.stringify(data) });
+
+export const deleteProfile = (key: string) =>
+  request<{ success: boolean; message: string }>('/user-profile/' + encodeURIComponent(key), { method: 'DELETE' });
+
+export const listPendingTraits = () =>
+  request<{ success: boolean; data: PendingTrait[]; total: number }>('/user-profile/pending');
+
+export const acceptPendingTrait = (traitId: string) =>
+  request<{ success: boolean; profile_id: string; key: string }>('/user-profile/pending/' + encodeURIComponent(traitId) + '/accept', { method: 'POST' });
+
+export const rejectPendingTrait = (traitId: string) =>
+  request<{ success: boolean; message: string }>('/user-profile/pending/' + encodeURIComponent(traitId) + '/reject', { method: 'POST' });
+
+export const triggerProfileProcess = () =>
+  request<ProfileProcessResponse>('/user-profile/process', { method: 'POST' });
+
 // ═══ 类别管理 ═══
 export interface Category {
   name: string;

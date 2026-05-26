@@ -181,6 +181,9 @@ def _generate_speech(req: WorkbenchChatRequest, db: Session):
                             yield sse_event(f"action:{result['type']}", **result)
                         db.commit()
                         yield sse_event("action:reload")
+                    except GeneratorExit:
+                        # 客户端断连：不 yield、不回滚（commit 已成功或没执行）
+                        return
                     except Exception as e:
                         db.rollback()
                         _log.error(f"[workbench_chat] actions failed, rolled back: {e}")
@@ -189,8 +192,12 @@ def _generate_speech(req: WorkbenchChatRequest, db: Session):
         except Exception as e:
             _log.error(f"[workbench_chat] intent parse error: {e}")
 
+    # done 事件同样防 GeneratorExit
     zhu.update_mood("amused", "")
-    yield sse_event("done")
+    try:
+        yield sse_event("done")
+    except GeneratorExit:
+        return
 
 
 @router.post("/api/workbench/chat")

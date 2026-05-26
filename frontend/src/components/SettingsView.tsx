@@ -7,6 +7,9 @@ import {
   createModel, updateModel, deleteModel,
   getSettings, updateSettings, getServiceStatus, getDefaultPrompts,
   AiProviderData, AiModelData,
+  UserProfile, PendingTrait,
+  listProfiles, updateProfile, deleteProfile,
+  listPendingTraits, acceptPendingTrait, rejectPendingTrait, triggerProfileProcess,
 } from '../api/client';
 import { showPrompt, showConfirm, showAlert } from '../stores/dialogStore';
 
@@ -24,6 +27,7 @@ const TABS = [
   { key: 'routing', label: '🔀 路由配置' },
   { key: 'prompts', label: '📝 系统人设' },
   { key: 'service', label: '💻 服务状态' },
+  { key: 'profile', label: '👤 用户画像' },
   { key: 'general', label: '⚙ 通用配置' },
 ];
 
@@ -80,6 +84,13 @@ export function SettingsView() {
   // ── Features / 通用配置 ──
   const [featuresEdit, setFeaturesEdit] = useState<{ message_load_count: number } | null>(null);
   const [featuresSaving, setFeaturesSaving] = useState(false);
+  // ── 用户画像 ──
+  const [profiles, setProfiles] = useState<Record<string, UserProfile[]>>({});
+  const [pendingTraits, setPendingTraits] = useState<PendingTrait[]>([]);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [profileEditKey, setProfileEditKey] = useState<string | null>(null);
+  const [profileEditData, setProfileEditData] = useState<Partial<UserProfile>>({});
   // ── Inline API Key editing ──
   const [editingApiKeys, setEditingApiKeys] = useState<Record<string, string>>({});
   const startEditApiKey = (pid: string, currentKey: string) => {
@@ -113,10 +124,76 @@ export function SettingsView() {
     try { setServiceStatus(await getServiceStatus()); } catch {}
   }, []);
 
+  // ── 用户画像 ──
+  const loadProfile = useCallback(async () => {
+    setProfileLoading(true);
+    try {
+      const [profRes, pendRes] = await Promise.all([
+        listProfiles(),
+        listPendingTraits(),
+      ]);
+      setProfiles(profRes.profiles);
+      setPendingTraits(pendRes.data);
+    } catch (e) { setProfiles({}); setPendingTraits([]); }
+    setProfileLoading(false);
+  }, []);
+
+  const handleAcceptTrait = async (traitId: string) => {
+    try {
+      await acceptPendingTrait(traitId);
+      await loadProfile();
+    } catch (e: any) { showAlert('接受失败: ' + (e.message || '')); }
+  };
+
+  const handleRejectTrait = async (traitId: string) => {
+    try {
+      await rejectPendingTrait(traitId);
+      await loadProfile();
+    } catch (e: any) { showAlert('拒绝失败: ' + (e.message || '')); }
+  };
+
+  const handleProcess = async () => {
+    setProcessing(true);
+    try {
+      const res = await triggerProfileProcess();
+      showAlert(res.message);
+      await loadProfile();
+    } catch (e: any) { showAlert('处理失败: ' + (e.message || '')); }
+    setProcessing(false);
+  };
+
+  const startEditProfile = (key: string, p: UserProfile) => {
+    setProfileEditKey(key);
+    setProfileEditData({ content: p.content, category: p.category, priority: p.priority, tags: [...(p.tags || [])] });
+  };
+
+  const cancelEditProfile = () => {
+    setProfileEditKey(null);
+    setProfileEditData({});
+  };
+
+  const saveProfileEdit = async (key: string) => {
+    if (!profileEditData.content?.trim()) return;
+    try {
+      await updateProfile(key, profileEditData);
+      cancelEditProfile();
+      await loadProfile();
+    } catch (e: any) { showAlert('保存失败: ' + (e.message || '')); }
+  };
+
+  const handleDeleteProfile = async (key: string) => {
+    if (!await showConfirm('确认软删该画像？')) return;
+    try {
+      await deleteProfile(key);
+      await loadProfile();
+    } catch (e: any) { showAlert('删除失败: ' + (e.message || '')); }
+  };
+
   useEffect(() => {
     if (activeTab === 'providers') loadP();
     else if (activeTab === 'routing' || activeTab === 'prompts') loadS();
     else if (activeTab === 'service') loadStatus();
+    else if (activeTab === 'profile') loadProfile();
   }, [activeTab]);
 
   // ── Provider CRUD ──
@@ -608,7 +685,140 @@ export function SettingsView() {
           </div>
         )}
 
-        {/* ═══ Tab 5: 通用配置 ═══ */}
+        {/* ═══ Tab 5: 用户画像 ═══ */}
+        {activeTab === 'profile' && (
+          <div className="sv-tab-panel">
+            <div className="sv-desc-row">
+              <span className="sv-desc">从分身对话中自动提取的用户画像，由 LLM 判重合并入库。P0（原则）和 P1（偏好）自动注入 context，P2+按话题匹配注入。</span>
+              <div className="sv-profile-actions">
+                <span className="badge">暂存区 {pendingTraits.filter(t => t.status === 'pending').length} 条待处理</span>
+                <span className="btn btn-sm btn-outline" onClick={handleProcess} disabled={processing}>
+                  {processing ? '处理中…' : '🔄 批量处理'}
+                </span>
+              </div>
+            </div>
+
+            {profileLoading ? (
+              <div className="sv-loading">加载中…</div>
+            ) : (
+              <>
+                {(['P0', 'P1', 'P2', 'P3'] as const).map(pri => {
+                  const items = profiles[pri] || [];
+                  if (items.length === 0) return null;
+                  const icons: Record<string, string> = { P0: '🔒', P1: '⭐', P2: '📍', P3: '📎' };
+                  const labels: Record<string, string> = { P0: '原则', P1: '偏好', P2: '习惯', P3: '上下文' };
+                  return (
+                    <div key={pri} className="sv-profile-group" style={{ marginBottom: 12 }}>
+                      <div className="sv-profile-group-header">
+                        <span>{icons[pri]} {labels[pri]} ({pri})</span>
+                        <span className="sv-profile-group-count">{items.length} 条</span>
+                      </div>
+                      {items.map(p => {
+                        const isEditing = profileEditKey === p.key;
+                        return (
+                          <div key={p.key} className={`sv-profile-card${isEditing ? ' sv-profile-editing-card' : ''}`}>
+                            <span className={`sv-profile-card-icon sv-profile-badge-${pri.toLowerCase()}`}>●</span>
+                            <div className="sv-profile-card-body">
+                              {isEditing ? (
+                                <>
+                                  <textarea className="sv-profile-edit-input" rows={2}
+                                    value={profileEditData.content || ''}
+                                    onChange={e => setProfileEditData(d => ({ ...d, content: e.target.value }))} />
+                                  <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                                    <select className="sv-profile-edit-select"
+                                      value={profileEditData.priority || 'P2'}
+                                      onChange={e => setProfileEditData(d => ({ ...d, priority: e.target.value }))}>
+                                      <option value="P0">P0 原则</option>
+                                      <option value="P1">P1 偏好</option>
+                                      <option value="P2">P2 习惯</option>
+                                      <option value="P3">P3 上下文</option>
+                                    </select>
+                                    <select className="sv-profile-edit-select"
+                                      value={profileEditData.category || 'preference'}
+                                      onChange={e => setProfileEditData(d => ({ ...d, category: e.target.value }))}>
+                                      <option value="principle">principle</option>
+                                      <option value="preference">preference</option>
+                                      <option value="habit">habit</option>
+                                      <option value="context">context</option>
+                                    </select>
+                                    <input className="sv-profile-edit-input" style={{ width: 200 }}
+                                      value={(profileEditData.tags || []).join(', ')}
+                                      onChange={e => setProfileEditData(d => ({ ...d, tags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+                                      placeholder="标签（逗号分隔）" />
+                                  </div>
+                                  <div className="sv-profile-edit-actions">
+                                    <span className="btn btn-sm btn-ghost" onClick={() => cancelEditProfile()}>取消</span>
+                                    <span className="btn btn-sm btn-primary" onClick={() => saveProfileEdit(p.key)}>保存</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="sv-profile-card-content">{p.content}</div>
+                                  <div className="sv-profile-card-meta">
+                                    <span>{p.category}</span>
+                                    {p.tags?.length > 0 && p.tags.map((t, i) => <span key={i} className="sv-profile-tag">{t}</span>)}
+                                    <span>来源: {p.source_scenes?.length || 0} 场景</span>
+                                    {p.total_injections > 0 && <span>注入 {p.total_injections} 次</span>}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            <div className="sv-profile-card-actions">
+                              <span className="btn btn-sm btn-ghost" style={{ padding: '2px 6px', fontSize: 12 }}
+                                onClick={() => isEditing ? cancelEditProfile() : startEditProfile(p.key, p)}>
+                                {isEditing ? '✕' : '✏️'}
+                              </span>
+                              <span className="btn btn-sm btn-ghost" style={{ padding: '2px 6px', fontSize: 12 }}
+                                onClick={() => handleDeleteProfile(p.key)}>🗑️</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                {/* 暂存区 */}
+                <div className="sv-pending-section">
+                  <div className="sv-profile-group-header" style={{ borderBottom: '1px solid #21262d', borderRadius: '6px 6px 0 0', background: '#161b22', padding: '10px 14px', fontSize: 13, fontWeight: 500, color: '#e6edf3', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>📋 暂存区</span>
+                    <span className="sv-profile-group-count">{pendingTraits.filter(t => t.status === 'pending').length} 条待处理</span>
+                  </div>
+                  {pendingTraits.filter(t => t.status === 'pending').length === 0 ? (
+                    <div className="sv-empty-pending">暂存区为空，暂无待处理的用户特征</div>
+                  ) : (
+                    pendingTraits.filter(t => t.status === 'pending').map(t => (
+                      <div key={t.id} className="sv-pending-item">
+                        <div className="sv-pending-content">
+                          <div>{t.content}</div>
+                          <div className="sv-pending-meta">
+                            {t.source_scene && <span>来源: {t.source_scene} · </span>}
+                            <span className={`sv-pending-badge ${t.confidence === 'high' ? 'sv-pending-badge-high' : t.confidence === 'low' ? 'sv-pending-badge-low' : ''}`}>
+                              {t.confidence === 'high' ? '高置信' : t.confidence === 'low' ? '低置信' : '中置信'}
+                            </span>
+                            {t.created_at && <span> · {new Date(t.created_at).toLocaleDateString()}</span>}
+                          </div>
+                        </div>
+                        <div className="sv-pending-actions">
+                          <span className="btn btn-sm btn-primary" style={{ padding: '2px 8px', fontSize: 11 }}
+                            onClick={() => handleAcceptTrait(t.id)}>接受</span>
+                          <span className="btn btn-sm btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }}
+                            onClick={() => handleRejectTrait(t.id)}>拒绝</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {(!profiles || Object.keys(profiles).length === 0) && pendingTraits.filter(t => t.status === 'pending').length === 0 && (
+                  <div className="sv-empty">暂无用户画像数据，使用坐山客分身对话后将自动提取。</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ═══ Tab 6: 通用配置 ═══ */}
         {activeTab === 'general' && (
           <div className="sv-tab-panel">
             <div className="sv-desc-row">

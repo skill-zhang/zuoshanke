@@ -3866,3 +3866,193 @@ body {
   .wb-card-grid { grid-template-columns: 1fr; }
   .workbench-view { padding: 3px 16px 110px; }
 }
+
+/* ═══ 用户画像 Tab (Phase 4) ═══ */
+.sv-profile-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.sv-profile-actions .badge {
+  font-size: 11px;
+  color: #8b949e;
+  background: #21262d;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.sv-profile-actions .badge {
+  font-size: 11px;
+  color: #8b949e;
+  background: #21262d;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.sv-profile-group {
+  border: 1px solid #21262d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sv-profile-group-header {
+  background: #161b22;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e6edf3;
+  border-bottom: 1px solid #21262d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sv-profile-group-count {
+  font-size: 11px;
+  color: #6e7681;
+  font-weight: 400;
+  margin-left: auto;
+}
+.sv-profile-card {
+  padding: 10px 14px;
+  border-bottom: 1px solid #21262d;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.sv-profile-card:last-child {
+  border-bottom: none;
+}
+.sv-profile-card:hover {
+  background: #1c2128;
+}
+.sv-profile-card-icon {
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-top: 2px;
+}
+.sv-profile-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.sv-profile-card-content {
+  font-size: 13px;
+  color: #c9d1d9;
+  line-height: 1.5;
+}
+.sv-profile-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6e7681;
+}
+.sv-profile-tag {
+  display: inline-block;
+  background: #21262d;
+  color: #8b949e;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.sv-profile-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.sv-profile-card:hover .sv-profile-card-actions {
+  opacity: 1;
+}
+.sv-profile-editing-card {
+  border: 1px solid #58a6ff;
+  box-shadow: 0 0 0 1px rgba(88,166,255,0.2);
+}
+.sv-profile-edit-input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #c9d1d9;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+.sv-profile-edit-input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+.sv-profile-edit-select {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #c9d1d9;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.sv-profile-edit-select:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+.sv-profile-edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sv-profile-badge-p0 { color: #f85149; }
+.sv-profile-badge-p1 { color: #d29922; }
+.sv-profile-badge-p2 { color: #58a6ff; }
+.sv-profile-badge-p3 { color: #6e7681; }
+
+/* 暂存区 */
+.sv-pending-section {
+  margin-top: 20px;
+}
+.sv-pending-item {
+  padding: 8px 14px;
+  border: 1px solid #21262d;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sv-pending-item:hover {
+  border-color: #30363d;
+  background: #1c2128;
+}
+.sv-pending-content {
+  flex: 1;
+  font-size: 13px;
+  color: #c9d1d9;
+  min-width: 0;
+}
+.sv-pending-meta {
+  font-size: 11px;
+  color: #6e7681;
+  margin-top: 2px;
+}
+.sv-pending-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sv-pending-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #21262d;
+  color: #8b949e;
+}
+.sv-pending-badge-high { background: rgba(248,81,73,0.15); color: #f85149; }
+.sv-pending-badge-low  { background: rgba(88,166,255,0.15); color: #58a6ff; }
+.sv-empty-pending {
+  padding: 20px;
+  text-align: center;
+  color: #484f58;
+  font-size: 13px;
+  border: 1px dashed #21262d;
+  border-radius: 6px;
+}
