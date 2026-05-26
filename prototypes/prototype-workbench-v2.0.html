@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坐山客 · 工作台 v2.0 — 多入口卡片</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --card-bg: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --text-faint: #484f58;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --gold: #d29922;
+    --purple: #a371f7;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ═══ Main ═══ */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 3px 32px 110px;
+    display: flex; flex-direction: column;
+  }
+  .main::-webkit-scrollbar { width: 8px; }
+  .main::-webkit-scrollbar-track { background: transparent; }
+  .main::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+
+  /* ═══ Greeting ═══ */
+  .greeting {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .greeting-left h1 {
+    font-size: 28px; font-weight: 600; color: var(--text);
+    margin-bottom: 4px;
+  }
+  .greeting-left .sub {
+    font-size: 13px; color: var(--text-dim);
+  }
+  .greeting-right {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .greeting-right .time {
+    font-size: 14px; color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    margin-right: 8px;
+  }
+
+  /* ═══ Card Grid ═══ */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    align-items: start; /* 高度由内容决定，不强行拉齐 */
+  }
+
+  /* ═══ Card — 三区域结构 ═══ */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+    cursor: default; /* body 内独立点击不触发整卡 */
+  }
+  .card:hover { border-color: #454d59; }
+
+  /*
+   * 多入口语义（原型用注释标注，React 实现用 stopPropagation）:
+   *   .card-header  →  onClick → handleEnterScene(scene)  进入聊天
+   *   .card-body    →  按产出类型自适应，子元素各自 onClick
+   *   .card-footer  →  onClick → 打开产出画廊/主产出
+   */
+
+  .card-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; /* header 可点击 → 进聊天 */
+    transition: background 0.15s;
+  }
+  .card-header:hover { background: #1c2333; }
+  .card-header .icon { font-size: 15px; }
+  .card-header .actions { margin-left: auto; display: flex; gap: 6px; }
+  .card-header .actions button {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 13px; padding: 2px 6px; border-radius: 4px;
+  }
+  .card-header .actions button:hover { color: var(--text); background: #21262d; }
+
+  .card-body { padding: 16px; }
+
+  /* ═══ Card Footer — 产出入口 ═══ */
+  .card-footer {
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .card-footer:hover { background: #1c2333; color: var(--text); }
+  .card-footer .arrow { margin-left: auto; font-size: 14px; transition: transform 0.2s; }
+  .card-footer:hover .arrow { transform: translateX(3px); }
+  .card-footer.empty { cursor: default; color: var(--text-faint); }
+  .card-footer.empty:hover { background: transparent; color: var(--text-faint); }
+
+  /* ═══ 天气 Card（实时数据） ═══ */
+  .weather-main {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .weather-icon { font-size: 48px; line-height: 1; }
+  .weather-info .temp { font-size: 36px; font-weight: 300; line-height: 1.1; }
+  .weather-info .desc { font-size: 13px; color: var(--text-dim); }
+  .weather-info .location { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+  .weather-details {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .weather-details .detail {
+    display: flex; justify-content: space-between;
+    font-size: 12px;
+  }
+  .weather-details .detail .label { color: var(--text-dim); }
+  .weather-details .detail .val { color: var(--text); font-weight: 500; }
+
+  /* ═══ 待办 Card（结构化列表） ═══ */
+  .todo-list { display: flex; flex-direction: column; gap: 8px; }
+  .todo-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; background: #0d1117;
+    border-radius: var(--radius-sm); font-size: 13px;
+    cursor: pointer; /* 点条目 → 勾选/跳转 */
+    transition: background 0.15s;
+  }
+  .todo-item:hover { background: #161b22; }
+  .todo-item .check {
+    width: 16px; height: 16px; border-radius: 4px;
+    border: 2px solid var(--border); flex-shrink: 0;
+  }
+  .todo-item.done .check { background: var(--green); border-color: var(--green); }
+  .todo-item.done .check::after {
+    content: '✓'; color: #fff; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .todo-item.done .text { color: var(--text-faint); text-decoration: line-through; }
+  .todo-item .text { flex: 1; color: var(--text); }
+  .todo-item .priority {
+    font-size: 11px; padding: 1px 6px; border-radius: 3px; font-weight: 500;
+  }
+  .priority.high { color: var(--red); background: rgba(248,81,73,0.1); }
+  .priority.medium { color: var(--gold); background: rgba(210,153,34,0.1); }
+  .priority.low { color: var(--green); background: rgba(63,185,80,0.1); }
+
+  .todo-stats {
+    display: flex; gap: 12px; margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim);
+  }
+  .todo-stats span strong { color: var(--text); }
+
+  /* ═══ 分身 Card（状态列表） ═══ */
+  .fenshen-list { display: flex; flex-direction: column; gap: 10px; }
+  .fenshen-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px; background: #0d1117; border-radius: var(--radius-sm);
+    cursor: pointer; /* 点分身条目 → 进入该场景 */
+    transition: background 0.15s;
+  }
+  .fenshen-item:hover { background: #161b22; }
+  .fenshen-item .avatar {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--purple), var(--blue));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+  .fenshen-item .info { flex: 1; min-width: 0; }
+  .fenshen-item .name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .fenshen-item .task { font-size: 12px; color: var(--text-dim); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fenshen-item .meta {
+    display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-faint);
+  }
+  .fenshen-item .status-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 3px;
+  }
+  .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.idle { background: var(--gold); }
+
+  /* ═══ 文本产出 Card（小说/报告） ═══ */
+  .text-output-preview {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .text-output-preview .text-meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-dim);
+  }
+  .text-output-preview .text-meta .word-count {
+    background: #21262d; padding: 2px 8px; border-radius: 4px;
+  }
+  .text-output-preview .text-excerpt {
+    font-size: 13px; line-height: 1.7; color: var(--text);
+    padding: 10px 12px; background: #0d1117; border-radius: var(--radius-sm);
+    border-left: 2px solid var(--purple);
+    max-height: 72px; overflow: hidden;
+    cursor: pointer; /* 点摘要 → 打开全文 */
+    transition: border-color 0.2s;
+  }
+  .text-output-preview .text-excerpt:hover { border-color: #c4a7ff; }
+
+  /* ═══ Web 应用 Card（游戏/工具） ═══ */
+  .webapp-preview {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .webapp-thumb {
+    width: 100%; aspect-ratio: 16/10;
+    background: linear-gradient(135deg, #1a2332, #0d1117);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 42px;
+    cursor: pointer; /* 点缩略图 → 新标签打开 */
+    transition: border-color 0.2s;
+    overflow: hidden;
+    position: relative;
+  }
+  .webapp-thumb:hover { border-color: var(--blue); }
+  .webapp-thumb .play-overlay {
+    position: absolute; bottom: 6px; right: 8px;
+    background: rgba(0,0,0,0.7); color: var(--text);
+    font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .webapp-thumb:hover .play-overlay { opacity: 1; }
+  .webapp-info {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--text-dim);
+  }
+  .webapp-launch {
+    background: linear-gradient(135deg, #e6c84a 0%, #c8a84e 50%, #a08030 100%);
+    color: #0d1117;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .webapp-launch:hover { opacity: 0.9; }
+
+  /* ═══ 数据分析 Card（图表） ═══ */
+  .analysis-preview {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .analysis-chart-thumb {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer; /* 点图表 → 全屏查看 */
+    transition: border-color 0.2s;
+  }
+  .analysis-chart-thumb:hover { border-color: var(--blue); }
+  .analysis-chart-thumb .chart-icon { font-size: 28px; }
+  .analysis-chart-thumb .chart-label { font-size: 11px; color: var(--text-dim); }
+  .analysis-metrics {
+    display: flex; gap: 12px; margin-top: 8px;
+    padding-top: 10px; border-top: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .analysis-metric { text-align: center; flex: 1; }
+  .analysis-metric .val { font-size: 20px; font-weight: 600; color: var(--text); }
+  .analysis-metric .label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ═══ 文件集合 Card ═══ */
+  .file-collection {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  .file-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: #0d1117;
+    border-radius: var(--radius-sm); font-size: 12px;
+    cursor: pointer; /* 点文件 → 打开/下载 */
+    transition: background 0.15s;
+  }
+  .file-item:hover { background: #161b22; }
+  .file-item .file-icon { font-size: 18px; flex-shrink: 0; }
+  .file-item .file-name { flex: 1; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-item .file-size { color: var(--text-faint); font-size: 11px; }
+
+  /* ═══ 默认 Card（无产出占位） ═══ */
+  .card-placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 40px 20px; text-align: center; gap: 8px;
+    cursor: pointer; /* 点 body → 进聊天（同 header） */
+    transition: background 0.15s;
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+  .card-placeholder:hover { background: #1c2333; }
+  .card-placeholder .icon { font-size: 32px; opacity: 0.4; }
+  .card-placeholder .title { font-size: 14px; color: var(--text-dim); }
+  .card-placeholder .hint { font-size: 12px; color: var(--text-faint); }
+
+  /* ═══ Quick Buttons ═══ */
+  .quick-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .quick-btn:hover { border-color: #c8a84e; }
+  .quick-btn .icon { font-size: 15px; }
+  .quick-btn.primary {
+    background: linear-gradient(135deg, #e6c84a 0%, #c8a84e 50%, #a08030 100%);
+    color: #0d1117;
+    border-color: #c8a84e;
+    font-weight: 600;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .quick-btn.primary:hover { opacity: 0.9; border-color: #ffd700; }
+
+  /* ═══ Floating Chat Bar ═══ */
+  .float-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--card-bg);
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; gap: 10px;
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .float-bar.collapsed { transform: translateY(calc(100% - 6px)); }
+  .float-bar-toggle {
+    position: absolute;
+    top: -28px; left: 50%; transform: translateX(-50%);
+    width: 48px; height: 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border); border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-faint); font-size: 11px;
+    transition: color 0.2s;
+  }
+  .float-bar-toggle:hover { color: var(--text); }
+  .float-bar-input {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    min-height: 48px;
+    line-height: 1.6;
+  }
+  .float-bar-input:focus { border-color: #c8a84e; }
+  .float-bar-input::placeholder { color: var(--text-faint); }
+  .float-bar-send {
+    background: linear-gradient(135deg, #e6c84a 0%, #c8a84e 50%, #a08030 100%);
+    color: #0d1117;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .float-bar-send:hover { opacity: 0.9; }
+  .float-bar-hint {
+    font-size: 12px; color: var(--text-faint); white-space: nowrap;
+  }
+
+  /* ═══ Responsive ═══ */
+  @media (max-width: 760px) {
+    .card-grid { grid-template-columns: 1fr; }
+    .main { padding: 3px 16px 110px; }
+  }
+
+  .dim { color: var(--text-dim); }
+  .faint { color: var(--text-faint); }
+
+  /* ═══ Avatar ═══ */
+  .avatar-area {
+    position: fixed;
+    top: 0; left: 0; width: 100%;
+    z-index: 100;
+    display: flex; justify-content: center;
+    pointer-events: none;
+  }
+  .avatar-container {
+    position: relative;
+    width: 70px; height: 66px;
+    pointer-events: auto; cursor: pointer;
+  }
+  .avatar-canvas {
+    width: 56px; height: 56px;
+    position: absolute;
+    top: -3px; left: 50%; transform: translateX(-50%);
+    filter: drop-shadow(0 2px 16px rgba(0,212,255,0.12));
+    transition: filter 0.3s;
+  }
+  .avatar-canvas:hover { filter: drop-shadow(0 2px 28px rgba(0,212,255,0.25)); }
+  .avatar-canvas svg { width: 100%; height: 100%; }
+  .avatar-bubble {
+    position: absolute;
+    top: 10px; left: calc(100% + 8px);
+    background: #1a2332;
+    border: 1px solid rgba(0,212,255,0.33);
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: #c9d1d9;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-4px) scale(0.92);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .avatar-container:hover .avatar-bubble { opacity: 1; transform: translateX(0) scale(1); }
+  .avatar-bubble::before {
+    content: '';
+    position: absolute;
+    left: -5px; top: 8px;
+    border: 5px solid transparent;
+    border-right-color: #1a2332;
+  }
+  .avatar-dot {
+    display: inline-block;
+    width: 5px; height: 5px; border-radius: 50%;
+    margin-right: 4px;
+    background: var(--green);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.3); }
+  }
+  .avatar-label {
+    position: absolute;
+    top: 52px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; color: #484f58;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    white-space: nowrap;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  .avatar-container:hover .avatar-label { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══ Avatar ═══ -->
+<div class="avatar-area">
+  <div class="avatar-container">
+    <div class="avatar-canvas">
+      <svg viewBox="10 0 52 50" width="56" height="56" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.09"/>
+          <stop offset="60%" stop-color="#00d4ff" stop-opacity="0.025"/>
+          <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="skinTone" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#2a2a3e"/>
+          <stop offset="50%" stop-color="#1e1e32"/>
+          <stop offset="100%" stop-color="#1a1a2e"/>
+        </linearGradient>
+        <linearGradient id="hairGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#1a1a2e"/>
+          <stop offset="50%" stop-color="#16213e"/>
+          <stop offset="100%" stop-color="#0f3460"/>
+        </linearGradient>
+        <linearGradient id="hairStreak" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#00d4ff"/>
+          <stop offset="100%" stop-color="#7b2ff7"/>
+        </linearGradient>
+        <linearGradient id="jacketGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a2332"/>
+          <stop offset="100%" stop-color="#0f1624"/>
+        </linearGradient>
+        <linearGradient id="visorGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.3"/>
+          <stop offset="50%" stop-color="#00d4ff" stop-opacity="0.06"/>
+          <stop offset="100%" stop-color="#00d4ff" stop-opacity="0.18"/>
+        </linearGradient>
+        <filter id="neonGlow"><feGaussianBlur stdDeviation="0.8"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="softGlow"><feGaussianBlur stdDeviation="0.5"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <!-- 背景光晕 -->
+      <circle cx="36" cy="28" r="28" fill="url(#bgGlow)"/>
+      <!-- 夹克上部分 -->
+      <path d="M14 42 L10 44 L12 50 L16 54 L56 54 L60 50 L62 44 L58 42" fill="url(#jacketGrad)" stroke="#1e2a3a" stroke-width="0.8"/>
+      <!-- 领口 -->
+      <path d="M26 34 Q22 32 24 28 L48 28 Q50 32 46 34 Z" fill="#1a2332" stroke="#1e2a3a" stroke-width="0.6"/>
+      <!-- 电路装饰线 -->
+      <path d="M28 34 L26 28" fill="none" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+      <path d="M44 34 L46 28" fill="none" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+      <!-- 中心线 -->
+      <line x1="36" y1="38" x2="36" y2="54" stroke="#1e2a3a" stroke-width="1"/>
+      <!-- 夹克下摆 -->
+      <path d="M24 38 Q30 36 36 36 Q42 36 48 38 L48 46 Q42 48 36 48 Q30 48 24 46 Z" fill="url(#jacketGrad)" stroke="#1e2a3a" stroke-width="0.5" opacity="0.7"/>
+      <!-- 菱形胸针 -->
+      <polygon points="34,40 36,38 38,40 36,42" fill="none" stroke="#00d4ff" stroke-width="0.6" opacity="0.45" filter="url(#softGlow)"/>
+      <!-- 夹克纽扣 -->
+      <circle cx="12" cy="46" r="1" fill="#00d4ff" opacity="0.4" filter="url(#softGlow)"/>
+      <circle cx="60" cy="46" r="1" fill="#00d4ff" opacity="0.4" filter="url(#softGlow)"/>
+      <!-- 鼻子 -->
+      <rect x="32" y="28" width="8" height="6" rx="2" fill="url(#skinTone)" stroke="#2d3748" stroke-width="0.4"/>
+      <!-- 脸部 -->
+      <ellipse cx="36" cy="20" rx="10" ry="10.5" fill="url(#skinTone)" stroke="#2d3748" stroke-width="0.6"/>
+      <!-- 面颊轮廓 -->
+      <path d="M26 20 Q26 28 30 30 Q36 31 42 30 Q46 28 46 20" fill="none" stroke="#2d3748" stroke-width="0.4" opacity="0.4"/>
+      <!-- 嘴唇辅助线 -->
+      <path d="M33 29 Q36 30.5 39 29" fill="none" stroke="#3d4a5c" stroke-width="0.3" opacity="0.25"/>
+      <!-- 发型主体 -->
+      <path d="M25 16 Q25 6 30 4 Q33 2 36 3 Q39 2 42 4 Q47 6 47 16 Q43 10 36 9 Q29 10 25 16 Z" fill="url(#hairGrad)"/>
+      <!-- 鬓发 -->
+      <path d="M26 14 Q24 10 27 8 Q29 7 31 8 Q29 10 28 13 Z" fill="url(#hairGrad)"/>
+      <path d="M31 4 Q31 2 32 1 L33 4 Z" fill="url(#hairGrad)"/>
+      <path d="M36 3 Q36 1 37 0 L38 3 Z" fill="url(#hairGrad)"/>
+      <path d="M40 4 Q41 2 42 2 L42 4 Z" fill="url(#hairGrad)"/>
+      <!-- 挑染 -->
+      <path d="M29 13 Q30 9 33 8" fill="none" stroke="url(#hairStreak)" stroke-width="1.5" stroke-linecap="round" filter="url(#softGlow)"/>
+      <path d="M37 10 Q39 7 42 7" fill="none" stroke="url(#hairStreak)" stroke-width="0.8" stroke-linecap="round" opacity="0.5" filter="url(#softGlow)"/>
+      <!-- 护目镜主体 -->
+      <path d="M24 16 Q28 14 36 14 Q44 14 48 16 L48 20 Q44 22 36 22 Q28 22 24 20 Z" fill="url(#visorGrad)" stroke="#00d4ff" stroke-width="0.7" opacity="0.7"/>
+      <!-- 护目镜高光 -->
+      <path d="M26 17 Q30 16 34 16 L35 17 L33 18 Q29 18 26 17 Z" fill="#00d4ff" opacity="0.1"/>
+      <!-- 护目镜中央光点 -->
+      <circle cx="36" cy="18" r="1.3" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
+      <!-- 护目镜侧光点 -->
+      <circle cx="26" cy="18" r="0.7" fill="#00d4ff" opacity="0.3" filter="url(#neonGlow)"/>
+      <circle cx="46" cy="18" r="0.7" fill="#00d4ff" opacity="0.3" filter="url(#neonGlow)"/>
+      <!-- 护目镜边框 -->
+      <path d="M25 16 Q31 14.5 36 14.5 Q41 14.5 47 16" fill="none" stroke="#00d4ff" stroke-width="0.35" opacity="0.45"/>
+      <!-- ═══ 眼睛：idle 闭眼 ═══ -->
+      <g>
+        <path d="M31 17 Q33 16 35 17" fill="none" stroke="#00d4ff" stroke-width="1" stroke-linecap="round"/>
+        <path d="M37 17 Q39 16 41 17" fill="none" stroke="#00d4ff" stroke-width="1" stroke-linecap="round"/>
+      </g>
+      <!-- ═══ 嘴：smile ═══ -->
+      <path d="M33 24 Q36 25.5 39 24" fill="none" stroke="#3d4a5c" stroke-width="0.7" stroke-linecap="round"/>
+      <!-- 护目镜 侧环 -->
+      <circle cx="47" cy="16" r="2" fill="none" stroke="#00d4ff" stroke-width="0.4" opacity="0.3"/>
+      <circle cx="47" cy="16" r="0.5" fill="#00d4ff" opacity="0.2" filter="url(#neonGlow)"/>
+    </svg>
+    </div>
+    <div class="avatar-bubble">
+      <span class="avatar-dot"></span>在线待命
+    </div>
+    <div class="avatar-label">idle</div>
+  </div>
+</div>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+
+  <!-- Greeting -->
+  <div class="greeting">
+    <div class="greeting-left">
+      <h1 id="greeting-text">下午好 ☀️</h1>
+      <div class="sub">2026年5月26日 星期一 · 北京 晴 26°C</div>
+    </div>
+    <div class="greeting-right">
+      <span class="time" id="clock">--</span>
+      <button class="quick-btn"><span class="icon">➕</span> 新建场景</button>
+      <button class="quick-btn primary">进入坐山客空间 →</button>
+    </div>
+  </div>
+
+  <!-- ═══ Card Grid ═══ -->
+  <div class="card-grid">
+
+    <!--
+      ===============================
+      卡片 1: 🌤️ 天气 — 实时数据型
+      header → 进聊天
+      body → 纯展示（数据卡无独立点击）
+      footer → 打开天气场景产出（预报/历史）
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入天气查询场景">
+        <span class="icon">🌤️</span> 今日天气
+        <div class="actions">
+          <button title="切换城市">📍 北京</button>
+          <button title="刷新">🔄</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="weather-main">
+          <div class="weather-icon">☀️</div>
+          <div class="weather-info">
+            <div class="temp">26°<span class="faint" style="font-size:18px;">C</span></div>
+            <div class="desc">晴朗 · 体感 24°</div>
+            <div class="location">📍 北京 · 朝阳区</div>
+          </div>
+        </div>
+        <div class="weather-details">
+          <div class="detail"><span class="label">💧 湿度</span><span class="val">45%</span></div>
+          <div class="detail"><span class="label">🌬 风力</span><span class="val">西北 3级</span></div>
+          <div class="detail"><span class="label">🌅 日出</span><span class="val">05:12</span></div>
+          <div class="detail"><span class="label">🌇 日落</span><span class="val">19:28</span></div>
+          <div class="detail"><span class="label">🌡 最高</span><span class="val">31°</span></div>
+          <div class="detail"><span class="label">🌡 最低</span><span class="val">18°</span></div>
+          <div class="detail"><span class="label">👁 能见度</span><span class="val">12km</span></div>
+          <div class="detail"><span class="label">☂ 降水</span><span class="val">5%</span></div>
+        </div>
+      </div>
+      <div class="card-footer" title="查看完整预报">
+        📡 完整预报 <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 2: ✅ 待办 — 结构化列表型
+      header → 进聊天
+      body → 条目独立点击勾选/跳转
+      footer → 打开待办场景产出
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入待办场景">
+        <span class="icon">✅</span> 今日待办
+        <div class="actions">
+          <button title="添加">＋</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="todo-list">
+          <div class="todo-item" title="点击跳转到该待办">
+            <div class="check"></div>
+            <span class="text">完成 Dashboard 原型设计</span>
+            <span class="priority high">高</span>
+          </div>
+          <div class="todo-item done" title="已完成">
+            <div class="check"></div>
+            <span class="text">修复 SettingsView 分隔线样式</span>
+            <span class="priority medium">中</span>
+          </div>
+          <div class="todo-item" title="点击跳转">
+            <div class="check"></div>
+            <span class="text">检查 zuoshanke DB 备份状态</span>
+            <span class="priority medium">中</span>
+          </div>
+          <div class="todo-item" title="点击跳转">
+            <div class="check"></div>
+            <span class="text">整理本周 git commit 记录</span>
+            <span class="priority low">低</span>
+          </div>
+        </div>
+        <div class="todo-stats">
+          <span>共 <strong>4</strong> 项</span>
+          <span>进行中 <strong>3</strong></span>
+          <span>已完成 <strong>1</strong></span>
+        </div>
+      </div>
+      <div class="card-footer" title="浏览所有待办产出">
+        📋 全部待办 <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 3: 📝 小说创作 — 文本产出型
+      header → 进入聊天
+      body → 点摘要打开全文
+      footer → 打开产出画廊（所有章节）
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入小说创作场景">
+        <span class="icon">📝</span> 小说创作 · 夜雨长安
+        <div class="actions">
+          <button title="配置">⚙</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="text-output-preview">
+          <div class="text-meta">
+            <span>📄 第三章 · 夜雨</span>
+            <span class="word-count">2,847 字</span>
+          </div>
+          <div class="text-excerpt" title="点击阅读全文">
+            雨打在青石板上，溅起细碎的水花。她撑着油纸伞站在巷口，远远望着那扇紧闭的朱漆大门。三年前，她也是这样一个雨夜离开的。如今回来了，却发现这扇门似乎从未为她敞开过。门缝里透出的昏黄灯光，像是隔了一个世纪那么遥远……
+          </div>
+          <div class="text-meta" style="margin-top:4px;">
+            <span>📊 人物关系图</span>
+            <span style="margin-left:auto;">📈 情节进度 3/12</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer" title="浏览全部章节和人物档案">
+        📖 阅读全文 · 3章 <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 4: 🕹️ 像素游戏 — Web 应用型
+      header → 进入聊天
+      body → 点缩略图/按钮 → 新标签打开游戏
+      footer → 打开游戏场景产出（版本/截图）
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入游戏开发场景">
+        <span class="icon">🕹️</span> 像素冒险
+        <div class="actions">
+          <button title="分享">🔗</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="webapp-preview">
+          <div class="webapp-thumb" title="新标签打开游戏">
+            <span>🎮</span>
+            <span class="play-overlay">▶ 开始游戏</span>
+          </div>
+          <div class="webapp-info">
+            <span>🏆 高分: 2,847</span>
+            <span>⚡ v1.2.0</span>
+            <button class="webapp-launch" title="新标签打开">🕹️ 开始游戏</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer" title="浏览游戏产出和截图">
+        🎮 运行游戏 · 截图 · 日志 <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 5: 📊 数据分析 — 图表型
+      header → 进入聊天
+      body → 点图表全屏查看
+      footer → 打开分析场景产出（导出/原始数据）
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入数据分析场景">
+        <span class="icon">📊</span> 用户增长分析
+        <div class="actions">
+          <button title="刷新数据">🔄</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="analysis-preview">
+          <div class="analysis-chart-thumb" title="全屏查看趋势图">
+            <span class="chart-icon">📈</span>
+            <span class="chart-label">日活趋势</span>
+          </div>
+          <div class="analysis-chart-thumb" title="全屏查看分布图">
+            <span class="chart-icon">🍩</span>
+            <span class="chart-label">用户分布</span>
+          </div>
+          <div class="analysis-chart-thumb" title="全屏查看漏斗">
+            <span class="chart-icon">🔻</span>
+            <span class="chart-label">转化漏斗</span>
+          </div>
+          <div class="analysis-chart-thumb" title="全屏查看热力图">
+            <span class="chart-icon">🗺️</span>
+            <span class="chart-label">区域热力图</span>
+          </div>
+        </div>
+        <div class="analysis-metrics">
+          <div class="analysis-metric">
+            <div class="val">12.8K</div>
+            <div class="label">日活</div>
+          </div>
+          <div class="analysis-metric">
+            <div class="val">34.2%</div>
+            <div class="label">留存</div>
+          </div>
+          <div class="analysis-metric">
+            <div class="val">↑18%</div>
+            <div class="label" style="color: var(--green);">增长</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer" title="导出数据 / 原始数据">
+        📊 查看全部图表 · 导出CSV <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 6: 🧠 分身进展 — 状态列表型
+      header → 进聊天（分身总览）
+      body → 点每个分身条目 → 进入该分身场景
+      footer → 打开所有分身产出汇总
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入分身管理">
+        <span class="icon">🧠</span> 分身任务进展
+        <div class="actions">
+          <button title="刷新">🔄</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="fenshen-list">
+          <div class="fenshen-item" title="进入坐山客自开发场景">
+            <div class="status-dot active"></div>
+            <div class="avatar">🛠</div>
+            <div class="info">
+              <div class="name">坐山客自开发</div>
+              <div class="task">重构 Agent Loop 工具调用链路 — 第 3/5 步</div>
+              <div class="meta">
+                <span>🔄 循环 12</span><span>📊 8 工具调用</span><span>⏱ 3分钟前</span>
+              </div>
+            </div>
+          </div>
+          <div class="fenshen-item" title="进入文档撰写场景">
+            <div class="status-dot active"></div>
+            <div class="avatar">📝</div>
+            <div class="info">
+              <div class="name">文档撰写助手</div>
+              <div class="task">生成 API 接口文档 — 执行中…</div>
+              <div class="meta">
+                <span>🔄 循环 5</span><span>📊 3 工具调用</span><span>⏱ 1分钟前</span>
+              </div>
+            </div>
+          </div>
+          <div class="fenshen-item" title="进入 Bug 猎手场景">
+            <div class="status-dot idle"></div>
+            <div class="avatar">🐛</div>
+            <div class="info">
+              <div class="name">Bug 猎手</div>
+              <div class="task">扫描前端 JS 异常 — 等待触发</div>
+              <div class="meta">
+                <span>💤 空闲中</span><span>⏱ 15分钟前</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer" title="查看所有分身的产出汇总">
+        🧠 分身产出汇总 <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 7: 📦 Github Trending — 默认型（无产出）
+      header → 进聊天
+      body → 进聊天（同 header 行为）
+      footer → 无产出时显示占位文字
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="进入 Github Trending 场景">
+        <span class="icon">📦</span> Github Trending
+        <div class="actions">
+          <button title="配置">⚙</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-placeholder" title="进入场景">
+          <div class="icon">📦</div>
+          <div class="title">坐山客正在准备中…</div>
+          <div class="hint">跟我说你想要什么</div>
+        </div>
+      </div>
+      <div class="card-footer empty">
+        暂无产出
+      </div>
+    </div>
+
+    <!--
+      ===============================
+      卡片 8: 🎯 常用场景 — 入口卡（列表型）
+      header → 进聊天（常用场景管理）
+      body → 点每个场景条目 → 进入该场景
+      footer → 打开场景广场
+      ===============================
+    -->
+    <div class="card">
+      <div class="card-header" title="管理常用场景">
+        <span class="icon">🎯</span> 常用场景
+        <div class="actions">
+          <button title="管理">⚙</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="fenshen-list">
+          <div class="fenshen-item" title="进入坐山客自开发">
+            <div class="avatar">💻</div>
+            <div class="info">
+              <div class="name">坐山客自开发</div>
+              <div class="task" style="color:var(--text-dim);">主开发场景 · 上次活跃 3分钟前</div>
+            </div>
+          </div>
+          <div class="fenshen-item" title="进入 Web 前端助手">
+            <div class="avatar">🌐</div>
+            <div class="info">
+              <div class="name">Web 前端助手</div>
+              <div class="task" style="color:var(--text-dim);">前端开发 · 上次活跃 1小时前</div>
+            </div>
+          </div>
+          <div class="fenshen-item" title="进入数据分析">
+            <div class="avatar">📊</div>
+            <div class="info">
+              <div class="name">数据分析</div>
+              <div class="task" style="color:var(--text-dim);">数据处理 · 上次活跃 昨天</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer" title="浏览场景广场">
+        🏪 场景广场 <span class="arrow">→</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ Floating Chat Bar ═══ -->
+<div class="float-bar" id="floatBar">
+  <div class="float-bar-toggle" id="floatBarToggle" title="收起/展开">▲</div>
+  <input class="float-bar-input" type="text" placeholder="💬 跟坐山客说你想看什么...（例如：加一个 Github Trending 卡片）" id="floatInput" />
+  <button class="float-bar-send" id="floatSend">发送</button>
+  <span class="float-bar-hint">⌘K 唤起</span>
+</div>
+
+<script>
+// Live clock
+function updateClock() {
+  const now = new Date();
+  const el = document.getElementById('clock');
+  if (el) el.textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// Dynamic greeting
+function updateGreeting() {
+  const h = new Date().getHours();
+  const g = document.getElementById('greeting-text');
+  let emoji, text;
+  if (h < 6)       { emoji = '🌙'; text = '夜深了'; }
+  else if (h < 9)  { emoji = '🌅'; text = '早上好'; }
+  else if (h < 12) { emoji = '☀️'; text = '上午好'; }
+  else if (h < 14) { emoji = '☀️'; text = '中午好'; }
+  else if (h < 18) { emoji = '🌤️'; text = '下午好'; }
+  else             { emoji = '🌆'; text = '晚上好'; }
+  if (g) g.textContent = text + ' ' + emoji;
+}
+updateGreeting();
+
+// Float bar toggle
+const floatBar = document.getElementById('floatBar');
+const floatToggle = document.getElementById('floatBarToggle');
+let barExpanded = true;
+floatToggle.addEventListener('click', () => {
+  barExpanded = !barExpanded;
+  floatBar.classList.toggle('collapsed', !barExpanded);
+  floatToggle.textContent = barExpanded ? '▲' : '▼';
+});
+
+// Send placeholder animation
+const floatSend = document.getElementById('floatSend');
+const floatInput = document.getElementById('floatInput');
+floatSend.addEventListener('click', () => {
+  if (!floatInput.value.trim()) return;
+  const original = floatInput.placeholder;
+  floatInput.placeholder = '✅ 已收到！坐山客正在为你创建场景…';
+  floatInput.value = '';
+  floatInput.disabled = true;
+  floatSend.disabled = true;
+  setTimeout(() => {
+    floatInput.placeholder = original;
+    floatInput.disabled = false;
+    floatSend.disabled = false;
+  }, 2000);
+});
+floatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') floatSend.click();
+});
+
+// ⌘K / Ctrl+K to focus float bar
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    if (!barExpanded) floatToggle.click();
+    floatInput.focus();
+  }
+});
+</script>
+
+</body>
+</html>

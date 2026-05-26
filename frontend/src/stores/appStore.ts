@@ -22,7 +22,7 @@ import {
   activateSession,  // 🆕 Schema v1.1: Session 管理
 } from '../api/client';
 
-export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'delegate-results' | 'secret-garden' | 'settings';
+export type ViewPage = 'chat' | 'plaza' | 'workshop' | 'tools' | 'capability-verify' | 'skills' | 'memory' | 'dashboard' | 'outputs' | 'delegate-results' | 'secret-garden' | 'settings' | 'workbench';
 
 /** 从 settings 读取每次加载的聊天记录条数（默认 4） */
 function getMsgLimit(): number {
@@ -159,6 +159,11 @@ interface AppState {
   loadPlazaScenes: (params?: { category?: string; q?: string }) => Promise<void>;
   loadWorkshopScenes: (params?: { category?: string; project_id?: string }) => Promise<void>;
   publishSceneVersion: (sceneId: string, version: string, changelog?: string) => Promise<Scene | null>;
+
+  // ═══ 工作台 ═══
+  scenes: Scene[];
+  loadingScenes: boolean;
+  loadScenes: () => Promise<void>;
   createSceneModalOpen: boolean;
   setCreateSceneModalOpen: (v: boolean) => void;
 
@@ -987,7 +992,6 @@ export const useStore = create<AppState>((set, get) => ({
   publishSceneVersion: async (sceneId, version, changelog) => {
     try {
       const updated = await publishScene(sceneId, { version, changelog });
-      // 同步刷新工坊列表
       get().loadWorkshopScenes();
       return updated;
     } catch (e) {
@@ -995,6 +999,22 @@ export const useStore = create<AppState>((set, get) => ({
       return null;
     }
   },
+
+  // ═══ 工作台 ═══
+  scenes: [],
+  loadingScenes: false,
+  loadScenes: async () => {
+    set({ loadingScenes: true });
+    try {
+      const scenes = await listScenes();
+      set({ scenes });
+    } catch (e) {
+      console.error('[store] loadScenes failed:', e);
+    } finally {
+      set({ loadingScenes: false });
+    }
+  },
+
   createSceneModalOpen: false,
   setCreateSceneModalOpen: (v) => set({ createSceneModalOpen: v }),
 

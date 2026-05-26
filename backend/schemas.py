@@ -47,6 +47,9 @@ class SceneOut(BaseModel):
     source: str = "self"
     changelog: Optional[str] = None
     published_at: Optional[datetime] = None
+    # ── Schema v1.3: 工作台 ──
+    show_on_workbench: bool = False
+    workbench_position: int = 0
     created_at: datetime
     updated_at: datetime
     # ── Schema v0.81: 收敛/发散参数（默认值） ──
@@ -73,6 +76,9 @@ class SceneUpdate(BaseModel):
     diverge_min_rounds: Optional[int] = None
     # ── Schema v1.0: 场景扩展配置 ──
     scene_config: Optional[dict] = None
+    # ── Schema v1.3: 工作台 ──
+    show_on_workbench: Optional[bool] = None
+    workbench_position: Optional[int] = None
 
 class ScenePublishRequest(BaseModel):
     version: str

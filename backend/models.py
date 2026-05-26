@@ -33,6 +33,11 @@ class Scene(Base):
     source = Column(String, default="self", nullable=False)    # system|self|imported
     changelog = Column(Text, nullable=True, default=None)      # 最近更新说明
     published_at = Column(DateTime, nullable=True, default=None) # 最近发布时间
+
+    # ── Schema v1.3: 工作台 ──
+    show_on_workbench = Column(Boolean, default=False)         # 是否展示在工作台
+    workbench_position = Column(Integer, default=0)            # 工作台排序
+
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

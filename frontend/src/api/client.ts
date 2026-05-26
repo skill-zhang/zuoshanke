@@ -25,12 +25,17 @@ export interface Scene {
   guide_text: string | null;
   category: string;
   version: string;
+  source: string;
   created_at: string;
   updated_at: string;
   // Schema v0.81: 收敛/发散参数
   converge_threshold: number;
   converge_enabled: boolean;
   diverge_min_rounds: number;
+  // Schema v1.3: 工作台
+  show_on_workbench: boolean;
+  workbench_position: number;
+  scene_config?: Record<string, any>;
 }
 export const listScenes = (projectId?: string) =>
   request<Scene[]>(`/scenes${projectId ? '?project_id=' + projectId : ''}`);
@@ -41,6 +46,7 @@ export const updateScene = (sceneId: string, data: {
   icon?: string | null; description?: string; category?: string; guide_text?: string | null;
   converge_threshold?: number; converge_enabled?: boolean; diverge_min_rounds?: number;
   scene_config?: Record<string, any>;
+  show_on_workbench?: boolean; workbench_position?: number;
 }) =>
   request<Scene>(`/scenes/${sceneId}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteScene = (id: string) =>

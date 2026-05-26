@@ -1,7 +1,7 @@
 /** 🏪 场景广场 — 浏览已发布的场景 */
 import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '../stores/appStore';
-import { Scene } from '../api/client';
+import { Scene, updateScene } from '../api/client';
 
 const CATEGORIES = [
   { key: 'all', icon: '🔍', label: '全部' },
@@ -58,6 +58,12 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
     } catch { return ''; }
   };
 
+  const toggleWorkbenchPin = useCallback(async (scene: Scene, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await updateScene(scene.id, { show_on_workbench: !scene.show_on_workbench });
+    loadPlazaScenes();
+  }, [loadPlazaScenes]);
+
   return (
     <div className="plaza">
       <div className="category-bar">
@@ -113,6 +119,13 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
               </span>
               <span className="scene-card-updated">{formatDate(s.published_at || s.updated_at)}</span>
             </div>
+            <button
+              className={`plaza-pin-btn${s.show_on_workbench ? ' pinned' : ''}`}
+              onClick={(e) => toggleWorkbenchPin(s, e)}
+              title={s.show_on_workbench ? '从工作台移除' : '钉到工作台'}
+            >
+              {s.show_on_workbench ? '⭐ 已加入' : '☆ 加入工作台'}
+            </button>
           </div>
         ))}
       </div>

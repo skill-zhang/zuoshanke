@@ -17,6 +17,7 @@ import { SecretGarden } from './components/SecretGarden';
 import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
 import { Dialog } from './components/Dialog';
+import { WorkbenchView } from './components/WorkbenchView';
 import { ClarifyDialog } from './components/ClarifyDialog';
 import { CommandApprovalDialog } from './components/CommandApprovalDialog';
 import { Scene, createScene } from './api/client';
@@ -39,7 +40,26 @@ export default function App() {
     channels, setCurrentChannel,
     loadWorkshopScenes,
     createSceneModalOpen, setCreateSceneModalOpen,
+    loadScenes, scenes,
   } = useStore();
+
+  // ═══ 启动时加载 scenes + 工作台默认首页（仅首次） ═══
+  useEffect(() => {
+    loadScenes();
+  }, [loadScenes]);
+
+  const initialRouteRef = useRef(false);
+  useEffect(() => {
+    if (initialRouteRef.current) return; // 只执行一次
+    if (scenes.length === 0) return;
+    if (view !== 'chat') return;
+    const hasWorkbench = scenes.some(s => s.show_on_workbench);
+    if (hasWorkbench) {
+      console.log('[App] 检测到工作台场景，首次跳转工作台');
+      setView('workbench');
+    }
+    initialRouteRef.current = true;
+  }, [scenes]);
 
   const [createName, setCreateName] = useState('');
   const [createCategory, setCreateCategory] = useState('other');
@@ -248,6 +268,7 @@ export default function App() {
   const getTitle = () => {
     switch (view) {
       case 'plaza': return '🏪 场景广场';
+      case 'workbench': return '🏠 工作台';
       case 'workshop': return '🛠 工坊';
       case 'secret-garden': return '🌸 秘密花园';
       case 'delegate-results': return '🧩 子 Agent 成果';
@@ -260,7 +281,14 @@ export default function App() {
   };
 
   return (
-    <>
+    <>{view === 'workbench' ? (
+      // ═══ 工作台：独立页面，无 Topbar / Sidebar ═══
+      <>
+        <AgentCharacter hidden={agentHidden} />
+        <WorkbenchView />
+      </>
+    ) : (
+      <>
       <Topbar extraTitle={getTitle()} />
       <AgentCharacter
         hidden={agentHidden}
@@ -364,6 +392,7 @@ export default function App() {
           </div>
         </div>
       </div>
+    </>)}
     </>
   );
 }

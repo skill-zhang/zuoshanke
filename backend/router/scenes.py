@@ -304,6 +304,11 @@ def update_scene(scene_id: str, data: SceneUpdate, db: Session = Depends(get_db)
         scene.diverge_min_rounds = data.diverge_min_rounds
     if data.scene_config is not None:
         scene.scene_config = data.scene_config
+    # ── Schema v1.3: 工作台 ──
+    if data.show_on_workbench is not None:
+        scene.show_on_workbench = data.show_on_workbench
+    if data.workbench_position is not None:
+        scene.workbench_position = data.workbench_position
     scene.updated_at = utcnow()
     db.commit()
     db.refresh(scene)

@@ -325,6 +325,13 @@ export function Sidebar() {
                     <span className="sidebar-item-name">坐山客自开发</span>
                   </div>
                 )}
+                <div
+                  className={`sidebar-item indent${view === 'workbench' ? ' active' : ''}`}
+                  onClick={() => setView('workbench')}
+                >
+                  <span className="sidebar-item-icon">🏠</span>
+                  <span className="sidebar-item-name">工作台</span>
+                </div>
               </>
             );
           })()}
