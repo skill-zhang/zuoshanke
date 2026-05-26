@@ -382,7 +382,8 @@ class TestPatternCount(unittest.TestCase):
                 self.assertIsInstance(cat, str)
                 self.assertIsInstance(desc, str)
                 self.assertIn(cat, {"filesystem", "disk", "git", "database",
-                                     "network", "docker", "package", "config"})
+                                    "network", "docker", "package", "config",
+                                    "exfil", "ssrf"})
 
 
 if __name__ == "__main__":

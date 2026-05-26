@@ -26,6 +26,7 @@ HIGH_RISK_PATTERNS: list[tuple[str, str, str]] = [
     (r'\brm\s+(?:-[rfFR]+\s+)?/usr\b', 'filesystem', '删除 /usr → 用户程序全灭'),
     (r'\bchmod\s+-R\s+[0-7]{3}\s+/', 'filesystem', '递归 chmod 根目录 → 系统权限崩坏'),
     (r'\bchown\s+-R\s+\w+:\w+\s+/', 'filesystem', '递归 chown 根目录 → 系统权限崩坏'),
+    (r'\brm\s+(?:-[rfFR]+\s+)?/etc/(?:nginx|apache2|mysql)\b', 'filesystem', '删除服务配置目录'),
 
     # ── 磁盘毁灭 ──
     (r'\bdd\s+if=/dev/zero\s+of=/dev/sd', 'disk', 'dd 零覆写系统盘'),
@@ -76,7 +77,24 @@ HIGH_RISK_PATTERNS: list[tuple[str, str, str]] = [
     (r'\busermod\s+-s\s+/sbin/nologin\s+root\b', 'config', '禁止 root 登录'),
     (r'\bkill\s+-9\s+-1\b', 'config', '广播 SIGKILL 杀死所有进程'),
     (r'\bpkill\s+-9\s+-u\b', 'config', '杀死指定用户所有进程'),
-    (r'\brm\s+(?:-[rf]+\s+)?/etc/(?:nginx|apache2|mysql)\b', 'config', '删除服务配置目录'),
+
+    # ── 凭据外泄（exfiltration）──
+    (r'curl\s+[^\n]*\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)[^}]*\}?', 'exfil', 'curl 外泄 API Key/Token 到外部服务器'),
+    (r'wget\s+[^\n]*\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)', 'exfil', 'wget 外泄 API Key/Token 到外部服务器'),
+    (r'(?:cat|base64|head|tail)\s+(?:.*\|\s*)?(?:curl|wget|nc|ncat)', 'exfil', '通过管道将本地文件内容外泄到外部服务器'),
+    (r'(?:\.env|credentials|auth\.json|\.netrc|\.pgpass)\s*\|(?!\s*grep)', 'exfil', '读取敏感文件并通过管道外泄'),
+    (r'\b(?:nc|ncat)\s+(?:-e|--exec)\s', 'exfil', 'netcat 反向 shell 外泄'),
+    (r'base64\s+.*(?:\.env|credentials|\.netrc)', 'exfil', 'base64 编码敏感文件 → 可用于外泄'),
+
+    # ── SSRF curl（curl 到私有/元数据地址）──
+    (r'curl\s+.*169\.254\.169\.254', 'ssrf', 'curl 到云元数据服务（169.254.169.254）'),
+    (r'wget\s+.*169\.254\.169\.254', 'ssrf', 'wget 到云元数据服务（169.254.169.254）'),
+    (r'curl\s+.*metadata\.google\.internal', 'ssrf', 'curl 到 GCP 元数据服务'),
+    (r'curl\s+.*metadata\.goog', 'ssrf', 'curl 到 GCP 元数据服务'),
+    (r'curl\s+.*100\.100\.100\.200', 'ssrf', 'curl 到阿里云元数据服务'),
+    (r'curl\s+.*fd00:ec2::254', 'ssrf', 'curl 到 AWS IMDS IPv6 端点'),
+    (r'wget\s+.*metadata\.google\.internal', 'ssrf', 'wget 到 GCP 元数据服务'),
+    (r'wget\s+.*100\.100\.100\.200', 'ssrf', 'wget 到阿里云元数据服务'),
 ]
 
 

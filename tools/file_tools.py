@@ -30,9 +30,9 @@ MAX_RESULTS = 200
 # ── 路径安全 ──────────────────────────────────────────────────────────────────
 
 def _resolve_path(path: str) -> str:
-    """展开 ~ 并转为绝对路径，防止路径遍历攻击"""
+    """展开 ~ 并转为规范绝对路径，解析符号链接防遍历绕过"""
     expanded = os.path.expanduser(path)
-    resolved = os.path.abspath(expanded)
+    resolved = os.path.realpath(expanded)
     # 阻止读取 /dev、/proc、/sys 等特殊设备
     if any(resolved.startswith(p) for p in ["/dev/", "/proc/", "/sys/", "/etc/"]):
         raise PermissionError(f"禁止访问系统路径: {resolved}")
@@ -134,6 +134,15 @@ def write_file(path: str, content: str = "", content_b64: str = None) -> dict:
         {"success": True, "path": "..."} 或 {"error": "错误描述"}
     """
     try:
+        # 路径安全检查
+        try:
+            from agent_core.path_security import assert_safe_write
+            assert_safe_write(path)
+        except ImportError:
+            pass
+        except ValueError as e:
+            return {"error": str(e)}
+
         resolved = _resolve_path(path)
 
         # 若提供 content_b64，解码后作为实际内容
@@ -234,7 +243,7 @@ def _fuzzy_find(file_content: str, old_string: str, replace_all: bool = False):
     return sorted(unique, key=lambda x: x[0])
 
 
-def patch(path: str, old_string: str, new_string: str = "",
+def patch(path: str, old_string: str = "", new_string: str = "",
           replace_all: bool = False) -> dict:
     """在文件中查找并替换文本，支持模糊匹配。
 
@@ -248,6 +257,15 @@ def patch(path: str, old_string: str, new_string: str = "",
         {"success": True, "diff": "统一差异格式", "count": N} 或 {"error": "..."}
     """
     try:
+        # 路径安全检查
+        try:
+            from agent_core.path_security import assert_safe_write
+            assert_safe_write(path)
+        except ImportError:
+            pass
+        except ValueError as e:
+            return {"error": str(e)}
+
         resolved = _resolve_path(path)
 
         if not os.path.isfile(resolved):

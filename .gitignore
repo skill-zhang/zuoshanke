@@ -35,6 +35,8 @@ Thumbs.db
 
 # Outputs / temp
 outputs/
+*.bak
+*.bak.*
 
 # Hermes
 .hermes/

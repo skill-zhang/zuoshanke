@@ -12,9 +12,42 @@
 """
 
 import json
+import logging
 import urllib.request
 import urllib.error
 import urllib.parse
+
+logger = logging.getLogger(__name__)
+
+
+# ── SSRF 重定向守卫 ──
+
+
+class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """自定义重定向处理器：跟随前重新检查目标 URL 安全性"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        try:
+            from agent_core.url_safety import is_safe_url
+            if not is_safe_url(newurl):
+                logger.warning("SSRF 重定向阻断: %s → %s", req.full_url, newurl)
+                return None
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning("SSRF 重定向检测异常: %s", e)
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = None
+
+
+def _get_ssrf_safe_opener():
+    global _opener
+    if _opener is None:
+        _opener = urllib.request.build_opener(_SSRFSafeRedirectHandler)
+    return _opener
 
 
 def http_request(
@@ -47,12 +80,31 @@ def http_request(
         result["error"] = "无效的 URL，必须以 http:// 或 https:// 开头"
         return result
 
+    # SSRF 安全检测（fail-closed：安全模块异常也阻断）
+    try:
+        from agent_core.url_safety import is_safe_url, is_always_blocked_url
+        if is_always_blocked_url(url):
+            result["error"] = "SSRF 阻断：目标地址为云元数据服务，禁止访问"
+            return result
+        if not is_safe_url(url):
+            parsed = urllib.parse.urlparse(url)
+            hostname = parsed.hostname or url
+            result["error"] = f"SSRF 阻断：目标地址不安全（私有IP/云元数据/回环地址）: {hostname}"
+            return result
+    except ImportError:
+        logger.warning("SSRF 安全检查不可用：agent_core.url_safety 未导入，已跳过检查")
+    except Exception as e:
+        logger.warning("SSRF 安全检测异常: %s", e)
+        result["error"] = f"安全检测异常，已阻断: {e}"
+        return result
+
     method = method.upper()
     if method not in ("GET", "POST", "PUT", "DELETE"):
         result["error"] = f"不支持的 HTTP 方法: {method}，支持 GET/POST/PUT/DELETE"
         return result
 
     try:
+        opener = _get_ssrf_safe_opener()
         req = urllib.request.Request(url, method=method)
 
         # 设置请求头
@@ -68,7 +120,7 @@ def http_request(
                 req.add_header("Content-Type", "application/octet-stream")
 
         # 发送请求
-        response = urllib.request.urlopen(req, timeout=timeout)
+        response = opener.open(req, timeout=timeout)
         result["status_code"] = response.status
         result["headers"] = dict(response.headers)
         result["body"] = response.read().decode("utf-8", errors="replace")

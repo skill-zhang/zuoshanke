@@ -4,11 +4,45 @@
 """
 
 import json
+import logging
 import re
 from html import unescape
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener, install_opener
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+# ── SSRF 重定向守卫 ──
+# 阻止 urllib 自动跟随重定向到私有/元数据地址
+
+
+class _SSRFSafeRedirectHandler(HTTPRedirectHandler):
+    """自定义重定向处理器：跟随前重新检查目标 URL 安全性"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # 在跟随重定向前检查目标 URL
+        try:
+            from agent_core.url_safety import is_safe_url
+            if not is_safe_url(newurl):
+                logger.warning("SSRF 重定向阻断: %s → %s", req.full_url, newurl)
+                return None  # 返回 None = 不跟随，urllib 返回原始 3xx 响应
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning("SSRF 重定向检测异常: %s", e)
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+_opener = None
+
+
+def _get_ssrf_safe_opener():
+    """获取配置了 SSRF 重定向守卫的 opener（单例）"""
+    global _opener
+    if _opener is None:
+        _opener = build_opener(_SSRFSafeRedirectHandler)
+    return _opener
 
 # 常见非正文标签
 _SKIP_TAGS = re.compile(
@@ -52,7 +86,26 @@ def web_fetch(url: str, max_chars: int = 3000) -> str:
             "error": f"不支持的协议: {parsed.scheme}，仅支持 http/https",
         }, ensure_ascii=False)
 
+    # SSRF 安全检测（fail-closed：安全模块异常也阻断）
     try:
+        from agent_core.url_safety import is_safe_url
+        if not is_safe_url(url):
+            hostname = parsed.hostname or url
+            return json.dumps({
+                "success": False, "url": url,
+                "error": f"SSRF 阻断：目标地址不安全（私有IP/云元数据/回环地址）: {hostname}",
+            }, ensure_ascii=False)
+    except ImportError:
+        logger.warning("SSRF 安全检查不可用：agent_core.url_safety 未导入，已跳过检查")
+    except Exception as e:
+        logger.warning("SSRF 安全检测异常: %s", e)
+        return json.dumps({
+            "success": False, "url": url,
+            "error": f"安全检测异常，已阻断: {e}",
+        }, ensure_ascii=False)
+
+    try:
+        opener = _get_ssrf_safe_opener()
         req = Request(
             url,
             headers={
@@ -60,7 +113,7 @@ def web_fetch(url: str, max_chars: int = 3000) -> str:
                 "Accept": "text/html,application/xhtml+xml",
             },
         )
-        with urlopen(req, timeout=10) as resp:
+        with opener.open(req, timeout=10) as resp:
             # 只处理 HTML
             content_type = resp.headers.get("Content-Type", "")
             if "text/html" not in content_type and "application/xhtml" not in content_type:
