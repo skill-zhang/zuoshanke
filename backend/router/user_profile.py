@@ -320,124 +320,121 @@ def _run_llm_dedup(pending: list, db: Session) -> dict:
     # 解析并执行
     stats = {"pending_count": len(pending), "merged": 0, "new_profiles": 0, "discarded": 0, "merged_into_existing": 0}
 
-    try:
-        decision = json.loads(llm_result)
-        groups = decision.get("merged_groups", [])
+    decision = _parse_llm_json(llm_result)
+    if decision is None:
+        _log.error(f"LLM 返回无法解析: {llm_result[:300]}")
+        # 安全降级：全部标记为 rejected，不写任何正式库
+        for t in pending:
+            t.status = "rejected"
+        db.commit()
+        return {
+            "message": f"LLM 返回格式无法解析，{len(pending)} 条已标记为 rejected",
+            "stats": {**stats, "discarded": len(pending)},
+        }
 
-        for group in groups:
-            action = group.get("action", "new_profile")
-            pending_ids = group.get("pending_ids", [])
+    groups = decision.get("merged_groups", [])
 
-            if action == "discard":
-                # 标记为 rejected
-                db.query(PendingUserTrait).filter(
-                    PendingUserTrait.id.in_(pending_ids),
-                ).update({"status": "rejected"}, synchronize_session=False)
-                stats["discarded"] += len(pending_ids)
+    for group in groups:
+        action = group.get("action", "new_profile")
+        pending_ids = group.get("pending_ids", [])
 
-            elif action == "merge_into_existing":
-                # 合入已有正式画像
-                existing_key = group.get("existing_key", "")
-                existing = db.query(UserProfile).filter(
-                    UserProfile.key == existing_key,
-                    UserProfile.is_active == True,
-                ).first()
-                if existing:
-                    # 追加来源场景
-                    source_scenes = []
-                    for pid in pending_ids:
-                        t = db.query(PendingUserTrait).filter(PendingUserTrait.id == pid).first()
-                        if t and t.source_scene and t.source_scene not in (existing.source_scenes or []):
-                            source_scenes.append(t.source_scene)
-                    existing.source_scenes = list(set((existing.source_scenes or []) + source_scenes))
-                    existing.merged_from = list(set((existing.merged_from or []) + pending_ids))
-                    existing.updated_at = _utcnow()
+        if action == "discard":
+            db.query(PendingUserTrait).filter(
+                PendingUserTrait.id.in_(pending_ids),
+            ).update({"status": "rejected"}, synchronize_session=False)
+            stats["discarded"] += len(pending_ids)
 
-                    # 标记暂存条目
-                    db.query(PendingUserTrait).filter(
-                        PendingUserTrait.id.in_(pending_ids),
-                    ).update({
-                        "status": "merged",
-                        "merged_into": existing_key,
-                    }, synchronize_session=False)
-                    stats["merged_into_existing"] += len(pending_ids)
-
-            else:  # merge 或 new_profile
-                content = group.get("content", "")
-                if not content or not content.strip():
-                    # LLM 返回空 content → 降级为 discard
-                    db.query(PendingUserTrait).filter(
-                        PendingUserTrait.id.in_(pending_ids),
-                    ).update({"status": "rejected"}, synchronize_session=False)
-                    stats["discarded"] += len(pending_ids)
-                    continue
-                category = group.get("category", "preference")
-                priority = group.get("priority", "P2")
-                tags = group.get("tags", [])
-
-                # 收集来源场景
+        elif action == "merge_into_existing":
+            existing_key = group.get("existing_key", "")
+            existing = db.query(UserProfile).filter(
+                UserProfile.key == existing_key,
+                UserProfile.is_active == True,
+            ).first()
+            if existing:
                 source_scenes = []
                 for pid in pending_ids:
                     t = db.query(PendingUserTrait).filter(PendingUserTrait.id == pid).first()
-                    if t and t.source_scene and t.source_scene not in source_scenes:
+                    if t and t.source_scene and t.source_scene not in (existing.source_scenes or []):
                         source_scenes.append(t.source_scene)
+                existing.source_scenes = list(set((existing.source_scenes or []) + source_scenes))
+                existing.merged_from = list(set((existing.merged_from or []) + pending_ids))
+                existing.updated_at = _utcnow()
 
-                key = _content_to_key(content)
-
-                # 检查是否与已有正式库重复
-                existing = db.query(UserProfile).filter(
-                    UserProfile.key == key,
-                    UserProfile.is_active == True,
-                ).first()
-
-                if existing:
-                    # 更新已有
-                    existing.source_scenes = list(set((existing.source_scenes or []) + source_scenes))
-                    existing.merged_from = list(set((existing.merged_from or []) + pending_ids))
-                    existing.updated_at = _utcnow()
-                    if content != existing.content:
-                        # 内容有更新，记录修正历史
-                        trail = list(existing.correction_trail or [])
-                        trail.append({
-                            "old": existing.content,
-                            "new": content,
-                            "reason": group.get("reason", "LLM 判重更新"),
-                            "timestamp": _iso(_utcnow()),
-                        })
-                        existing.correction_trail = trail
-                        existing.content = content
-                else:
-                    profile = UserProfile(
-                        id=_make_profile_id(),
-                        key=key,
-                        content=content,
-                        category=category,
-                        priority=priority,
-                        tags=tags,
-                        source_scenes=source_scenes,
-                        merged_from=pending_ids,
-                    )
-                    db.add(profile)
-
-                # 标记暂存条目
                 db.query(PendingUserTrait).filter(
                     PendingUserTrait.id.in_(pending_ids),
                 ).update({
                     "status": "merged",
-                    "merged_into": key,
+                    "merged_into": existing_key,
                 }, synchronize_session=False)
+                stats["merged_into_existing"] += len(pending_ids)
 
-                stats["merged" if len(pending_ids) > 1 else "new_profiles"] += 1
+        else:  # merge 或 new_profile
+            content = group.get("content", "")
+            if not content or not content.strip():
+                db.query(PendingUserTrait).filter(
+                    PendingUserTrait.id.in_(pending_ids),
+                ).update({"status": "rejected"}, synchronize_session=False)
+                stats["discarded"] += len(pending_ids)
+                continue
+            category = group.get("category", "preference")
+            priority = group.get("priority", "P2")
+            tags = group.get("tags", [])
 
-        db.commit()
-        return {
-            "message": f"处理完成: {stats['merged']} 组合并, {stats['new_profiles']} 条独立入库, "
-                       f"{stats['merged_into_existing']} 条合入已有, {stats['discarded']} 条丢弃",
-            "stats": stats,
-        }
-    except json.JSONDecodeError as e:
-        _log.error(f"LLM 返回非 JSON: {llm_result[:200]}")
-        raise ValueError(f"LLM 返回格式错误: {e}")
+            source_scenes = []
+            for pid in pending_ids:
+                t = db.query(PendingUserTrait).filter(PendingUserTrait.id == pid).first()
+                if t and t.source_scene and t.source_scene not in source_scenes:
+                    source_scenes.append(t.source_scene)
+
+            key = _content_to_key(content)
+
+            existing = db.query(UserProfile).filter(
+                UserProfile.key == key,
+                UserProfile.is_active == True,
+            ).first()
+
+            if existing:
+                existing.source_scenes = list(set((existing.source_scenes or []) + source_scenes))
+                existing.merged_from = list(set((existing.merged_from or []) + pending_ids))
+                existing.updated_at = _utcnow()
+                if content != existing.content:
+                    trail = list(existing.correction_trail or [])
+                    trail.append({
+                        "old": existing.content,
+                        "new": content,
+                        "reason": group.get("reason", "LLM 判重更新"),
+                        "timestamp": _iso(_utcnow()),
+                    })
+                    existing.correction_trail = trail
+                    existing.content = content
+            else:
+                profile = UserProfile(
+                    id=_make_profile_id(),
+                    key=key,
+                    content=content,
+                    category=category,
+                    priority=priority,
+                    tags=tags,
+                    source_scenes=source_scenes,
+                    merged_from=pending_ids,
+                )
+                db.add(profile)
+
+            db.query(PendingUserTrait).filter(
+                PendingUserTrait.id.in_(pending_ids),
+            ).update({
+                "status": "merged",
+                "merged_into": key,
+            }, synchronize_session=False)
+
+            stats["merged" if len(pending_ids) > 1 else "new_profiles"] += 1
+
+    db.commit()
+    return {
+        "message": f"处理完成: {stats['merged']} 组合并, {stats['new_profiles']} 条独立入库, "
+                   f"{stats['merged_into_existing']} 条合入已有, {stats['discarded']} 条丢弃",
+        "stats": stats,
+    }
 
 
 def _build_dedup_prompt(pending: list, existing_profiles: list) -> list[dict]:
@@ -582,6 +579,44 @@ def _scheduler_loop():
 
 
 # ── 辅助函数 ──
+
+def _parse_llm_json(text: str) -> Optional[dict]:
+    """解析 LLM 返回的 JSON，带容错
+
+    处理策略：
+    1. 直接 json.loads
+    2. 提取 {} 块后重试
+    3. 修复尾逗号后重试
+    """
+    if not text or not text.strip():
+        return None
+
+    # 策略1：直接解析
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 策略2：提取 {} 块（LLM 有时会在 JSON 前后加说明文字）
+    import re
+    brace_match = re.search(r'\{[\s\S]*\}', text)
+    if brace_match:
+        candidate = brace_match.group()
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    # 策略3：修复尾逗号
+    fixed = re.sub(r',\s*}', '}', text)
+    fixed = re.sub(r',\s*]', ']', fixed)
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
 
 def _make_trait_id() -> str:
     return f"pt-{uuid4().hex[:12]}"
