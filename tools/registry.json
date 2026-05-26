@@ -1329,6 +1329,67 @@
       "returns": "JSON 响应 {success, total, scenes}",
       "category": "tools",
       "verified": true
+    },
+    {
+      "name": "container_list",
+      "description": "列出 Docker 容器（支持 -a 显示所有容器）",
+      "file": "tools/container_tools.py",
+      "function": "container_list",
+      "parameters": {
+        "all": {
+          "type": "boolean",
+          "description": "是否显示所有容器（包括已停止的），默认只显示运行中的",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, containers: [{id, name, image, status, ports, created}]}",
+      "category": "dev",
+      "verified": true
+    },
+    {
+      "name": "container_logs",
+      "description": "查看 Docker 容器日志",
+      "file": "tools/container_tools.py",
+      "function": "container_logs",
+      "parameters": {
+        "container": {
+          "type": "string",
+          "description": "容器名或容器 ID"
+        },
+        "tail": {
+          "type": "integer",
+          "description": "仅显示最后 N 行（默认全部）",
+          "optional": true
+        },
+        "follow": {
+          "type": "boolean",
+          "description": "是否跟随输出（默认 False）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, logs, error}",
+      "category": "dev",
+      "verified": true
+    },
+    {
+      "name": "container_restart",
+      "description": "重启 Docker 容器",
+      "file": "tools/container_tools.py",
+      "function": "container_restart",
+      "parameters": {
+        "container": {
+          "type": "string",
+          "description": "容器名或容器 ID"
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "等待容器停止的超时秒数",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, message, error}",
+      "category": "dev",
+      "verified": true
     }
   ]
 }
