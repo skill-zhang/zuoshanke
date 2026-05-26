@@ -4,8 +4,6 @@
 """
 import json
 import logging
-import os
-import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -74,6 +72,14 @@ class ProcessResult(BaseModel):
     stats: Optional[dict] = None
 
 
+class PendingCreateRequest(BaseModel):
+    content: str = Field(..., min_length=1, description="分身提取的描述")
+    source_scene: str = Field("", description="来源场景名称")
+    source_scene_id: str = Field("", description="来源场景 ID")
+    confidence: str = Field("medium", description="high/medium/low")
+    context_snippet: str = Field("", description="触发对话片段")
+
+
 # ── 工具函数 ──
 
 def _utcnow() -> datetime:
@@ -99,20 +105,17 @@ def list_pending_traits(db: Session = Depends(get_db)):
 
 @router.post("/api/user-profile/pending")
 def create_pending_trait(
-    content: str = Query(..., description="分身提取的描述"),
-    source_scene: str = Query(""),
-    source_scene_id: str = Query(""),
-    confidence: str = Query("medium", description="high/medium/low"),
-    context_snippet: str = Query(""),
+    req: PendingCreateRequest,
     db: Session = Depends(get_db),
 ):
     """分身调用 — 写入暂存区（严格精确去重，不走文本反序列化）"""
+    confidence = req.confidence
     if confidence not in ("high", "medium", "low"):
         confidence = "medium"
 
     # 精确去重：同内容且 pending 状态的不重复提
     existing = db.query(PendingUserTrait).filter(
-        PendingUserTrait.content == content,
+        PendingUserTrait.content == req.content,
         PendingUserTrait.status == "pending",
     ).first()
     if existing:
@@ -125,11 +128,11 @@ def create_pending_trait(
 
     trait = PendingUserTrait(
         id=_make_trait_id(),
-        content=content,
-        source_scene=source_scene or None,
-        source_scene_id=source_scene_id or None,
+        content=req.content,
+        source_scene=req.source_scene or None,
+        source_scene_id=req.source_scene_id or None,
         confidence=confidence,
-        context_snippet=context_snippet or None,
+        context_snippet=req.context_snippet or None,
         status="pending",
     )
     db.add(trait)
@@ -138,7 +141,7 @@ def create_pending_trait(
         "success": True,
         "id": trait.id,
         "deduped": False,
-        "message": f"用户特征已提取，等待自动合入正式库",
+        "message": "用户特征已提取，等待自动合入正式库",
     }
 
 
@@ -279,7 +282,13 @@ def trigger_process(db: Session = Depends(get_db)):
             stats={"pending_count": 0, "merged": 0, "new_profiles": 0, "discarded": 0},
         )
 
-    # 交由 LLM 批量判重
+    if not _PROCESSING_LOCK.acquire(blocking=False):
+        return ProcessResult(
+            success=False,
+            message="处理中，请稍后再试",
+            stats={"pending_count": len(pending)},
+        )
+
     try:
         result = _run_llm_dedup(pending, db)
         return ProcessResult(
@@ -290,6 +299,8 @@ def trigger_process(db: Session = Depends(get_db)):
     except Exception as e:
         _log.error(f"LLM 判重处理失败: {e}")
         raise HTTPException(status_code=500, detail=f"处理失败: {e}")
+    finally:
+        _PROCESSING_LOCK.release()
 
 
 # ── LLM 判重合并引擎 ──
@@ -353,6 +364,13 @@ def _run_llm_dedup(pending: list, db: Session) -> dict:
 
             else:  # merge 或 new_profile
                 content = group.get("content", "")
+                if not content or not content.strip():
+                    # LLM 返回空 content → 降级为 discard
+                    db.query(PendingUserTrait).filter(
+                        PendingUserTrait.id.in_(pending_ids),
+                    ).update({"status": "rejected"}, synchronize_session=False)
+                    stats["discarded"] += len(pending_ids)
+                    continue
                 category = group.get("category", "preference")
                 priority = group.get("priority", "P2")
                 tags = group.get("tags", [])

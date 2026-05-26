@@ -134,18 +134,18 @@ def pending_extract(content: str, confidence: str = "medium") -> str:
 
 ### 3.3 处理后的清理
 
-已处理的 pending 条目**直接删除**，不留表里。暂存区只保留尚未处理的条目：
+已处理的 pending 条目**标记为 merged/rejected 状态**（不物理删除），保留审计追踪：
 
 ```python
 # 处理完成后
 processed_ids = [t.id for group in merged_groups for t in group]
 db.query(PendingUserTrait).filter(
     PendingUserTrait.id.in_(processed_ids)
-).delete(synchronize_session=False)
+).update({"status": "merged"}, synchronize_session=False)
 db.commit()
 ```
 
-理由：暂存区的使命就是「等合并」，合并后就完成了。保留已合并的记录没有意义，还会让库越来越臃肿。
+理由：保留已合并的记录作为审计追踪。暂存区只标记状态，不影响下次扫描（查询时只取 `status="pending"` 的条目）。如日后需要清理历史数据，可单独写清理脚本。
 
 ### 3.4 注入（消费层 — 第 8 层，插在 Memory 之后、Config 之前）
 
