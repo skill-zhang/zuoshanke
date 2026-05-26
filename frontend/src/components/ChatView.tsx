@@ -326,6 +326,41 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
         >
           {msg.content}
         </ReactMarkdown>
+        {/* 🆕 文件/图片附件渲染 */}
+        {msg.attachments && msg.attachments.length > 0 && (
+          <div className="msg-attachment-list">
+            {msg.attachments.map((att, i) => {
+              const fileUrl = att.url.startsWith('/uploads/')
+                ? `http://localhost:8000${att.url}`
+                : att.url;
+              if (att.file_type === 'image') {
+                return (
+                  <img
+                    key={i}
+                    src={fileUrl}
+                    alt={att.filename}
+                    className="msg-attachment-image"
+                    onClick={() => window.open(fileUrl, '_blank')}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                );
+              }
+              return (
+                <div key={i} className="msg-file-card">
+                  <div className="msg-file-card-left">
+                    <span className="msg-file-icon">📄</span>
+                    <span className="msg-file-name">{att.filename}</span>
+                  </div>
+                  <button className="msg-file-open-btn" onClick={() => window.open(fileUrl, '_blank')}>
+                    ↗ 打开
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {msg.map_ref && (
           <div style={{ marginTop: '10px' }}>
             <button

@@ -443,9 +443,11 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
 
     def generate():
         nonlocal scene
-        # 1. 用户消息事件
+        # 1. 广播用户消息（SSE）
+        attachments_json = json.loads(user_msg.file_attachments) if user_msg.file_attachments else None
         yield sse_event("user_msg", id=user_msg.id, role="user",
-                        content=user_msg.content, created_at=iso_utc(user_msg.created_at))
+                        content=user_msg.content, created_at=iso_utc(user_msg.created_at),
+                        attachments=attachments_json)
 
         # 2. 历史消息（session 隔离）
         q = db.query(Message).filter(Message.scene_id == scene_id)

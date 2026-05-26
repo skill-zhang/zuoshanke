@@ -488,6 +488,7 @@ export const useStore = create<AppState>((set, get) => ({
       content,
       map_ref: null,
       model: null,
+      attachments,
       created_at: new Date().toISOString(),
     };
 
@@ -792,6 +793,7 @@ export const useStore = create<AppState>((set, get) => ({
       content,
       map_ref: null,
       model: null,
+      attachments,
       created_at: new Date().toISOString(),
     };
 
@@ -841,7 +843,7 @@ export const useStore = create<AppState>((set, get) => ({
           set(state => ({
             channelMessages: state.channelMessages.map(m =>
               m.id === tempUserId
-                ? { ...m, id: event.id, created_at: event.created_at }
+                ? { ...m, id: event.id, created_at: event.created_at, attachments: event.attachments || m.attachments }
                 : m
             ),
           }));

@@ -1,7 +1,8 @@
 """Pydantic schemas — API 请求/响应"""
+import json
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 from utils import iso_utc
 
 
@@ -194,11 +195,24 @@ class MessageOut(BaseModel):
     content: str
     map_ref: Optional[str]
     model: Optional[str] = None  # 生成该消息的模型名
-    attachments: Optional[list[dict]] = None  # 🆕 文件附件
+    attachments: Optional[list[dict]] = Field(default=None, alias='file_attachments')  # 🆕 文件附件
     created_at: datetime
+
+    @field_validator('attachments', mode='before')
+    @classmethod
+    def parse_file_attachments(cls, v):
+        """兼容 SQLAlchemy 的 file_attachments TEXT 字段（JSON 字符串→list）"""
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else None
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
 
     class Config:
         from_attributes = True
+        populate_by_name = True  # 允许 JSON 输入用 'attachments' 而非 'file_attachments'
 
     @field_serializer('created_at')
     def serialize_created_at(self, v: datetime) -> str:

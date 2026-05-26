@@ -158,8 +158,10 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
         _zhu_ch.observe_fenshen_event("fenshen:started", channel.name or "闲聊")
 
         # 1. 用户消息
+        attachments_json = json.loads(user_msg.file_attachments) if user_msg.file_attachments else None
         yield sse_event("user_msg", id=user_msg.id, role="user",
-                        content=user_msg.content, created_at=iso_utc(user_msg.created_at))
+                        content=user_msg.content, created_at=iso_utc(user_msg.created_at),
+                        attachments=attachments_json)
 
         # 2. 模型信息
         route_cfg = _get_route_cfg("channel")
