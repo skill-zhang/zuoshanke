@@ -183,6 +183,7 @@ class MessageCreate(BaseModel):
     content: str
     channel: str = "main"  # main = AI 更新 Thinking Map, chat = 只聊天
     session_id: Optional[str] = None    # 场景会话分组
+    attachments: Optional[list[dict]] = None  # 🆕 文件附件 [{url: str, file_type: str, filename: str}]
 
 class MessageOut(BaseModel):
     id: str
@@ -193,6 +194,7 @@ class MessageOut(BaseModel):
     content: str
     map_ref: Optional[str]
     model: Optional[str] = None  # 生成该消息的模型名
+    attachments: Optional[list[dict]] = None  # 🆕 文件附件
     created_at: datetime
 
     class Config:

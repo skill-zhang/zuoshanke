@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+from typing import Optional
 import requests
 from sqlalchemy.orm import Session
 from models import ThinkingMap, ThinkNode
@@ -323,9 +324,21 @@ def ai_channel_chat(
     messages: list[dict],
     is_default: bool = False,
     db=None,
+    attachments: Optional[list[dict]] = None,
 ) -> str:
     """频道闲聊：纯对话"""
     api_messages = _build_channel_messages(messages, is_default, db=db)
+
+    # 🆕 处理附件：如果模型支持多模态，将最后一条用户消息的 content 转为数组格式
+    if attachments:
+        route_cfg = get_settings("channel")
+        from agent_core.multimodal import format_message_content
+        for i in range(len(api_messages) - 1, -1, -1):
+            if api_messages[i].get("role") in ("user", "assistant"):
+                api_messages[i]["content"] = format_message_content(
+                    api_messages[i]["content"], attachments, route_cfg
+                )
+                break
 
     # ── 注入实时数据（天气等）──
     if messages and isinstance(messages[-1], dict):
@@ -373,21 +386,28 @@ def _build_channel_messages(messages: list[dict], is_default: bool = False,
 
 
 def ai_channel_chat_stream(messages: list[dict], is_default: bool = False,
-                           db=None):
+                           db=None, attachments: Optional[list[dict]] = None):
     """频道闲聊：流式生成器，逐 token yield
+
+    支持附件（图片/文档）多模态输入。
 
     Yields:
         str: 单个 token 文本
         None: 发生错误时 yield None（调用方应停止迭代）
-
-    用法:
-        for token in ai_channel_chat_stream(messages):
-            if token is None:
-                break  # 出错
-            print(token, end='', flush=True)
     """
     api_messages = _build_channel_messages(messages, is_default, db=db)
     route_cfg = get_settings("channel")
+
+    # 🆕 处理附件：如果模型支持多模态，将最后一条用户消息的 content 转为数组格式
+    if attachments:
+        from agent_core.multimodal import format_message_content
+        for i in range(len(api_messages) - 1, -1, -1):
+            if api_messages[i].get("role") in ("user", "assistant"):
+                api_messages[i]["content"] = format_message_content(
+                    api_messages[i]["content"], attachments, route_cfg
+                )
+                break
+
     yield from call_llm_stream(api_messages, route_cfg, temperature=route_cfg.get("temperature", 0.7))
 
 

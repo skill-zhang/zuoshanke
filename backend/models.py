@@ -166,6 +166,7 @@ class Message(Base):
     model = Column(String, nullable=True)       # 生成该消息的模型名（如 Qwen3.5、DeepSeek Flash）
     display = Column(Boolean, default=True)     # Schema v0.7: False=系统内部记录,前端不渲染
     priority = Column(String(10), default="normal")  # Schema v1.0: high | normal | low
+    file_attachments = Column(Text, nullable=True)  # 🆕 文件附件 JSON [{url, file_type, filename}]
     created_at = Column(DateTime, default=utcnow)
     memory_extracted = Column(Boolean, default=False)  # 是否已提取为记忆
 

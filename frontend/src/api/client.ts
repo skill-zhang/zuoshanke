@@ -173,6 +173,28 @@ export const batchDeleteMessages = (ids: string[]) =>
 export const clearSceneMessages = (sceneId: string) =>
   request<{ ok: boolean; deleted: number }>(`/scenes/${sceneId}/messages`, { method: 'DELETE' });
 
+// ═══ 文件上传 ═══
+export interface Attachment {
+  url: string;
+  file_type: 'image' | 'doc';
+  filename: string;
+  size?: number;
+}
+
+export const uploadFile = async (file: File): Promise<{ url: string; file_type: string; filename: string; size: number }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${BASE}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+};
+
 export interface SceneSession {
   session_id: string;
   last_active: string | null;
@@ -186,11 +208,12 @@ export async function* sendSceneMessageStream(
   sceneId: string,
   content: string,
   sessionId?: string,
+  attachments?: Attachment[],
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${BASE}/scenes/${sceneId}/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, scene_id: sceneId, session_id: sessionId || null }),
+    body: JSON.stringify({ content, scene_id: sceneId, session_id: sessionId || null, attachments }),
   });
 
   if (!res.ok) {
@@ -233,8 +256,41 @@ export const deleteChannel = (id: string) =>
   request(`/channels/${id}`, { method: 'DELETE' });
 export const clearChannelMessages = (channelId: string) =>
   request(`/channels/${channelId}/messages`, { method: 'DELETE' });
-export const sendChannelMessage = (channelId: string, content: string) =>
-  request<Message>(`/channels/${channelId}/messages`, { method: 'POST', body: JSON.stringify({ content }) });
+export const sendChannelMessage = (channelId: string, content: string, attachments?: Attachment[]) =>
+  request<Message>(`/channels/${channelId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content, attachments }),
+  });
+/** 发送频道消息 + 流式接收 AI 回复（SSE，支持附件） */
+export async function* sendChannelMessageStream(
+  channelId: string,
+  content: string,
+  attachments?: Attachment[],
+): AsyncGenerator<StreamEvent> {
+  const res = await fetch(`${BASE}/channels/${channelId}/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, attachments }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('data: ')) {
+        const data = JSON.parse(trimmed.slice(6));
+        yield data as StreamEvent;
+      }
+    }
+  }
+}
 export const listChannelMessages = (channelId: string, limit?: number, beforeId?: string) => {
   const params = new URLSearchParams();
   if (limit) params.set('limit', String(limit));
@@ -289,44 +345,6 @@ export interface ToolLog {
   success?: boolean;
   message: string;
 }
-
-/** 发送频道消息 + 流式接收 AI 回复（SSE） */
-export async function* sendChannelMessageStream(
-  channelId: string,
-  content: string,
-): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${BASE}/channels/${channelId}/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('data: ')) {
-        const data = JSON.parse(trimmed.slice(6));
-        yield data as StreamEvent;
-      }
-    }
-  }
-}
-
 
 // ═══ Action Map ═══
 export interface ActionNode {

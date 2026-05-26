@@ -24,6 +24,7 @@ from router.command_approval import router as command_approval_router  # 🆕 �
 from router.providers import router as providers_router                 # 🆕 AI Provider 管理
 from router.user_profile import router as user_profile_router              # 🆕 Schema v1.4 用户画像
 from router.workbench_chat import router as workbench_chat_router          # 🆕 工作台 Avatar 对话
+from router.upload import router as upload_router                          # 🆕 文件上传
 
 
 def register_all_routers(app: FastAPI):
@@ -50,4 +51,5 @@ def register_all_routers(app: FastAPI):
     app.include_router(command_approval_router)   # 🆕 高危命令审批
     app.include_router(providers_router)           # 🆕 AI Provider 管理
     app.include_router(user_profile_router)         # 🆕 Schema v1.4 用户画像
-    app.include_router(workbench_chat_router)        # 🆕 工作台 Avatar 对话
+    app.include_router(workbench_chat_router)          # 🆕 工作台 Avatar 对话
+    app.include_router(upload_router)                  # 🆕 文件上传

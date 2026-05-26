@@ -38,6 +38,11 @@ _outputs_dir.mkdir(exist_ok=True)
 from fastapi.staticfiles import StaticFiles
 app.mount("/outputs", StaticFiles(directory=str(_outputs_dir)), name="outputs")
 
+# 🆕 上传文件静态服务
+_uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+_uploads_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
+
 if __name__ == "__main__":
     import uvicorn
     from logger import configure_logger

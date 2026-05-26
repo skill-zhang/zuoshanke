@@ -428,6 +428,8 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         id=make_id("msg"), scene_id=scene_id,
         role="user", content=data.content, session_id=data.session_id,
     )
+    if data.attachments:
+        user_msg.file_attachments = json.dumps(data.attachments, ensure_ascii=False)
     db.add(user_msg)
     db.commit()
     db.refresh(user_msg)
@@ -478,8 +480,22 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         from agent_core.context_builder import build_agent_context_v1
 
         # Schema v1.0: 使用 Context Composer 7 层精炼构建上下文
+        # 🆕 处理附件：注入文件描述到用户消息中（Agent Loop 用 DeepSeek，不支持多模态）
+        scene_user_content = data.content
+        if data.attachments:
+            att_descs = []
+            for att in data.attachments:
+                at = att.get("file_type", "")
+                fn = att.get("filename", "")
+                if at == "image":
+                    att_descs.append(f"[📷 图片: {fn}]")
+                else:
+                    att_descs.append(f"[📄 文件: {fn}]")
+            if att_descs:
+                scene_user_content = scene_user_content + "\n\n" + "\n".join(att_descs)
+
         agent_messages = build_agent_context_v1(
-            user_content=data.content,
+            user_content=scene_user_content,
             history_messages=history_messages,
             user_context=scene.user_context,
             db=db,

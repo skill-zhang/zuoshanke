@@ -8,6 +8,8 @@ import {
   deleteMessage as apiDeleteMessage, regenerateMessage as apiRegenerateMessage,
   newSceneSession as apiNewSceneSession,
   batchDeleteMessages, clearSceneMessages, listSceneSessions,
+  sendChannelMessageStream,
+  uploadFile,
   SceneSession,
   listChannels, createChannel, updateChannel, deleteChannel, clearChannelMessages,
   sendChannelMessage, listChannelMessages, sendChannelMessageStream,
@@ -88,7 +90,7 @@ interface AppState {
   sessions: SceneSession[];          // 历史会话列表
   loadSceneMessages: (sceneId: string) => Promise<void>;
   loadOlderMessages: (sceneId: string) => Promise<void>;
-  sendSceneMsg: (sceneId: string, content: string) => Promise<void>;
+  sendSceneMsg: (sceneId: string, content: string, attachments?: Attachment[]) => Promise<void>;
   newSceneSession: (sceneId: string) => Promise<string | null>;  // 开始新会话
   batchDeleteMsgs: (ids: string[]) => Promise<void>;             // 批量删除
   clearSceneMsgs: (sceneId: string) => Promise<void>;            // 一键清空
@@ -112,7 +114,7 @@ interface AppState {
   channelMessagesLoading: boolean;
   loadChannelMessages: (channelId: string) => Promise<void>;
   loadOlderChannelMessages: (channelId: string) => Promise<void>;
-  sendChannelMsg: (channelId: string, content: string) => Promise<void>;
+  sendChannelMsg: (channelId: string, content: string, attachments?: Attachment[]) => Promise<void>;
 
   // ═══ 流式状态 ═══
   isGenerating: boolean;
@@ -474,7 +476,7 @@ export const useStore = create<AppState>((set, get) => ({
       set({ messagesLoading: false });
     }
   },
-  sendSceneMsg: async (sceneId, content) => {
+  sendSceneMsg: async (sceneId, content, attachments) => {
     // 0. 乐观更新：立即插入临时用户消息 + 空壳 AI 消息
     const tempUserId = 'temp-user-' + Date.now();
     const tempUserMsg: Message = {
@@ -512,7 +514,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     try {
       const sessionId = get().currentSessionId;
-      const stream = sendSceneMessageStream(sceneId, content, sessionId || undefined);
+      const stream = sendSceneMessageStream(sceneId, content, sessionId || undefined, attachments);
 
       for await (const event of stream) {
         if (event.type === 'tool_cards') {
@@ -778,7 +780,7 @@ export const useStore = create<AppState>((set, get) => ({
       set({ channelMessagesLoading: false });
     }
   },
-  sendChannelMsg: async (channelId, content) => {
+  sendChannelMsg: async (channelId, content, attachments) => {
     // 1. 乐观更新：立即插入临时用户消息
     const tempUserId = 'temp-user-' + Date.now();
     const tempUserMsg: Message = {
@@ -814,7 +816,7 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     try {
-      const stream = sendChannelMessageStream(channelId, content);
+      const stream = sendChannelMessageStream(channelId, content, attachments);
 
       for await (const event of stream) {
         if (event.type === 'model_info') {

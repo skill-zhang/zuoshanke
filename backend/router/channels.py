@@ -90,12 +90,15 @@ def send_channel_message(channel_id: str, data: MessageCreate, db: Session = Dep
         id=make_id("msg"), channel_id=channel_id,
         role="user", content=data.content,
     )
+    if data.attachments:
+        msg.file_attachments = json.dumps(data.attachments, ensure_ascii=False)
     db.add(msg)
     db.commit()
     db.refresh(msg)
 
     history = _get_channel_history(db, channel_id)
-    ai_response = ai_channel_chat(history, is_default=channel.is_default, db=db)
+    attachments_json = json.loads(msg.file_attachments) if msg.file_attachments else None
+    ai_response = ai_channel_chat(history, is_default=channel.is_default, db=db, attachments=attachments_json)
 
     ai_msg = Message(
         id=make_id("msg"), channel_id=channel_id,
@@ -132,6 +135,8 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
         id=make_id("msg"), channel_id=channel_id,
         role="user", content=data.content,
     )
+    if data.attachments:
+        user_msg.file_attachments = json.dumps(data.attachments, ensure_ascii=False)
     db.add(user_msg)
     db.commit()
     db.refresh(user_msg)
@@ -198,7 +203,8 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
 
         # 5. 流式 AI 回复
         full_content = ""
-        for token in ai_channel_chat_stream(history_dicts, is_default=channel.is_default, db=db):
+        attachments_json = json.loads(user_msg.file_attachments) if user_msg.file_attachments else None
+        for token in ai_channel_chat_stream(history_dicts, is_default=channel.is_default, db=db, attachments=attachments_json):
             if token is None:
                 yield sse_event("error", message="AI 引擎响应失败")
                 return

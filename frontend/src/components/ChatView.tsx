@@ -3,8 +3,8 @@ import { useStore } from '../stores/appStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { Message, ToolCard, ToolLog, Scene } from '../api/client';
-import { getActionMap, updateScene } from '../api/client';
+import type { Message, ToolCard, ToolLog, Scene, Attachment } from '../api/client';
+import { getActionMap, updateScene, uploadFile } from '../api/client';
 import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
 import { showConfirm, showAlert } from '../stores/dialogStore';
 import { DelegationMonitor } from './DelegationMonitor';
@@ -427,7 +427,11 @@ export function ChatView() {
 
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [uploadMenu, setUploadMenu] = useState(false);
+  // 🆕 文件上传状态
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // 用户输入背景设定
   const [ucExpanded, setUcExpanded] = useState(false);
   const [ucText, setUcText] = useState('');
@@ -703,6 +707,80 @@ export function ChatView() {
     }
   }, [ucText]);
 
+  // 🆕 文件上传处理器
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(files)) {
+        const result = await uploadFile(f);
+        setAttachments(prev => [...prev, {
+          url: result.url,
+          file_type: result.file_type as 'image' | 'doc',
+          filename: result.filename,
+          size: result.size,
+        }]);
+      }
+    } catch (err: any) {
+      console.error('[upload] 图片上传失败:', err);
+      await showAlert(err.message || '图片上传失败');
+    } finally {
+      setUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(files)) {
+        const result = await uploadFile(f);
+        setAttachments(prev => [...prev, {
+          url: result.url,
+          file_type: result.file_type as 'image' | 'doc',
+          filename: result.filename,
+          size: result.size,
+        }]);
+      }
+    } catch (err: any) {
+      console.error('[upload] 文件上传失败:', err);
+      await showAlert(err.message || '文件上传失败');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleAttachImage = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
+  const handleAttachFile = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // 生成附件预览 URL（用于缩略图渲染）
+  const getPreviewUrl = (att: Attachment): string => {
+    if (att.url.startsWith('/uploads/')) {
+      return `http://localhost:8000${att.url}`;
+    }
+    return att.url;
+  };
+
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  };
+
   // ═══ 上下文压缩 ═══
   const handleCompress = useCallback(async () => {
     if (!currentChannel || compressing) return;
@@ -723,17 +801,19 @@ export function ChatView() {
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending || entityGenerating) return;
+    if ((!text && attachments.length === 0) || sending || entityGenerating) return;
+    const currentAttachments = [...attachments];
     setInput('');
+    setAttachments([]);
     setSending(true);
 
     try {
       if (isChannel && currentChannel) {
-        sendChannelMsg(currentChannel.id, text);
+        sendChannelMsg(currentChannel.id, text, currentAttachments.length > 0 ? currentAttachments : undefined);
         setSending(false);
         return;
       } else if (currentScene) {
-        sendSceneMsg(currentScene.id, text);
+        sendSceneMsg(currentScene.id, text, currentAttachments.length > 0 ? currentAttachments : undefined);
         setSending(false);
         return;
       }
@@ -742,7 +822,8 @@ export function ChatView() {
     } finally {
       setSending(false);
     }
-  }, [input, sending, entityGenerating, isChannel, currentChannel, currentScene, sendChannelMsg, sendSceneMsg]);
+  }, [input, sending, entityGenerating, isChannel, currentChannel, currentScene,
+      sendChannelMsg, sendSceneMsg, attachments]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1138,35 +1219,67 @@ export function ChatView() {
                 />
                 <div className="chat-input-toolbar">
                   <div className="chat-toolbar-left">
+                    {/* 🆕 图片上传按钮 */}
                     <button
                       className="chat-toolbar-btn"
-                      onClick={() => setUploadMenu(!uploadMenu)}
-                      title="上传文件"
-                    >
-                      📎 文件
-                    </button>
-                    <button
-                      className="chat-toolbar-btn"
-                      onClick={() => setUploadMenu(!uploadMenu)}
+                      onClick={handleAttachImage}
+                      disabled={uploading || sending || entityGenerating}
                       title="上传图片"
                     >
-                      🖼 图片
+                      {uploading ? '⏳' : '🖼'}
                     </button>
-                    {uploadMenu && (
-                      <div className="chat-upload-menu">
-                        <div className="chat-upload-item" onClick={async () => { await showAlert('文件上传功能即将支持'); setUploadMenu(false); }}>
-                          📄 上传文件
-                        </div>
-                        <div className="chat-upload-item" onClick={async () => { await showAlert('图片上传功能即将支持'); setUploadMenu(false); }}>
-                          🖼 上传图片
-                        </div>
+                    {/* 🆕 文件上传按钮 */}
+                    <button
+                      className="chat-toolbar-btn"
+                      onClick={handleAttachFile}
+                      disabled={uploading || sending || entityGenerating}
+                      title="上传文件"
+                    >
+                      {uploading ? '⏳' : '📎'}
+                    </button>
+                    {/* 隐藏的文件输入 */}
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={handleImageSelect}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.txt,.json,.csv,.doc,.docx,.xls,.xlsx,.md,.zip"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={handleFileSelect}
+                    />
+                    {/* 🆕 附件预览条 */}
+                    {attachments.length > 0 && (
+                      <div className="chat-attachment-preview">
+                        {attachments.map((att, i) => (
+                          <div key={i} className="chat-attachment-item">
+                            {att.file_type === 'image' ? (
+                              <img
+                                src={getPreviewUrl(att)}
+                                alt={att.filename}
+                                className="chat-attachment-thumb"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <span className="chat-attachment-icon">📄</span>
+                            )}
+                            <span className="chat-attachment-name">{att.filename}</span>
+                            <span className="chat-attachment-remove" onClick={() => removeAttachment(i)}>✕</span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
                   <button
                     className="chat-send-btn"
                     onClick={handleSend}
-                    disabled={sending || entityGenerating || !input.trim()}
+                    disabled={sending || entityGenerating || (!input.trim() && attachments.length === 0)}
                   >
                     {sending || entityGenerating ? '⏳' : '发送'}
                   </button>

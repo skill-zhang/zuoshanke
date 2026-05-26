@@ -800,25 +800,51 @@ body {
 }
 .chat-toolbar-btn:hover { color: #c9d1d9; border-color: #484f58; }
 
-.chat-upload-menu {
-  position: absolute;
-  bottom: 34px;
-  left: 0;
+/* 🆕 附件预览条 */
+.chat-attachment-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0;
+  align-items: center;
+}
+.chat-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: #21262d;
   border: 1px solid #30363d;
-  border-radius: 8px;
-  z-index: 10;
-  min-width: 120px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  overflow: hidden;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  max-height: 36px;
 }
-.chat-upload-item {
-  padding: 8px 14px;
-  font-size: 13px;
-  cursor: pointer;
+.chat-attachment-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.chat-attachment-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.chat-attachment-name {
   color: #c9d1d9;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.chat-upload-item:hover { background: #30363d; }
+.chat-attachment-remove {
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.chat-attachment-remove:hover { color: #f85149; }
 
 .chat-send-btn {
   background: linear-gradient(135deg, #1f3a5f, #2d4a7a);
@@ -3872,13 +3898,6 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
-}
-.sv-profile-actions .badge {
-  font-size: 11px;
-  color: #8b949e;
-  background: #21262d;
-  padding: 2px 8px;
-  border-radius: 10px;
 }
 .sv-profile-actions .badge {
   font-size: 11px;
