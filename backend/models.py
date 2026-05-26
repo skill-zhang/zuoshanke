@@ -1,4 +1,6 @@
-"""SQLAlchemy 模型 — 基于 Schema v0.3"""
+"""
+SQLAlchemy 模型 — 基于 Schema v0.3
+"""
 import json
 from datetime import datetime, timezone
 from sqlalchemy import (
@@ -59,519 +61,313 @@ class ThinkingMap(Base):
     __tablename__ = "thinking_maps"
 
     id = Column(String, primary_key=True)
-    scene_id = Column(String, ForeignKey("scenes.id"), unique=True, nullable=False)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
-    status = Column(String, default="editing")  # editing | readonly | archived
+    status = Column(String, default="editing")  # editing | converged | active
     version = Column(Integer, default=1)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
 
     scene = relationship("Scene", back_populates="thinking_maps")
     nodes = relationship("ThinkNode", back_populates="map", cascade="all, delete-orphan")
 
 
-# ═══ Thinking Map 节点 ═══
 class ThinkNode(Base):
     __tablename__ = "think_nodes"
 
     id = Column(String, primary_key=True)
-    map_id = Column(String, ForeignKey("thinking_maps.id"), nullable=False)
+    map_id = Column(String, ForeignKey("thinking_maps.id"), nullable=False, index=True)
     parent_id = Column(String, ForeignKey("think_nodes.id"), nullable=True)
-    type = Column(String, nullable=False)  # root | domain | leaf
     label = Column(String, nullable=False)
-    status = Column(String, default="discussing")  # confirmed | discussing | unknown | mixed | refined | discarded
-    actionable = Column(Boolean, default=False)      # 仅 leaf 可为 true
-    context_ref = Column(String, nullable=True)       # 关联对话消息 ID
-    discussion = Column(JSON, default=list)           # [string] 待讨论子问题
-    linked_action_map = Column(String, nullable=True)
-    action_status = Column(String, nullable=True)
-
-    # === Agent Loop v1 新字段 ===
-    converged_from = Column(JSON, default=list)       # [string] 被合并的原始节点名列表
-    created_by = Column(String, default="brainstorm") # brainstorm | reflect | manual
-    priority = Column(Integer, nullable=True)         # 1-4 (P1-P4)
-    queue_order = Column(Integer, nullable=True)      # Priority Queue 排序位置
-    depends_on = Column(JSON, default=list)           # [string] 依赖的节点 ID 列表（DAG）
-    execution_result = Column(Text, nullable=True)    # 执行结果摘要（Reflect 注入）
-
-    # 布局坐标（前端渲染用）
+    node_type = Column(String, default="leaf")  # root | domain | leaf
+    status = Column(String, default="active")   # active | confirmed | abandoned | merged
+    priority = Column(String, nullable=True)    # P0 | P1 | P2 | P3
+    actionable = Column(Boolean, default=False)
+    queue_order = Column(Integer, nullable=True)
     position_x = Column(Integer, nullable=True)
     position_y = Column(Integer, nullable=True)
 
     map = relationship("ThinkingMap", back_populates="nodes")
     parent = relationship("ThinkNode", remote_side="ThinkNode.id", backref="children")
 
-    def to_schema_dict(self):
-        """输出兼容 schema v0.3 的 dict"""
-        child_ids = [c.id for c in self.children]
-        d = {
-            "id": self.id,
-            "type": self.type,
-            "label": self.label,
-            "status": self.status,
-            "children": child_ids,
-            "converged_from": self.converged_from or [],
-            "created_by": self.created_by or "brainstorm",
-            "depends_on": self.depends_on or [],
-        }
-        if self.priority is not None:
-            d["priority"] = self.priority
-        if self.queue_order is not None:
-            d["queue_order"] = self.queue_order
-        if self.execution_result:
-            d["execution_result"] = self.execution_result
-        if self.type == "root":
-            d.pop("children", None)  # root 用 children 数组
-            d["children"] = child_ids
-        if self.actionable:
-            d["actionable"] = True
-        if self.context_ref:
-            d["context_ref"] = self.context_ref
-        if self.discussion:
-            d["discussion"] = self.discussion
-        if self.linked_action_map:
-            d["linked_action_map"] = self.linked_action_map
-        if self.action_status:
-            d["action_status"] = self.action_status
-        return d
 
-
-# ═══ 闲聊频道 ═══
+# ═══ 频道 ═══
 class Channel(Base):
     __tablename__ = "channels"
 
     id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
-    pinned = Column(Boolean, default=False)
-    is_default = Column(Boolean, default=False)  # 系统默认「闲聊」不可删除
+    role = Column(String, nullable=False)  # 角色设定
+    model = Column(String, nullable=True)
     created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
 
     messages = relationship("Message", back_populates="channel", cascade="all, delete-orphan")
 
 
-# ═══ 对话消息 ═══
+# ═══ 消息 ═══
 class Message(Base):
     __tablename__ = "messages"
 
     id = Column(String, primary_key=True)
-    scene_id = Column(String, ForeignKey("scenes.id"), nullable=True)   # 场景消息
-    channel_id = Column(String, ForeignKey("channels.id"), nullable=True)  # 频道消息
-    session_id = Column(String, nullable=True, index=True)   # 场景会话分组
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    channel_id = Column(String, ForeignKey("channels.id"), nullable=True, index=True)
+    session_id = Column(String, nullable=True, index=True)
     role = Column(String, nullable=False)  # user | ai | system
     content = Column(Text, nullable=False)
-    map_ref = Column(String, nullable=True)     # 关联的 map node/drawer 操作
-    model = Column(String, nullable=True)       # 生成该消息的模型名（如 Qwen3.5、DeepSeek Flash）
-    display = Column(Boolean, default=True)     # Schema v0.7: False=系统内部记录,前端不渲染
-    priority = Column(String(10), default="normal")  # Schema v1.0: high | normal | low
-    created_at = Column(DateTime, default=utcnow)
-    memory_extracted = Column(Boolean, default=False)  # 是否已提取为记忆
+    map_ref = Column(String, nullable=True)
+    model = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
 
     scene = relationship("Scene", back_populates="messages")
     channel = relationship("Channel", back_populates="messages")
 
 
-# ═══ 系统设置 ═══
-SETTINGS_ID = "zuoshanke-v1"
-
-DEFAULT_ROUTING = {
-    "channel":    {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.7, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
-    "scene":      {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
-    "extraction": {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.1, "max_tokens": 2048,  "context_length": 1048576, "repeat_penalty": 1.05},
-    "medium":     {"model": "deepseek-v4-flash", "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-flash", "temperature": 0.3, "max_tokens": 16384, "context_length": 1048576, "repeat_penalty": 1.05},
-    "heavy":      {"model": "deepseek-v4-pro",   "provider": "deepseek", "provider_id": "pd-deepseek", "model_id": "pm-deepseek-v4-pro",   "temperature": 0.5, "max_tokens": 8192,  "context_length": 1048576, "repeat_penalty": 1.05},
-}
-
-def _load_default_prompts():
-    from prompts import load_default_prompts
-    return load_default_prompts()
-
-# 延迟初始化：模块首次被 import 时从 default-prompts.md 加载
-DEFAULT_SYSTEM_PROMPTS = _load_default_prompts()
-
-
+# ═══ 设置 ═══
 class Setting(Base):
     __tablename__ = "settings"
-
-    id = Column(String, primary_key=True)  # 固定 "zuoshanke-v1" 单行
-    routing = Column(JSON, nullable=False, default=lambda: DEFAULT_ROUTING.copy())
-    system_prompts = Column(JSON, nullable=False, default=lambda: _load_default_prompts().copy())
-    features = Column(JSON, nullable=False, default=lambda: {"pdf_as_image": False, "vision_enabled": False})
+    key = Column(String, primary_key=True)
+    value = Column(JSON, nullable=True)
+    description = Column(String, default="")
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-# ═══ Schema v0.7 — Agent Loop 仪表盘 ═══
+# ═══ 优先级队列（收敛产物） ═══
 class PriorityQueue(Base):
-    """Agent Loop 优先级队列"""
-    __tablename__ = "priority_queues"
+    __tablename__ = "priority_queue"
 
     id = Column(String, primary_key=True)
     scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
-    node_id = Column(String, ForeignKey("think_nodes.id"), nullable=True)
-    title = Column(String(200), nullable=False)
-    priority = Column(Integer, default=2)          # 1=P1, 2=P2, 3=P3, 4=P4
-    status = Column(String(20), default="pending") # pending | running | completed | blocked
-    deps = Column(Text, default="[]")              # JSON: ["node_id_1", "node_id_2"]
-    wip_group = Column(Integer, default=0)         # 同一批进入执行的任务组
-    sort_order = Column(Integer, default=0)
+    node_id = Column(String, nullable=True)
+    label = Column(String, nullable=False)
+    priority = Column(String, nullable=True)  # P0 | P1 | P2 | P3
+    status = Column(String, default="pending")  # pending | in_progress | done | blocked
+    order = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)
-    completed_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+# ═══ 反思时间线 ═══
 class ReflectTimeline(Base):
-    """反馈时间线 — Agent Loop 执行过程中的成功/失败/新发现/收敛记录"""
-    __tablename__ = "reflect_timelines"
+    __tablename__ = "reflect_timeline"
 
     id = Column(String, primary_key=True)
     scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
-    type = Column(String(20), nullable=False)       # success | fail | new | discover | correct | merge
-    icon = Column(String(10), default="💡")
-    title = Column(String(200), nullable=False)
-    detail = Column(Text, default="")
-    tag = Column(String(50), nullable=True)         # inject | blocked | queue_update
-    tag_text = Column(String(100), nullable=True)   # 标签文本如"↪ 注入TM: 新增节点"
     created_at = Column(DateTime, default=utcnow)
 
 
-# ════════════════════════════════════════════════
-# Schema v0.5 — 权重驱动的智能记忆系统
-# ════════════════════════════════════════════════
-#
-# 设计哲学：记忆像人一样
-#   - 反复提及的会强化（frequency）
-#   - 最近提过的更容易想起（recency）
-#   - 你说了"记住"会×3倍权重（explicit_boost）
-#   - 不重要的自然淡出，不会永远占位（decay）
-#
-# 权重公式（memory_manager.py 实时计算，不存静态值）:
-#   weight = base_weight × recency × frequency × explicit_boost
-#
-#   其中：
-#     recency   = e^(-λ·days)   λ = ln2/半衰期(14天)
-#     frequency = 1 + log₂(times_accessed + 1)
-#     boost     = explicit_boost
-#
-# 四个等级（自动流转，无需手动维护）:
-#   P0 🔒 (weight ≥ 8) — 永不过期，始终注入
-#   P1 ⭐ (weight 4~8) — 长期保留，高频注入
-#   P2 📝 (weight 2~4) — 中期保留，按需注入
-#   P3 💤 (weight < 2) — 短期保留，自然淡出→删除
-#
-# 自动强化机制:
-#   - 同一话题出现 3次+ → +explicit_boost（×2）
-#   - 用户说"记住"+"这个很重要" → ×3，手动升 P0
-#   - 用户主动纠正 → 覆盖原记忆内容
-#
-# Token 预算:
-#   每次最多注入 Top-5 条（按 weight 实时排序）
-#   P0 预留 1 个名额，其余按权重竞争
-#   总容量上限 500 条，超出时淘汰最低权重的 P3
-#
-# 生命周期:
-#   [用户说某事] → [AI 扫描对话] → [创建记忆, P2 起步]
-#       ↻ 反复提 → [reinforce，explicit_boost ×2] → [weight 升, 可能到 P1]
-#       ↻ 说"记住" → [mark_explicit，explicit_boost ×3] → [weight 升, 可能到 P0]
-#       ↻ 30天不提 → [weight 自然衰减] → [P3 淡出]
-#       ↻ 超 500 条 → [prune, 淘汰最低权重 P3]
-
+# ═══ Agent Memory（长期记忆） ═══
 class AgentMemory(Base):
-    """跨会话持久记忆 — 权重驱动，像人一样会强化也会遗忘"""
     __tablename__ = "agent_memory"
 
-    id = Column(String, primary_key=True)
-    category = Column(String, nullable=False, default="user")  # user | agent
-    key = Column(String, unique=True, nullable=False, index=True)  # 唯一标识
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(64), unique=True, nullable=False, index=True)
+    scope = Column(String(16), default="scene")  # zhu | scene | channel
+    scene_id = Column(String(32), nullable=True, index=True)
+    channel_id = Column(String(32), nullable=True, index=True)
+    target = Column(String(16), default="memory")  # memory | user
     content = Column(Text, nullable=False)
-    tags = Column(JSON, default=list)  # 关联标签，用于主题匹配
-    # ── 权重相关字段 ──
-    base_weight = Column(Integer, default=2)
-    priority_level = Column(String, default="P2")  # P0 | P1 | P2 | P3
-    explicit_boost = Column(Integer, default=1)  # 用户强调倍率
-    times_accessed = Column(Integer, default=0)  # 被访问次数
-    last_accessed_at = Column(DateTime, nullable=True)  # 最后被注入的时间
-    last_reinforced_at = Column(DateTime, nullable=True)  # 最后被用户强化的时间
-    # ── 作用域（2026-05-27: 记忆隔离） ──
-    scope = Column(String, default="zhu", nullable=False)  # zhu | scene | channel
-    context_id = Column(String, nullable=True, index=True)  # 场景ID/频道ID
-    # ── 🆕 v2 双重记忆池: 叙事型／不朽记忆 ──
-    is_narrative = Column(Boolean, default=False)     # 叙事型关系记忆（历程/决策/迭代故事）
-    is_immortal = Column(Boolean, default=False)      # 不衰减不清理（scope=zhu 自动 True）
-    correction_trail = Column(Text, default="[]")     # JSON: [{old, new, reason, timestamp}]
-    # ── 元数据 ──
-    source = Column(String, nullable=True)  # 记忆来源（auto | llm | user）
+    strength = Column(Integer, default=1)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-
-# ═══ 多平台网关会话 ═══
+# ═══ 网关会话 ═══
 class GatewaySession(Base):
     """网关会话 — 记录外部平台用户的当前上下文状态"""
     __tablename__ = "gateway_sessions"
 
     id = Column(String, primary_key=True)
-    platform = Column(String, nullable=False)                # weixin | telegram | ...
-    platform_user_id = Column(String, nullable=False)         # 外部平台的用户 ID
-    mode = Column(String, nullable=False, default="channel")  # channel | scene
-    channel_id = Column(String, ForeignKey("channels.id"), nullable=True)  # 当前绑定频道
-    scene_id = Column(String, ForeignKey("scenes.id"), nullable=True)      # 当前场景（mode=scene 时）
-    scene_name = Column(String, nullable=True)                # 缓存场景名
-    platform_username = Column(String, nullable=True)         # 缓存用户昵称
-    last_active_at = Column(DateTime, default=utcnow)         # 最后活跃时间
-
-    # 🆕 Schema v1.1
-    status = Column(String, default="active")                 # active | destroyed
-    started_at = Column(DateTime, default=utcnow)             # session 创建时间
-    ended_at = Column(DateTime, nullable=True)                # session 销毁时间
-    duration_seconds = Column(Integer, nullable=True)         # ended_at - started_at
-
-    # 🆕 Schema v1.1 token 用量
-    prompt_tokens = Column(Integer, default=0)
-    completion_tokens = Column(Integer, default=0)
-    total_tokens = Column(Integer, default=0)
-    input_tokens = Column(Integer, default=0)
-    output_tokens = Column(Integer, default=0)
-    cache_read_tokens = Column(Integer, default=0)
-    cache_write_tokens = Column(Integer, default=0)
-    reasoning_tokens = Column(Integer, default=0)
-    api_calls = Column(Integer, default=0)
-    estimated_cost_usd = Column(Float, default=0.0)
-    cost_status = Column(String, default="unknown")
-    cost_source = Column(String, nullable=True)
-
+    platform = Column(String, nullable=False, index=True)  # discord | wechat | telegram | terminal | api
+    external_user_id = Column(String, nullable=False, index=True)
+    scene_id = Column(String, nullable=True)
+    channel_id = Column(String, nullable=True)
+    session_state = Column(String, default="active")  # active | waiting_input | idle | expired
+    extra = Column(JSON, default=dict)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("platform", "platform_user_id", name="uq_platform_user"),
-    )
 
-
-# ═══ Schema v1.1: Web Session ═══
+# ═══ Web 会话 ═══
 class WebSession(Base):
-    """Web 前端会话 — 每个上下文（闲聊/频道/场景）各自独立
-
-    和 GatewaySession 共用相同的 session 生命周期管理逻辑，但 Web 端
-    每个上下文都有独立 session，不受 (platform, platform_user_id) 唯一约束。
-    """
+    """浏览器 Web 会话 — 状态管理"""
     __tablename__ = "web_sessions"
 
     id = Column(String, primary_key=True)
-    context_type = Column(String, nullable=False)             # channel | scene
-    context_id = Column(String, nullable=False)               # 频道ID 或 场景ID
-    context_name = Column(String, nullable=True)              # 缓存名称（显示用）
-
-    # 🆕 Schema v1.1 session 生命周期
-    status = Column(String, default="active")                 # active | destroyed
-    started_at = Column(DateTime, default=utcnow)             # session 创建时间
-    ended_at = Column(DateTime, nullable=True)                # session 销毁时间
-    duration_seconds = Column(Integer, nullable=True)         # ended_at - started_at
-    last_active_at = Column(DateTime, default=utcnow)         # 最后活跃时间
-
-    # 🆕 Schema v1.1 token 用量
-    prompt_tokens = Column(Integer, default=0)
-    completion_tokens = Column(Integer, default=0)
-    total_tokens = Column(Integer, default=0)
-    input_tokens = Column(Integer, default=0)
-    output_tokens = Column(Integer, default=0)
-    cache_read_tokens = Column(Integer, default=0)
-    cache_write_tokens = Column(Integer, default=0)
-    reasoning_tokens = Column(Integer, default=0)
-    api_calls = Column(Integer, default=0)
-    estimated_cost_usd = Column(Float, default=0.0)
-    cost_status = Column(String, default="unknown")
-    cost_source = Column(String, nullable=True)
-
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=True)
+    channel_id = Column(String, nullable=True)
+    user_context = Column(Text, nullable=True)
+    extra = Column(JSON, default=dict)
+    expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("context_type", "context_id", name="uq_web_context"),
-    )
 
-
-# ═══ 对话阶段引擎 — DialogState ═══
+# ═══ 对话状态 ═══
 class DialogState(Base):
-    """对话阶段 — 追踪场景对话的当前进度。
-
-    每个场景最多一条记录。当 LLM 判断问题需要进入引导模式时创建。
-    阶段流: EXPLORE → FOCUS → FINALIZE → EXECUTE
-    """
+    """对话状态快照 — 用于断线恢复"""
     __tablename__ = "dialog_states"
 
-    scene_id = Column(String, ForeignKey("scenes.id"), primary_key=True)
-    phase = Column(String, nullable=False, default="idle")
-    # phase: idle | explore | focus | decompose | challenge | finalize | execute
-    summary = Column(Text, default="")         # 当前阶段讨论摘要
-    decisions = Column(JSON, default=list)     # [string] 已确定的决策列表
-    context = Column(JSON, default=dict)       # {key: value} 梳理出的关键上下文
+    id = Column(String, primary_key=True)
+    session_id = Column(String, nullable=False, index=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=True)
+    channel_id = Column(String, nullable=True)
+    state = Column(JSON, default=dict)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-# ═══ Schema v0.8 — 坐山客本体 ═══
+# ═══ 本体 Agent ═══
 class ZhuAgent(Base):
-    """坐山客本体 — 持久化人格实体"""
+    """坐山客本体 Agent — 每个场景可绑定不同本体"""
     __tablename__ = "zhu_agents"
 
-    id = Column(String(32), primary_key=True)
-    name = Column(String(100), default="坐山客")
-    mood = Column(String(20), default="idle")   # idle/watching/thinking/amused/annoyed/speaking/resting
-    observation = Column(String(500), default="")  # 当前观察描述
-    core_prompt = Column(Text, default="")       # 核心人格（后续使用）
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, unique=True, index=True)
+    role = Column(String, default="助手")
+    model = Column(String, nullable=True)
+    system_prompt = Column(Text, default="")
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-# ═══ 场景产物 — 自动收敛后生成的行动交付物 ═══
+# ═══ 场景资源 ═══
 class SceneAsset(Base):
-    """场景产物 — 自动收敛后 LLM 生成的可交付物（行动手册/清单/指南）"""
+    """场景资源 — 每个场景关联的图片/文件等"""
     __tablename__ = "scene_assets"
 
     id = Column(String, primary_key=True)
     scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
-    type = Column(String(20), nullable=False)       # checklist / guide / table / html_page / pdf
-    title = Column(String(200), nullable=False)
-    content = Column(Text, default="")
-    format = Column(String(50), nullable=True)
+    asset_type = Column(String, nullable=False)  # image | file | audio | video
+    url = Column(String, nullable=False)
+    filename = Column(String, nullable=True)
+    mime_type = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
 
-# ═══ 类别元数据 ═══
+# ═══ 分类元数据 ═══
 class CategoryMeta(Base):
-    """类别定义 — 存储所有已知类别的元数据（图标、标签、排序）"""
+    """场景分类元数据 — 用于场景广场筛选"""
     __tablename__ = "category_meta"
 
-    name = Column(String(50), primary_key=True)         # 英文 key，如 "life"
-    label = Column(String(100), nullable=False)          # 中文名，如 "生活"
-    icon = Column(String(10), nullable=False, default="📁")
-    sort_order = Column(Integer, default=0)
+    id = Column(String, primary_key=True)
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, unique=True, index=True)
+    category = Column(String, nullable=False)
+    tags = Column(JSON, default=list)
+    score = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-# ═══ 产出成果 — 分身生成的独立 HTML/入口 ═══
+# ═══ 项目输出 ═══
 class ProjectOutput(Base):
-    """分身生成的独立产出（HTML 页面、系统入口等），可在新标签页打开"""
+    """项目输出 — 场景中生成的工作产物"""
     __tablename__ = "project_outputs"
 
     id = Column(String, primary_key=True)
     scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
-    title = Column(String(200), nullable=False)
-    description = Column(Text, default="")
-    type = Column(String(20), nullable=False, default="html")  # html / link
-    file_path = Column(String(500), nullable=True)              # 相对 outputs/ 的路径
-    url = Column(String(500), nullable=True)                    # 外部链接
-    project_id = Column(String, ForeignKey("output_projects.id"), nullable=True, index=True)  # Schema v0.81
+    project_id = Column(String, nullable=False, default="")
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    output_type = Column(String, default="text")  # text | code | markdown | image
+    tags = Column(JSON, default=list)
     created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    project = relationship("OutputProject", back_populates="outputs")
 
-
-# ═══ 产出项目 — 相关产出的容器（Schema v0.81） ═══
+# ═══ 输出项目（分组） ═══
 class OutputProject(Base):
-    """项目——一组相关产出的容器。收敛时由系统自动创建"""
+    """输出项目分组 — 将多个 ProjectOutput 归组"""
     __tablename__ = "output_projects"
 
     id = Column(String, primary_key=True)
     scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
-    name = Column(String(200), nullable=False)               # 项目名称
-    description = Column(Text, default="")                   # 项目描述
-    converged_at = Column(DateTime, default=utcnow)          # 收敛诞生时间
-    is_active = Column(Boolean, default=True)                # 是否活跃
+    title = Column(String, nullable=False)
+    description = Column(Text, default="")
+    status = Column(String, default="active")  # active | archived
+    sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    outputs = relationship("ProjectOutput", back_populates="project", cascade="all, delete-orphan")
 
-
-# ═══ Schema v1.0 — Context 组合架构 ═══
+# ═══ 文件快照 ═══
 class FileSnapshot(Base):
-    """文件快照 — 用于 diff 提取与文件版本跟踪"""
+    """文件快照 — 记录文件在某个时刻的内容"""
     __tablename__ = "file_snapshots"
 
     id = Column(String, primary_key=True)
-    scene_id = Column(String, nullable=False, index=True)
-    file_path = Column(String(500), nullable=False)
-    snapshot = Column(Text, nullable=False)           # 文件完整内容
-    diff_summary = Column(String(200), nullable=True) # 改动摘要（如"新增3行，删除1行"）
-    diff_content = Column(Text, nullable=True)        # 最近一次 diff 的 hunks 内容
+    scene_id = Column(String, ForeignKey("scenes.id"), nullable=False, index=True)
+    file_path = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    version = Column(Integer, default=1)
     created_at = Column(DateTime, default=utcnow)
 
 
+# ═══ 文档摘要 ═══
 class DocumentSummary(Base):
-    """文档摘要 — 预生成的三级摘要（single_line / brief / full）"""
+    """文档摘要 — 文档/URL 的摘要缓存"""
     __tablename__ = "document_summaries"
 
     id = Column(String, primary_key=True)
-    doc_name = Column(String(200), unique=True, nullable=False)
-    single_line = Column(String(200), default="")
-    brief = Column(Text, default="")
-    full = Column(Text, default="")
+    url_or_path = Column(String, nullable=False, unique=True, index=True)
+    title = Column(String, default="")
+    summary = Column(Text, default="")
+    word_count = Column(Integer, default=0)
+    language = Column(String, default="zh")
+    source = Column(String, default="web")  # web | local
+    created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+# ═══ 配置项 ═══
 class ConfigEntry(Base):
-    """配置条目 — 与 skill 分离的配置存储"""
+    """系统配置项 — key-value 持久化"""
     __tablename__ = "config_entries"
 
-    id = Column(String, primary_key=True)
-    config_name = Column(String(100), unique=True, nullable=False)
-    content = Column(Text, default="")         # JSON/YAML 内容
-    category = Column(String(20), default="system")  # system | model | service
+    key = Column(String, primary_key=True)
+    value = Column(JSON, nullable=True)
+    description = Column(String, default="")
+    category = Column(String, default="system")  # system | user | scene
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-# ═══ 已废弃的表（代码中已删除，DB 中保留供历史数据查询） ═══
-# - action_maps
-# - action_nodes
-# - action_edges
-# - action_execution_logs
-# - cross_refs
-
-
-# ═══ 🆕 AI Provider ═══
+# ═══ AI Provider ═══
 class AiProvider(Base):
-    """AI Provider — 管理 API 凭据和连接信息"""
+    """AI 服务提供商 — 含 API 地址、密钥、模型列表"""
     __tablename__ = "ai_providers"
 
     id = Column(String(32), primary_key=True)
     name = Column(String(100), nullable=False)
-    base_url = Column(String(500), nullable=False)
+    api_base = Column(String(500), nullable=False)
     api_key = Column(String(500), nullable=True)
-    provider_type = Column(String(20), default="openai-compatible")  # openai-compatible | local
+    models = Column(JSON, default=list)       # 支持的模型列表
+    default_model = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
+    priority = Column(Integer, default=0)     # 优先级（数值越高越优先）
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    models = relationship("AiModel", cascade="all, delete-orphan", back_populates="provider")
 
-
+# ═══ AI 模型 ═══
 class AiModel(Base):
     """AI 模型 — 绑定到 Provider，带默认参数和能力声明"""
     __tablename__ = "ai_models"
 
     id = Column(String(32), primary_key=True)
-    provider_id = Column(String(32), ForeignKey("ai_providers.id", ondelete="CASCADE"), nullable=False, index=True)
-    name = Column(String(100), nullable=False)
-    display_name = Column(String(100), nullable=True)
-    # 默认参数
+    provider_id = Column(String(32), ForeignKey("ai_providers.id"), nullable=False, index=True)
+    display_name = Column(String(100), nullable=False)
+    model_name = Column(String(200), nullable=False)       # 实际传给 API 的 model 参数
     temperature = Column(Float, default=0.7)
-    max_tokens = Column(Integer, default=8192)
-    context_length = Column(Integer, default=32768)
-    repeat_penalty = Column(Float, default=1.05)
-    # 能力标记
-    vision = Column(Boolean, default=False)
-    function_calling = Column(Boolean, default=True)
-    # 排序
+    max_tokens = Column(Integer, default=4096)
+    capabilities = Column(JSON, default=list)               # ["function_calling", "vision", ...]
+    is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    provider = relationship("AiProvider", back_populates="models")
 
-
-# ═══ 🆕 子 Agent 执行结果 ═══
+# ═══ 子 Agent 执行结果 ═══
 class DelegateResult(Base):
     """子 Agent 执行结果 — 持久化到 DB，供前端独立展示"""
     __tablename__ = "delegate_results"
@@ -609,6 +405,44 @@ class SceneSelfMap(Base):
     title = Column(String(200), default="")
     tree = Column(JSON, default=list)          # 左侧导航树 [{id, icon, label, children?, detail?, hasDiagram?}]
     diagrams = Column(JSON, default=dict)       # 流程图 {nodeId: {title, nodes, edges}}
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ═══ 🆕 Schema v1.4 Phase 1 — 用户画像 ═══
+
+class PendingUserTrait(Base):
+    """用户画像暂存区 — 分身提取的用户特征，待人工确认后合入正式库"""
+    __tablename__ = "pending_user_traits"
+
+    id = Column(String, primary_key=True)
+    content = Column(Text, nullable=False)           # 分身提取的描述
+    source_scene = Column(String, nullable=True)     # 来源场景名称
+    source_scene_id = Column(String, nullable=True)  # 来源场景ID
+    confidence = Column(String, default="medium")    # high / medium / low
+    context_snippet = Column(Text, nullable=True)    # 触发对话片段
+    status = Column(String, default="pending")       # pending / merged / rejected
+    merged_into = Column(String, nullable=True)      # 合入哪条正式画像的 key
+    created_at = Column(DateTime, default=utcnow)
+
+
+class UserProfile(Base):
+    """用户画像正式库 — 沉淀后的用户偏好/原则/习惯/上下文"""
+    __tablename__ = "user_profiles"
+
+    id = Column(String, primary_key=True)
+    key = Column(String, unique=True, index=True, nullable=False)  # 唯一标识
+    content = Column(Text, nullable=False)                          # 画像内容
+    category = Column(String, default="preference")                 # principle / preference / habit / context
+    priority = Column(String, default="P2")                        # P0 / P1 / P2 / P3
+    tags = Column(JSON, default=list)
+    source_scenes = Column(JSON, default=list)
+    merged_from = Column(JSON, default=list)
+    is_active = Column(Boolean, default=True)
+    deprecated_by = Column(String, nullable=True)
+    correction_trail = Column(JSON, default=list)
+    total_injections = Column(Integer, default=0)
+    last_injected_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

@@ -98,6 +98,8 @@ Composer(user_input, scene, fenshen, session)
   ├── prompt_layer()        ─── 本体 prompt + 分身 prompt
   ├── memory_layer()        ─── 场景相关的持久记忆（DB 检索）
   ├── document_layer()      ─── 场景声明的文档摘要（DB 检索）
+  ├── user_profile_layer()  ─── 用户画像（P0+P1 始终注入，P2 按话题匹配）
+  │                            📖 Schema v1.4 — docs/design/schema-v1.4.md
   ├── config_layer()        ─── 当前生效的配置层叠
   ├── skill_layer()         ─── 按相关性检索的 skill 摘要
   ├── history_layer()       ─── 当前 session 全部聊天（带权重）
@@ -120,10 +122,10 @@ Composer(user_input, scene, fenshen, session)
 ┌────────────────────────────────────┐
 │        Context Composer            │
 │                                    │
-│  ┌──────┐ ┌──────┐ ┌───────────┐  │
-│  │prompt│ │memory│ │document   │  │
-│  │layer │ │layer │ │layer      │  │
-│  └──┬───┘ └──┬───┘ └─────┬─────┘  │
+│  ┌──────┐ ┌──────┐ ┌───────────┐ ┌──────────┐  │
+│  │prompt│ │memory│ │document   │ │user_prof │  │
+│  │layer │ │layer │ │layer      │ │ile_layer │  │
+│  └──┬───┘ └──┬───┘ └─────┬─────┘ └─────┬────┘  │
 │     │        │           │        │
 │  ┌──▼───┐ ┌──▼───┐ ┌────▼────┐  │
 │  │config│ │skill │ │history  │  │

@@ -1475,6 +1475,62 @@
         ],
         "requires_sql": true
       }
+    },
+    {
+      "name": "pending_extract",
+      "description": "分身提取用户偏好，写入 pending_user_traits 暂存区，等待确认后合入正式用户画像库",
+      "file": "tools/user_profile_tool.py",
+      "function": "pending_extract",
+      "parameters": {
+        "content": {
+          "type": "string",
+          "description": "分身提取的描述（必填）"
+        },
+        "source_scene": {
+          "type": "string",
+          "description": "来源场景名称",
+          "optional": true
+        },
+        "source_scene_id": {
+          "type": "string",
+          "description": "来源场景 ID",
+          "optional": true
+        },
+        "confidence": {
+          "type": "string",
+          "description": "置信度 high/medium/low",
+          "optional": true
+        },
+        "context_snippet": {
+          "type": "string",
+          "description": "触发对话片段",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, id, message}",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "profile_list",
+      "description": "查询正式用户画像，按优先级（P0/P1/P2/P3）分组返回",
+      "file": "tools/user_profile_tool.py",
+      "function": "profile_list",
+      "parameters": {
+        "category": {
+          "type": "string",
+          "description": "筛选分类（principle/preference/habit/context），空=全部",
+          "optional": true
+        },
+        "active_only": {
+          "type": "boolean",
+          "description": "仅返回有效的画像，默认 true",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, profiles: {P0:[...], P1:[...], ...}, total}",
+      "category": "data",
+      "verified": true
     }
   ]
 }
