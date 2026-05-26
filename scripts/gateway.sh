@@ -12,6 +12,10 @@ BACKEND_DIR="$PWD/backend"
 PID_FILE="$HOME/.zuoshanke/gateway.pid"
 LOG_FILE="$HOME/.zuoshanke/gateway.log"
 
+# 配置文件路径（新旧兼容）
+CONFIG_OLD="$HOME/.zuoshanke/.gateway.env"
+CONFIG_NEW="$HOME/.zuoshanke/gateway.env"
+
 mkdir -p "$HOME/.zuoshanke"
 
 start() {
@@ -20,13 +24,30 @@ start() {
         return 1
     fi
 
-    echo "🚀 启动坐山客 Gateway..."
-    nohup "$BACKEND_DIR/.venv/bin/python" -m backend.gateway.run \
+    echo "🚀 启动坐山客 Gateway v0.2 (多平台)..."
+    echo "   配置文件: $CONFIG_NEW (新版) / $CONFIG_OLD (旧版)"
+    
+    # 检测配置
+    if [ -f "$CONFIG_NEW" ]; then
+        echo "   检测到新版配置，支持多平台"
+        grep -E '^(WEIXIN|TELEGRAM|DISCORD|SIGNAL|EMAIL|SLACK|WHATSAPP|FEISHU|DINGTALK|WECOM|MATRIX|SMS|YYB)_' "$CONFIG_NEW" | \
+            sed 's/=.*//' | sort -u | while read -r prefix; do
+            echo "   📱 ${prefix%_*} 已配置"
+        done
+    elif [ -f "$CONFIG_OLD ]; then
+        echo "   检测到旧版配置（仅微信）"
+    else
+        echo "   ⚠️  无配置文件，Gateway 退出"
+    fi
+
+    cd "$BACKEND_DIR" && nohup ".venv/bin/python" -m backend.gateway.run \
         >> "$LOG_FILE" 2>&1 &
     PID=$!
     echo $PID > "$PID_FILE"
     echo "✅ Gateway 已启动 (PID: $PID)"
     echo "日志: $LOG_FILE"
+    sleep 1
+    tail -3 "$LOG_FILE" 2>/dev/null || true
 }
 
 stop() {
@@ -69,21 +90,105 @@ status() {
 
 config_status() {
     echo "📋 Gateway 配置状态:"
-    if [ -f "$HOME/.zuoshanke/.gateway.env" ]; then
-        echo "  配置文件: $HOME/.zuoshanke/.gateway.env ✅"
-        grep -v '^#' "$HOME/.zuoshanke/.gateway.env" | grep -v '^$' | while IFS='=' read -r key value; do
+    echo ""
+    
+    if [ -f "$CONFIG_NEW" ]; then
+        echo "  ✅ 新版配置文件: $CONFIG_NEW"
+        echo ""
+        echo "  已配置平台:"
+        grep -v '^#' "$CONFIG_NEW" | grep -v '^$' | while IFS='=' read -r key value; do
+            # 提取平台前缀
+            prefix="${key%%_*}"
+            case "$prefix" in
+                WEIXIN)
+                    if [ "$key" = "WEIXIN_TOKEN" ]; then
+                        echo "  📱 微信 (iLink)"
+                        echo "     Token: ${value:0:8}...${value: -4}"
+                    elif [ "$key" = "WEIXIN_ACCOUNT_ID" ]; then
+                        echo "     Account: ${value:0:8}..."
+                    fi
+                    ;;
+                TELEGRAM)
+                    if [ "$key" = "TELEGRAM_TOKEN" ]; then
+                        echo "  📱 Telegram"
+                        echo "     Token: ${value:0:8}...${value: -4}"
+                    fi
+                    ;;
+                DISCORD)
+                    if [ "$key" = "DISCORD_BOT_TOKEN" ]; then
+                        echo "  📱 Discord"
+                        echo "     Token: ${value:0:8}...${value: -4}"
+                    fi
+                    ;;
+                SIGNAL)
+                    if [ "$key" = "SIGNAL_PHONE_NUMBER" ]; then
+                        echo "  📱 Signal"
+                        echo "     Phone: ${value:0:6}...${value: -4}"
+                    fi
+                    ;;
+                EMAIL)
+                    if [ "$key" = "EMAIL_SMTP_HOST" ]; then
+                        echo "  📧 Email: $value"
+                    fi
+                    ;;
+                SLACK)
+                    if [ "$key" = "SLACK_BOT_TOKEN" ]; then
+                        echo "  📱 Slack (已配置)"
+                    fi
+                    ;;
+                WHATSAPP)
+                    if [ "$key" = "WHATSAPP_PHONE_NUMBER_ID" ]; then
+                        echo "  📱 WhatsApp: $value"
+                    fi
+                    ;;
+                FEISHU)
+                    if [ "$key" = "FEISHU_APP_ID" ]; then
+                        echo "  📱 飞书: $value"
+                    fi
+                    ;;
+                DINGTALK)
+                    if [ "$key" = "DINGTALK_CLIENT_ID" ]; then
+                        echo "  📱 钉钉: $value"
+                    fi
+                    ;;
+                WECOM)
+                    if [ "$key" = "WECOM_CORP_ID" ]; then
+                        echo "  📱 企业微信: $value"
+                    fi
+                    ;;
+                *)
+                    echo "  📱 ${prefix}: (已配置)"
+                    ;;
+            esac
+        done
+    elif [ -f "$CONFIG_OLD ]; then
+        echo "  ⚠️  旧版配置文件: $CONFIG_OLD"
+        echo "  建议迁移到新版格式: cp $CONFIG_OLD $CONFIG_NEW"
+        echo ""
+        grep -v '^#' "$CONFIG_OLD" | grep -v '^$' | while IFS='=' read -r key value; do
             if [ "$key" = "WEIXIN_TOKEN" ]; then
-                echo "  WEIXIN_TOKEN: ${value:0:8}...${value: -4}"
+                echo "  📱 微信"
+                echo "     Token: ${value:0:8}...${value: -4}"
             elif [ "$key" = "WEIXIN_ACCOUNT_ID" ]; then
-                echo "  WEIXIN_ACCOUNT_ID: ${value:0:8}..."
+                echo "     Account: ${value:0:8}..."
             else
                 echo "  $key: $value"
             fi
         done
     else
-        echo "  配置文件: ❌ 不存在"
-        echo "  请运行后端 Settings 页面配置，或手动创建:"
-        echo "    $HOME/.zuoshanke/.gateway.env"
+        echo "  ❌ 无配置文件"
+        echo ""
+        echo "  请创建配置文件:"
+        echo "    $CONFIG_NEW"
+        echo ""
+        echo "  示例内容:"
+        echo "    # 微信"
+        echo "    WEIXIN_TOKEN=your_token"
+        echo "    WEIXIN_ACCOUNT_ID=your_account_id"
+        echo "    # Telegram"
+        echo "    TELEGRAM_TOKEN=123456:ABC-DEF..."
+        echo "    # Discord"
+        echo "    DISCORD_BOT_TOKEN=your_discord_token"
     fi
 }
 
