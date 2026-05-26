@@ -302,5 +302,16 @@ def init_db():
         db.commit()
     except Exception as e:
         print(f"⚠️  文档摘要种子跳过: {e}")
+
+    # ── 迁移：messages 表新增 file_attachments 字段 ──
+    try:
+        with engine.connect() as conn:
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(messages)")).fetchall()]
+            if "file_attachments" not in cols:
+                conn.execute(text("ALTER TABLE messages ADD COLUMN file_attachments TEXT"))
+                conn.commit()
+                print("✅ messages 表新增 file_attachments 字段")
+    except Exception as e:
+        print(f"⚠️  file_attachments 迁移跳过: {e}")
     finally:
         db.close()
