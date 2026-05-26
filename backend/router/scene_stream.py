@@ -34,28 +34,59 @@ router = APIRouter(tags=["场景流式"])
 # 🆕 Schema v1.1: Web session 辅助
 
 def _ensure_web_session(db, context_type: str, context_id: str, context_name: str | None = None):
-    """获取或创建 Web session，供场景/频道流式端点集成"""
+    """获取或创建 Web session（每个上下文唯一一个活跃 session）
+
+    优先复用活跃 session；若无活跃 session，尝试复活已销毁的同上下文 session
+    （UNIQUE(context_type, context_id) 约束导致不能创建重复行）；都无则新建。
+    """
     from models import WebSession
     from utils import make_id
+
+    # 1. 找活跃 session
     ws = db.query(WebSession).filter(
         WebSession.context_type == context_type,
         WebSession.context_id == context_id,
         WebSession.status == "active",
     ).first()
-    if not ws:
-        ws = WebSession(
-            id=make_id("ws"),
-            context_type=context_type,
-            context_id=context_id,
-            context_name=context_name,
-            status="active",
-            started_at=utcnow(),
-            last_active_at=utcnow(),
-        )
-        db.add(ws)
+
+    if ws:
+        ws.last_active_at = utcnow()
+        ws.updated_at = utcnow()
+        if context_name:
+            ws.context_name = context_name
         db.commit()
         db.refresh(ws)
+        return ws
 
+    # 2. 不超过 UNIQUE 约束：找已销毁的同上下文 session 并复活
+    destroyed = db.query(WebSession).filter(
+        WebSession.context_type == context_type,
+        WebSession.context_id == context_id,
+    ).first()
+
+    if destroyed:
+        destroyed.status = "active"
+        destroyed.started_at = utcnow()
+        destroyed.last_active_at = utcnow()
+        destroyed.ended_at = None
+        destroyed.duration_seconds = None
+        db.commit()
+        db.refresh(destroyed)
+        return destroyed
+
+    # 3. 完全新建
+    ws = WebSession(
+        id=make_id("ws"),
+        context_type=context_type,
+        context_id=context_id,
+        context_name=context_name,
+        status="active",
+        started_at=utcnow(),
+        last_active_at=utcnow(),
+    )
+    db.add(ws)
+    db.commit()
+    db.refresh(ws)
     return ws
 
 
