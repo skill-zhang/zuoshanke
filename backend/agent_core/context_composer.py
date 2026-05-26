@@ -368,22 +368,35 @@ def _build_profile_layer(db, user_content: str) -> str:
                 if user_content and any(kw.lower() in user_content.lower() for kw in p_keywords if kw):
                     topical.append(p)
 
-        # 格式化输出
-        lines = ["## 👤 用户画像（你正在跟这样的用户对话）"]
+        # 格式化输出 — 匹配设计文档 §3.4 格式
+        lines = ["─── 👤 用户画像（你正在跟这样的用户对话） ───"]
 
         if important:
-            lines.append("")
-            for p in important:
-                scenes = ", ".join(p.source_scenes or []) if p.source_scenes else ""
-                source = f"（{scenes}）" if scenes else ""
-                lines.append(f"- {_pri_icon(p.priority)} {p.content} {source}")
-            lines.append("")
+            # 按 priority 分组：P0 → P1
+            p0_profiles = [p for p in important if p.priority == "P0"]
+            p1_profiles = [p for p in important if p.priority == "P1"]
+
+            if p0_profiles:
+                lines.append("【P0 原则】")
+                for p in p0_profiles:
+                    scenes = ", ".join(p.source_scenes or []) if p.source_scenes else ""
+                    source = f"（{scenes}）" if scenes else ""
+                    lines.append(f"- {p.content} {source}")
+                lines.append("")
+
+            if p1_profiles:
+                lines.append("【P1 偏好】")
+                for p in p1_profiles:
+                    scenes = ", ".join(p.source_scenes or []) if p.source_scenes else ""
+                    source = f"（{scenes}）" if scenes else ""
+                    lines.append(f"- {p.content} {source}")
+                lines.append("")
 
         if topical:
-            lines.append("---")
-            lines.append("")
+            lines.append("【P2 参考】")
             for p in topical:
                 lines.append(f"- {p.content}")
+            lines.append("")
 
         if len(lines) == 1:
             return ""  # 只有 header，没有内容
@@ -393,11 +406,6 @@ def _build_profile_layer(db, user_content: str) -> str:
     except Exception as e:
         _log.warning(f"构建画像层失败: {e}")
         return ""
-
-
-def _pri_icon(priority: str) -> str:
-    """优先级图标"""
-    return {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}.get(priority, "📝")
 
 
 def _extract_keywords(text: str, max_words: int = 5) -> list:

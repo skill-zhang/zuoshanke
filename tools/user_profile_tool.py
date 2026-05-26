@@ -46,11 +46,27 @@ def pending_extract(
     try:
         db = SessionLocal()
         try:
+            if confidence not in ("high", "medium", "low"):
+                confidence = "medium"
+
+            # 精确去重：同内容且 pending 状态的不重复提
+            existing = db.query(PendingUserTrait).filter(
+                PendingUserTrait.content == content,
+                PendingUserTrait.status == "pending",
+            ).first()
+            if existing:
+                return json.dumps({
+                    "success": True,
+                    "id": existing.id,
+                    "deduped": True,
+                    "message": f"已合并到现有暂存条目 (ID={existing.id})",
+                }, ensure_ascii=False)
+
             trait = PendingUserTrait(
                 id=str(uuid4()),
                 content=content,
-                source_scene=source_scene,
-                source_scene_id=source_scene_id,
+                source_scene=source_scene or None,
+                source_scene_id=source_scene_id or None,
                 confidence=confidence if confidence in ("high", "medium", "low") else "medium",
                 context_snippet=context_snippet or None,
                 status="pending",
@@ -60,7 +76,8 @@ def pending_extract(
             return json.dumps({
                 "success": True,
                 "id": trait.id,
-                "message": f"用户特征已提取，ID={trait.id}，等待确认合入正式库",
+                "deduped": False,
+                "message": f"用户特征已提取，ID={trait.id}，等待自动合入正式库",
             }, ensure_ascii=False)
         finally:
             db.close()

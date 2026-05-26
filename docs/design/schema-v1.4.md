@@ -123,7 +123,7 @@ def pending_extract(content: str, confidence: str = "medium") -> str:
    - 同类合并 → 一条正式画像，confidence 取最高，content 取最完整描述
    - 独立保留 → 直接入库（1 条 pending → 1 条 profile）
    - 无关/噪音 → 标记 rejected 或直接丢弃
-4. 合并/入库完成后，从暂存区**彻底删除**已处理的条目（不是标记 status）
+4. 合并/入库完成后，从暂存区**标记为 merged/rejected 状态**（不是物理删除）。详见 §3.3。
 5. 处理结果写入 user_profiles 表后，下次场景 context 构建时自动包含新画像
 
 **判重方式：** 不依赖向量库 / Embedding / 相似度算法。LLM 对自然语言的语义理解足以判断

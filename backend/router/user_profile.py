@@ -396,6 +396,7 @@ def _run_llm_dedup(pending: list, db: Session) -> dict:
                     source_scenes.append(t.source_scene)
 
             key = _content_to_key(content)
+            merge_into_key = key  # 默认用当前 key，内容进化时覆盖
 
             existing = db.query(UserProfile).filter(
                 UserProfile.key == key,
@@ -407,15 +408,39 @@ def _run_llm_dedup(pending: list, db: Session) -> dict:
                 existing.merged_from = list(set((existing.merged_from or []) + pending_ids))
                 existing.updated_at = _utcnow()
                 if content != existing.content:
+                    # 版本进化：内容有变 → 标记旧版 deprecated，创建新版
+                    new_key = f"{key}-v{len((existing.correction_trail or [])) + 1}"
+                    existing.deprecated_by = new_key
+                    existing.is_active = False
+                    # 新版 priority+1（更新的信息权重更高）
+                    new_priority = _bump_priority(existing.priority, priority)
+
+                    new_profile = UserProfile(
+                        id=_make_profile_id(),
+                        key=new_key,
+                        content=content,
+                        category=category or existing.category,
+                        priority=new_priority,
+                        tags=tags or existing.tags or [],
+                        source_scenes=list(set((existing.source_scenes or []) + source_scenes)),
+                        merged_from=list(set((existing.merged_from or []) + pending_ids)),
+                    )
+                    db.add(new_profile)
+
+                    # correction_trail 记录在本版上
                     trail = list(existing.correction_trail or [])
                     trail.append({
                         "old": existing.content,
                         "new": content,
-                        "reason": group.get("reason", "LLM 判重更新"),
+                        "reason": group.get("reason", "版本进化"),
                         "timestamp": _iso(_utcnow()),
                     })
                     existing.correction_trail = trail
-                    existing.content = content
+
+                    # 暂存条目合入新版的 key
+                    merge_into_key = new_key
+                else:
+                    merge_into_key = existing.key
             else:
                 profile = UserProfile(
                     id=_make_profile_id(),
@@ -433,7 +458,7 @@ def _run_llm_dedup(pending: list, db: Session) -> dict:
                 PendingUserTrait.id.in_(pending_ids),
             ).update({
                 "status": "merged",
-                "merged_into": key,
+                "merged_into": merge_into_key,
             }, synchronize_session=False)
 
             stats["merged" if len(pending_ids) > 1 else "new_profiles"] += 1
@@ -646,6 +671,20 @@ def _content_to_key(content: str) -> str:
 def _confidence_to_priority(confidence: str) -> str:
     mapping = {"high": "P1", "medium": "P2", "low": "P3"}
     return mapping.get(confidence, "P2")
+
+
+def _bump_priority(old_priority: str, llm_priority: str) -> str:
+    """版本进化时新版 priority+1（更新的信息权重更高）
+
+    规则：取 LLM 建议优先级，但至少比旧版高一级
+    """
+    rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    old_rank = rank.get(old_priority, 2)
+    llm_rank = rank.get(llm_priority, 2)
+    # 取更高级的（数字更小），但至少比 old 高一级
+    new_rank = min(llm_rank, old_rank - 1) if old_rank > 0 else llm_rank
+    rev_rank = {0: "P0", 1: "P1", 2: "P2", 3: "P3"}
+    return rev_rank.get(max(0, new_rank), "P2")
 
 
 def _row_to_pending(t) -> dict:
