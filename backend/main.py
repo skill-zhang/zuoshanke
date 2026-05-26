@@ -90,6 +90,13 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"记忆提取兜底调度启动失败: {e}")
 
+    # 🆕 Schema v1.4: 用户画像自动处理调度器（每60秒检查 pending 暂存区）
+    try:
+        from router.user_profile import start_profile_processing_scheduler
+        start_profile_processing_scheduler()
+    except Exception as e:
+        log.warning(f"用户画像自动处理调度器启动失败: {e}")
+
     # 🆕 Schema v0.81: 数据库迁移
     try:
         db = SessionLocal()

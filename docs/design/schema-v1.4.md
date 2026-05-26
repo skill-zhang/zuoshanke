@@ -1,4 +1,4 @@
-# 坐山客用户画像设计方案 v3 — 分层提取
+# 坐山客用户画像设计方案 v4 — LLM 判重 + 分层注入
 
 > 2026-05-26
 
@@ -117,17 +117,17 @@ def pending_extract(content: str, confidence: str = "medium") -> str:
 **处理逻辑：**
 
 ```
-1. 取所有 status="pending" 的条目
-2. 按语义相似度分组（> 70% 视为同类）
-3. 每组合并为一条正式画像：
-   - content = 最完整/最清晰的那条描述
-   - source_scenes = 来源场景列表
-   - priority = 综合 confidence 和证据条数确定（多条 high→P0/P1，单条 medium→P2）
-   - tags = 自动提取关键词
-4. 合并完成后，从暂存区**彻底清理**已处理的条目（不是标记 status，是 delete）
-5. 孤立条目（相似度 < 30% 且只有 1 条证据）保留在暂存区，等更多证据
+1. 取所有 status="pending" 的条目，打包发送给 LLM
+2. LLM 自行判断哪些重复/相似/无关，返回合并方案（JSON 格式）
+3. 按 LLM 返回的方案执行：
+   - 同类合并 → 一条正式画像，confidence 取最高，content 取最完整描述
+   - 独立保留 → 直接入库（1 条 pending → 1 条 profile）
+   - 无关/噪音 → 标记 rejected 或直接丢弃
+4. 合并/入库完成后，从暂存区**彻底删除**已处理的条目（不是标记 status）
+5. 处理结果写入 user_profiles 表后，下次场景 context 构建时自动包含新画像
 
-处理结果写入 user_profiles 表后，下次场景 context 构建时自动包含新画像。
+**判重方式：** 不依赖向量库 / Embedding / 相似度算法。LLM 对自然语言的语义理解足以判断
+"喜欢简洁界面" ≈ "热爱极简设计" ≠ "代码审查严格"。
 ```
 
 **关键：用户全程无感知。** 分身提取 → 后台自动处理 → 分身下一次对话自动看到更新的用户画像。不需要用户打开 SettingsView 确认，不需要弹气泡问「这条对吗」。
@@ -147,24 +147,42 @@ db.commit()
 
 理由：暂存区的使命就是「等合并」，合并后就完成了。保留已合并的记录没有意义，还会让库越来越臃肿。
 
-### 3.4 注入（消费层）
+### 3.4 注入（消费层 — 第 8 层，插在 Memory 之后、Config 之前）
 
-跟 v2 一致，`context_builder.py` 追加用户画像段落，P0+P1 始终注入，P2 按话题匹配。
+在 `context_composer.py` 中新增第 8 层 `_build_profile_layer()`，插入位置：
+
+```
+1. Prompt Layer       (system)   ← 角色+工具+指令
+2. Memory Layer       (user)     ← 持久记忆（原始、不确定）
+3. Profile Layer      (user)     ← 正式画像（结构化、高置信度） ← 🆕 插在这
+4. Config Layer       (user)     ← 当前配置
+5. Document Layer     (user)     ← 参考文档
+6. Skill Layer        (user)     ← 技能
+7. History Layer                 ← 对话历史
+8. Work Output Layer  (user)     ← 最近操作
+```
+
+**顺序不能错的原因：** Memory Layer 是碎片化的原始记忆（可能过时），Profile Layer 是本体审核过的结构化画像。LLM 先读记忆碎片再看整合画像，形成「碎片→全景」的认知递进，不会混淆两个来源的置信度差异。
+
+注入时按优先级分两组：
 
 ```
 ─────────────────────────────────
-👤 用户画像
-你正在跟一个这样的用户对话：
-
-【原则】
+👤 用户画像（你正在跟这样的用户对话）
+─────────────────────────────────
+【P0 原则】
 - 先讨论形成设计文档再动手
 - 验收要实机测试拿数据说话
-
-【偏好】
+─────────────────────────────────
+【P1 偏好】
 - 不喜欢弹窗交互
 - 偏好极简表单
 ─────────────────────────────────
+（P2 按话题匹配后选择性注入）
 ```
+
+- P0 + P1 **始终注入**（核心特征，不多）
+- P2 **按话题匹配**（仅当前对话话题相关时才注入，控制 token 开销）
 
 ## 四、去重策略
 
@@ -172,31 +190,72 @@ db.commit()
 
 ### 4.1 暂存区去重（写入时）
 
-分身提交 `pending_extract()` 时，先查暂存区 + 正式库：
+分身提交 `pending_extract()` 时，做**轻量精确匹配**（不做语义判断，那留给 LLM 批量处理）：
 
 ```python
-# 检查暂存区中是否有相似内容
-similar_pending = db.query(PendingUserTrait).filter(
+# 仅做精确去重（避免同一场景反复提交「一模一样」的内容）
+exact_dupe = db.query(PendingUserTrait).filter(
     PendingUserTrait.status == "pending",
-    similarity(PendingUserTrait.content, new_content) > 0.7,
+    PendingUserTrait.content == new_content,
 ).first()
 
-if similar_pending:
-    # 如果已有相似 pending 条目，不重复提交
-    # 但在 source_scene 记录中追加来源场景
-    similar_pending.source_scene += f", {scene_name}"
-    return {"deduped": True, "merged_into": similar_pending.id}
+if exact_dupe:
+    return {"deduped": True, "merged_into": exact_dupe.id}
 ```
 
-### 4.2 正式库去重（本体处理时）
+至于「意思相同但措辞不同」的语义去重，**不需要在写入时处理**——LLM 批量处理时会统一判断。
 
-本体批量处理时用语义相似度 + 关键词匹配做去重：
+### 4.2 正式库去重（本体处理时 — LLM 批量判重）
 
-| 情况 | 处理 |
-|------|------|
-| 5 条都说「不喜欢弹窗」 | 合为 1 条，confidence=high |
-| 3 条说「偏好暗色」，2 条说「偏好亮色」| 保留两条，标记为矛盾 |
-| 只有 1 条孤立「今天想看红色主题」| 保留在暂存区，不急于入库 |
+idle extractor 触发时，将暂存区所有 pending 条目打包发给 LLM，附上当前正式库中的活跃画像。LLM 自行判断去重和合并：
+
+```json
+// LLM 返回示例
+{
+  "merged_groups": [
+    {
+      "pending_ids": ["pt-001", "pt-003"],
+      "action": "merge",
+      "reason": "两条都说的是界面偏好，一模一样",
+      "content": "不喜欢弹窗，偏好极简交互",
+      "category": "preference",
+      "priority": "P1",
+      "extra_rows": []
+    },
+    {
+      "pending_ids": ["pt-005"],
+      "action": "new_profile",
+      "reason": "独立发现，暂存区唯一，正式库无匹配",
+      "content": "代码审查要求严格",
+      "category": "principle",
+      "priority": "P2",
+      "extra_rows": []
+    },
+    {
+      "pending_ids": ["pt-002"],
+      "action": "merge_into_existing",
+      "reason": "与正式库已有画像重复",
+      "existing_key": "design-philosophy-document-first",
+      "extra_rows": []
+    },
+    {
+      "pending_ids": ["pt-004"],
+      "action": "discard",
+      "reason": "纯闲聊感慨，不能算是用户偏好",
+      "extra_rows": []
+    }
+  ]
+}
+```
+
+| 情况 | LLM 的处理 |
+|------|-----------|
+| 多条 pending 说同一件事 | `merge` → 合为一条，confidence 取最高 |
+| 单条 pending，正式库无匹配 | `new_profile` → 直接入库 |
+| pending 与正式库已有画像重复 | `merge_into_existing` → 追加 source_scene |
+| 噪音/闲聊感慨 | `discard` → 直接丢弃 |
+
+**优势：** 零外部依赖、语义理解准确、可处理复杂关系（矛盾检测、版本进化）。
 
 ### 4.3 版本进化
 
@@ -272,12 +331,12 @@ Phase 1（表 + 提取层）：
   2. tools/user_profile_tool.py → pending_extract + profile_list
   3. registry.json 注册
 
-Phase 2（沉淀层）：
+Phase 2（沉淀层 — LLM 批量判重合并）：
   4. router/user_profile.py → 所有 API
-  5. 去重合并逻辑（process 端点）
-  6. idle_extractor.py 添加自动处理（条目数 ≥5 或距上次处理 ≥30分钟）
+  5. idle extractor：定时扫描 pending 区 → 打包发给 LLM → 解析返回的 JSON 合并方案 → 写入 user_profiles → 清理暂存区
+     （判重：不依赖向量库，LLM 自主判断。见 4.2 节）
 
-Phase 3（注入层）：
+Phase 3（注入层 — 第 8 层，插在 Memory 之后 Config 之前）：
   7. context_builder.py → 追加用户画像段落
 
 Phase 4（前端）：

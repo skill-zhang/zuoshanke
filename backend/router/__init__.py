@@ -22,6 +22,7 @@ from router.delegate_results import router as delegate_results_router  # 🆕 �
 from router.scene_self_map import router as scene_self_map_router      # 🆕 场景自省地图
 from router.command_approval import router as command_approval_router  # 🆕 高危命令审批
 from router.providers import router as providers_router                 # 🆕 AI Provider 管理
+from router.user_profile import router as user_profile_router              # 🆕 Schema v1.4 用户画像
 
 
 def register_all_routers(app: FastAPI):
@@ -47,3 +48,4 @@ def register_all_routers(app: FastAPI):
     app.include_router(scene_self_map_router)     # 🆕 场景自省地图
     app.include_router(command_approval_router)   # 🆕 高危命令审批
     app.include_router(providers_router)           # 🆕 AI Provider 管理
+    app.include_router(user_profile_router)         # 🆕 Schema v1.4 用户画像
