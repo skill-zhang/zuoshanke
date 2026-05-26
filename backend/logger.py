@@ -15,6 +15,7 @@ import logging.handlers
 import sys
 from pathlib import Path
 from config.paths import LOG_DIR
+from secret_redact import SecretRedactFilter
 
 _LOG_DIR = LOG_DIR
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -44,12 +45,14 @@ def configure_logger(level: int = logging.DEBUG) -> None:
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(_FILE_FORMAT, _DATE_FORMAT))
+    file_handler.addFilter(SecretRedactFilter())
     root.addHandler(file_handler)
 
     # stdout Handler
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.INFO)
     stdout_handler.setFormatter(logging.Formatter(_STDOUT_FORMAT, _DATE_FORMAT))
+    stdout_handler.addFilter(SecretRedactFilter())
     root.addHandler(stdout_handler)
 
     _LOGGER_CONFIGURED = True

@@ -1,0 +1,7 @@
+feat: Prompt Caching — Claude/Qwen 自动注入 cache_control 标记
+
+- 新增 backend/agent_core/prompt_caching.py (system_and_3 策略)
+- ai_engine.py: call_llm / call_llm_stream 集成
+- agent_loop.py: call_llm_with_tools 集成
+- router/gateway_config.py: 顺手修预存导入 bug (GATEWAY_ENV_FILE 不存在)
+- docs/design/prompt-caching.md: 设计文档

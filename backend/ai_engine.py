@@ -8,6 +8,7 @@ from models import ThinkingMap, ThinkNode
 from utils import make_id
 from agent_core.context_builder import _build_memory_block
 from logger import get_logger as _get_logger
+from secret_redact import redact, redact_headers
 _ai_log = _get_logger("ai_engine")
 
 # ── 天气查询（直接调 weather.py） ──
@@ -182,6 +183,8 @@ def call_llm(messages: list[dict], route_cfg: dict, temperature: float = 0.7,
         "temperature": temperature,
     }
 
+    _ai_log.debug(f"[call_llm] {base_url} {model_name} headers={redact_headers(headers)}")
+
     try:
         resp = requests.post(
             f"{base_url}/v1/chat/completions",
@@ -233,6 +236,8 @@ def call_llm_stream(messages: list[dict], route_cfg: dict, temperature: float = 
         "temperature": temperature,
         "stream": True,
     }
+
+    _ai_log.debug(f"[call_llm_stream] {base_url} {model_name} headers={redact_headers(headers)}")
 
     try:
         resp = requests.post(

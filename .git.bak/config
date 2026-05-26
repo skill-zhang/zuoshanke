@@ -1,0 +1,11 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+[user]
+	name = 张清泉
+	email = skill@zuoshanke.local
+[remote "backup"]
+	url = /mnt/e/zuoshanke-backup/zuoshanke.git
+	fetch = +refs/heads/*:refs/remotes/backup/*
