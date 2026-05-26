@@ -139,6 +139,7 @@ export interface Message {
   toolCards?: ToolCard[];
   asset?: { type: string; title: string; content: string };  // 🆕 场景产出
   outputRef?: { outputId: string; title: string; filePath: string };  // 🆕 自动提取的 HTML 产出链接
+  attachments?: Attachment[];  // 🆕 文件附件 [{url, file_type, filename}]
 }
 export const sendMessage = (sceneId: string, content: string, channel: string = 'main') =>
   request<Message>('/messages', { method: 'POST', body: JSON.stringify({ scene_id: sceneId, content, channel }) });
@@ -307,7 +308,7 @@ export interface ToolCard {
 }
 
 export type StreamEvent =
-  | { type: 'user_msg'; id: string; role: 'user'; content: string; created_at: string }
+  | { type: 'user_msg'; id: string; role: 'user'; content: string; created_at: string; attachments?: Attachment[] }
   | { type: 'tool_cards'; cards: ToolCard[] }
   | { type: 'tool_status'; tool: string; status: 'running' | 'done' | 'error'; success?: boolean; message: string }
   | { type: 'model_info'; model: string; complexity: string | null }

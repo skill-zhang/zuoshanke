@@ -585,6 +585,65 @@ body {
   background: rgba(0,212,255,0.2);
   border-color: #00d4ff;
 }
+
+/* 🆕 消息内文件/图片附件 */
+.msg-attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.msg-attachment-image {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  cursor: pointer;
+  display: block;
+}
+.msg-attachment-image:hover {
+  border-color: #58a6ff;
+}
+.msg-file-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 10px 14px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.msg-file-card-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.msg-file-icon { font-size: 20px; flex-shrink: 0; }
+.msg-file-name {
+  font-size: 13px;
+  color: #c9d1d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msg-file-open-btn {
+  flex-shrink: 0;
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: #00d4ff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.msg-file-open-btn:hover {
+  background: rgba(0,212,255,0.2);
+  border-color: #00d4ff;
+}
 .chat-msg-content .hljs-string { color: #a5d6ff; }
 .chat-msg-content .hljs-comment { color: #8b949e; font-style: italic; }
 .chat-msg-content .hljs-function { color: #d2a8ff; }
