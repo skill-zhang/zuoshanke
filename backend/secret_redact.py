@@ -24,6 +24,14 @@ _REDACT_ENABLED = os.getenv("ZUOSHANKE_REDACT_SECRETS", "true").lower() in (
     "1", "true", "yes", "on"
 )
 
+# ── 启动告警（遮盖关闭时打 WARNING） ──
+if not _REDACT_ENABLED:
+    _warn_logger = logging.getLogger("secret_redact")
+    _warn_logger.warning(
+        "⚠️ ZUOSHANKE_REDACT_SECRETS 已关闭！API Key/Token 将以明文出现在日志中。"
+        " 如需开启，请设置 ZUOSHANKE_REDACT_SECRETS=true 后重启。"
+    )
+
 # ── 敏感字段名（大小写不敏感） ──
 SENSITIVE_KEYS = frozenset({
     "api_key", "apikey", "api-key",
@@ -87,6 +95,16 @@ _JSON_KEY_NAMES = r"(?:api_?[Kk]ey|token|secret|password|access_token|refresh_to
 _JSON_FIELD_RE = re.compile(
     rf'("{_JSON_KEY_NAMES}")\s*:\s*"([^"]+)"',
     re.IGNORECASE,
+)
+
+# ── URL 用户信息（非 DB 协议）：https://user:password@host ──
+_URL_USERINFO_RE = re.compile(
+    r"(https?|wss?|ftp)://([^/\s:@]+):([^/\s@]+)@",
+)
+
+# ── Form-urlencoded body 检测（纯 k=v&k=v 无换行） ──
+_FORM_BODY_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_.-]*=[^&\s]*(?:&[A-Za-z_][A-Za-z0-9_.-]*=[^&\s]*)+$"
 )
 
 # ── 私钥块 ──
@@ -183,6 +201,37 @@ def _redact_url_query(text: str) -> str:
     return _URL_WITH_QUERY_RE.sub(_sub, text)
 
 
+def _redact_url_userinfo(text: str) -> str:
+    """遮盖非 DB URL 中的 user:password@ 部分"""
+    return _URL_USERINFO_RE.sub(
+        lambda m: f"{m.group(1)}://{m.group(2)}:***@",
+        text,
+    )
+
+
+def _redact_form_body(text: str) -> str:
+    """遮盖 form-urlencoded body 中的敏感参数值
+
+    只在纯 k=v&k=v 格式且无换行时触发
+    """
+    if not text or "\n" in text or "&" not in text:
+        return text
+    stripped = text.strip()
+    if not _FORM_BODY_RE.match(stripped):
+        return text
+    parts = []
+    for pair in stripped.split("&"):
+        if "=" not in pair:
+            parts.append(pair)
+            continue
+        key, _, val = pair.partition("=")
+        if key.lower() in _SENSITIVE_QUERY_PARAMS:
+            parts.append(f"{key}=***")
+        else:
+            parts.append(pair)
+    return "&".join(parts)
+
+
 def _redact_phone(text: str) -> str:
     """遮盖 E.164 手机号"""
     def _sub(m: re.Match) -> str:
@@ -235,6 +284,12 @@ def _redact_string(text: str, code_file: bool = False) -> str:
 
     # E.164 手机号
     text = _redact_phone(text)
+
+    # URL userinfo（非 DB 协议）
+    text = _redact_url_userinfo(text)
+
+    # Form-urlencoded body
+    text = _redact_form_body(text)
 
     return text
 
@@ -339,6 +394,21 @@ class SecretRedactFilter(logging.Filter):
                 pass
 
         return True  # 不过滤任何记录，只做遮盖
+
+
+class RedactingFormatter(logging.Formatter):
+    """日志格式器 — 在最终格式化字符串上做遮盖（双保险）
+
+    Filter 在格式化前修改 record.msg，Formatter 在格式化后修改最终字符串。
+    两者同时使用，覆盖 Filter 可能的遗漏路径。
+
+    用法:
+        handler.setFormatter(RedactingFormatter(fmt="%(asctime)s %(message)s"))
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        original = super().format(record)
+        return _redact_string(original)
 
 
 def redact_headers(headers: dict) -> dict:

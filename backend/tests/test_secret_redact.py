@@ -7,6 +7,7 @@ import logging
 from secret_redact import (
     redact,
     SecretRedactFilter,
+    RedactingFormatter,
     redact_headers,
     redact_text,
     _is_sensitive_key,
@@ -346,6 +347,38 @@ def test_switch_toggle():
         assert "***" in r["api_key"]
 
 
+def test_url_userinfo():
+    """非 DB URL 中的 user:password@ 遮盖"""
+    text = "https://admin:sk-abc123xyz456@api.company.com/v1/foo"
+    r = redact_text(text)
+    assert "admin:sk-abc123xyz456" not in r
+    assert "admin:***@" in r or "admin:***" in r
+
+
+def test_form_body():
+    """form-urlencoded body 遮盖"""
+    text = "api_key=sk-abc123&name=test&secret=mypass"
+    r = redact_text(text)
+    assert "api_key=sk-abc123" not in r
+    assert "api_key=***" in r
+    assert "secret=mypass" not in r
+    assert "secret=***" in r
+    assert "name=test" in r  # 非敏感字段保留
+
+
+def test_redacting_formatter():
+    """RedactingFormatter 遮盖最终格式化字符串"""
+    logger = logging.getLogger("test_formatter")
+    logger.setLevel(logging.DEBUG)
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(RedactingFormatter("%(message)s"))
+    logger.addHandler(handler)
+
+    logger.info("API Key: sk-abc123xyz4567890abcdefghijklmn")
+    logger.removeHandler(handler)
+
+
 if __name__ == "__main__":
     # v1 tests
     test_is_sensitive_key()
@@ -402,5 +435,11 @@ if __name__ == "__main__":
     print("✓ test_force_mode")
     test_switch_toggle()
     print("✓ test_switch_toggle")
+    test_url_userinfo()
+    print("✓ test_url_userinfo")
+    test_form_body()
+    print("✓ test_form_body")
+    test_redacting_formatter()
+    print("✓ test_redacting_formatter")
 
     print("\n✅ 所有测试通过！")

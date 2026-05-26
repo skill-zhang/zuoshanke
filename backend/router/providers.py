@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import AiProvider, AiModel
 from utils import make_id, utcnow
+from secret_redact import _mask_secret
 
 router = APIRouter(prefix="/api/providers", tags=["AI Provider"])
 
@@ -15,7 +16,6 @@ router = APIRouter(prefix="/api/providers", tags=["AI Provider"])
 # ─── Schemas ───
 
 def provider_to_dict(p: AiProvider) -> dict:
-    from secret_redact import _mask_secret
     return {
         "id": p.id,
         "name": p.name,
