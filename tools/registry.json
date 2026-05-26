@@ -1310,6 +1310,46 @@
       "verified": true
     },
     {
+      "name": "rss_fetch",
+      "description": "抓取并解析 RSS/Atom 订阅源，返回结构化条目列表（标题、链接、发布时间、摘要）",
+      "file": "tools/rss_fetch.py",
+      "function": "rss_fetch",
+      "parameters": {
+        "feed_url": {
+          "type": "string",
+          "description": "RSS/Atom 订阅源 URL"
+        },
+        "max_items": {
+          "type": "integer",
+          "description": "最大返回条目数，默认 10",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, feed_title, feed_link, items: [{title, link, description, pub_date, author, guid}], total}",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "rss_summarize",
+      "description": "对 RSS 抓取结果生成摘要，按时间排序、提取关键词，返回精简版条目列表",
+      "file": "tools/rss_summarize.py",
+      "function": "rss_summarize",
+      "parameters": {
+        "fetch_result": {
+          "type": "object",
+          "description": "rss_fetch 的返回结果（dict）"
+        },
+        "max_summary_items": {
+          "type": "integer",
+          "description": "摘要中最多显示条目数，默认 5",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, feed_title, total_items, summary_items, top_keywords}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "list_scenes",
       "description": "列出所有场景，支持按分类和状态过滤。返回每个场景的 id/name/icon/description/category/version/pinned/created_at/updated_at。",
       "file": "tools/scene_tool.py",
@@ -1390,6 +1430,51 @@
       "returns": "JSON {success, message, error}",
       "category": "dev",
       "verified": true
+    },
+    {
+      "name": "db_query",
+      "description": "直连 sqlite3 执行 SQL SELECT 查询，返回表格数据。支持参数化查询和 LIMIT 控制",
+      "file": "tools/db_query.py",
+      "function": "db_query",
+      "parameters": {
+        "sql": {
+          "type": "string",
+          "description": "SQL 查询语句（仅允许 SELECT）"
+        },
+        "params": {
+          "type": "array",
+          "description": "参数化查询参数列表（可选）",
+          "optional": true
+        },
+        "limit": {
+          "type": "integer",
+          "description": "最大返回行数（默认 50，最大 200）",
+          "optional": true
+        },
+        "format": {
+          "type": "string",
+          "description": "输出格式：json / table（默认 json）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, columns, rows, row_count, error?}",
+      "category": "data",
+      "verified": true,
+      "preexecute": {
+        "enabled": true,
+        "triggers": [
+          "查询数据库",
+          "查数据库",
+          "sql查询",
+          "数据库查询",
+          "select",
+          "sqlite",
+          "查表",
+          "看数据",
+          "db_query"
+        ],
+        "requires_sql": true
+      }
     }
   ]
 }
