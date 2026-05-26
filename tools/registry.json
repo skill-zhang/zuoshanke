@@ -830,6 +830,26 @@
       }
     },
     {
+      "name": "thinking_map_read",
+      "description": "读取当前场景的 Thinking Map 思维导图节点信息（只读查询）。返回场景的思维导图结构，包括所有节点及其层级关系、状态、优先级等信息。不修改任何数据。",
+      "file": "tools/thinking_map_read_tool.py",
+      "function": "thinking_map_read",
+      "parameters": {
+        "scene_id": {
+          "type": "string",
+          "description": "场景 ID（从系统提示中的「当前场景信息」获取）"
+        }
+      },
+      "returns": "JSON 字符串，含思维导图节点树、统计信息和优先级队列",
+      "category": "tools",
+      "verified": true,
+      "preexecute": {
+        "enabled": false,
+        "triggers": [],
+        "requires_city": false
+      }
+    },
+    {
       "name": "clarify",
       "description": "向用户提问，获取确认或选择后再继续。开发场景专用。支持多选题（最多4选项）和开放题。需要用户决策方向、确认方案或选择方案时使用。自己能合理默认的事直接做，无需问。",
       "file": "tools/clarify_tool.py",
