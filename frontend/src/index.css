@@ -3636,7 +3636,7 @@ body {
 }
 .wb-greeting-left h1 { font-size: 28px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; }
 .wb-greeting-left .wb-greeting-sub { font-size: 13px; color: #8b949e; }
-.wb-greeting-right { display: flex; gap: 10px; align-items: center; }
+.wb-greeting-right { display: flex; gap: 10px; align-items: center; margin-top: 5px; }
 .wb-clock { font-size: 14px; color: #8b949e; font-variant-numeric: tabular-nums; margin-right: 8px; }
 
 .wb-quick-btn {
@@ -3819,6 +3819,48 @@ body {
 }
 .wb-float-bar-send:hover { opacity: 0.9; }
 .wb-float-bar-hint { font-size: 12px; color: #484f58; white-space: nowrap; }
+
+/* 🆕 Avatar 对话字幕条（NPC 风格 — 浮动覆盖层） */
+.wb-subtitle-wrapper {
+  position: relative;
+  height: 0;
+  overflow: visible;
+  z-index: 10;
+}
+.wb-subtitle-bar {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 520px;
+  width: 90%;
+  padding: 14px 24px;
+  background: rgba(13, 17, 23, 0.88);
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  text-align: center;
+  transition: opacity 0.4s ease, transform 0.3s ease;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.wb-subtitle-hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+.wb-subtitle-text {
+  font-size: 15px;
+  color: #c9d1d9;
+  line-height: 1.6;
+  min-height: 1.6em;
+  word-break: break-word;
+}
+.wb-subtitle-name {
+  font-size: 11px;
+  color: #484f58;
+  margin-top: 5px;
+  letter-spacing: 1px;
+}
 
 @media (max-width: 760px) {
   .wb-card-grid { grid-template-columns: 1fr; }

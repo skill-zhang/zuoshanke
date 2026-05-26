@@ -174,10 +174,12 @@ interface AppState {
   agentStatus: AgentStatus;
   agentMessage: string;
   agentHidden: boolean;
+  agentSpeaking: boolean;           // 🆕 Avatar 说话状态（工作台）
   setAgentStatus: (s: AgentStatus) => void;
   setAgentMessage: (m: string) => void;
   setAgentHidden: (h: boolean) => void;
   toggleAgentHidden: () => void;
+  setAgentSpeaking: (s: boolean) => void;  // 🆕
 }
 
 export type AgentStatus =
@@ -209,10 +211,12 @@ export const useStore = create<AppState>((set, get) => ({
   agentStatus: 'idle' as AgentStatus,
   agentMessage: '在线待命',
   agentHidden: false,
+  agentSpeaking: false,             // 🆕
   setAgentStatus: (s) => set({ agentStatus: s }),
   setAgentMessage: (m) => set({ agentMessage: m }),
   setAgentHidden: (h) => set({ agentHidden: h }),
-  toggleAgentHidden: () => set((s) => ({ agentHidden: !s.agentHidden })),
+  toggleAgentHidden: () => set(s => ({ agentHidden: !s.agentHidden })),
+  setAgentSpeaking: (s) => set({ agentSpeaking: s }),
 
   currentScene: null,
   setCurrentScene: async (s) => {

@@ -7,6 +7,7 @@
  */
 import { useEffect, useState, useRef } from 'react';
 import type { AgentStatus } from '../stores/appStore';
+import { useStore } from '../stores/appStore';
 
 interface AgentCharacterProps {
   status?: AgentStatus;
@@ -86,6 +87,20 @@ export function AgentCharacter({ status: propStatus, message: propMessage, hidde
   const [zhuMood, setZhuMood] = useState<string>('idle');
   const [zhuObservation, setZhuObservation] = useState<string>('');
 
+  // 🆕 说话状态（来自 store，工作台字幕驱动）
+  const agentSpeaking = useStore(s => s.agentSpeaking);
+  const [mouthFrame, setMouthFrame] = useState(false);
+
+  // 🆕 说话时嘴巴开合动画
+  useEffect(() => {
+    if (!agentSpeaking) {
+      setMouthFrame(false);
+      return;
+    }
+    const t = setInterval(() => setMouthFrame(f => !f), 200);
+    return () => clearInterval(t);
+  }, [agentSpeaking]);
+
   // 🆕 轮询本体状态
   useEffect(() => {
     let active = true;
@@ -107,7 +122,9 @@ export function AgentCharacter({ status: propStatus, message: propMessage, hidde
   const cfg = STATE_MAP[effectiveStatus] || STATE_MAP.idle;
   const msg = zhuObservation || cfg.defaultMsg;
   const eye = EYE[cfg.eyes] || EYE.closed;
-  const mouthPath = MOUTH[cfg.mouth] || MOUTH.smile;
+  const mouthPath = agentSpeaking
+    ? (mouthFrame ? MOUTH.big : MOUTH.smile)
+    : (MOUTH[cfg.mouth] || MOUTH.smile);
   const animClass = `char-${cfg.classSuffix}`;
 
   // Bubble show animation: 只有后端传了 observation 才弹气泡
@@ -217,7 +234,7 @@ export function AgentCharacter({ status: propStatus, message: propMessage, hidde
           </svg>
         </div>
         {/* Bubble */}
-        <div className={`agent-char-bubble${bubbleShow ? ' show' : ''}`}>
+        <div className={`agent-char-bubble${bubbleShow && !agentSpeaking ? ' show' : ''}`}>
           <span className="agent-char-dot" style={{ background: cfg.color }} />
           <span className="agent-char-text">{msg}</span>
         </div>

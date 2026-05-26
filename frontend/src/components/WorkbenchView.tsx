@@ -13,13 +13,15 @@ import { Scene } from '../api/client';
 
 export function WorkbenchView() {
   const { scenes, loadScenes, loadingScenes, setView, setCurrentScene, loadThinkingMap, loadSceneMessages,
-    setCurrentChannel, channels, setAgentStatus, setAgentMessage } = useStore();
+    setCurrentChannel, channels, setAgentStatus, setAgentMessage, setAgentSpeaking } = useStore();
 
   const [clock, setClock] = useState('');
   const [greeting, setGreeting] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [inputVal, setInputVal] = useState('');
   const [barExpanded, setBarExpanded] = useState(true);
+  const [avatarSpeech, setAvatarSpeech] = useState('');       // 🆕 Avatar 说话文字
+  const [avatarSpeaking, setAvatarSpeaking] = useState(false); // 🆕 Avatar 是否在说话
 
   useEffect(() => { loadScenes(); }, []);
 
@@ -57,6 +59,61 @@ export function WorkbenchView() {
     setAgentMessage(`${scene.icon || '📦'} ${scene.name}，来了！`);
     setTimeout(() => { setAgentStatus('idle'); setAgentMessage('在线待命'); }, 3000);
   }, [setCurrentScene, setCurrentChannel, setView, loadThinkingMap, loadSceneMessages, channels, setAgentStatus, setAgentMessage]);
+
+  // ═══ 发送工作台聊天（SSE 流） ═══
+  const sendWorkbenchChat = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    setInputVal('');
+    setAvatarSpeaking(true);
+    setAvatarSpeech('');
+    setAgentSpeaking(true);
+
+    try {
+      const resp = await fetch('/api/workbench/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: text,
+          scene_ids: workbenchScenes.map(s => s.id),
+        }),
+      });
+
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'speech:token' || event.type === 'speech:done') {
+                setAvatarSpeech(event.text);
+                setAgentMessage(event.text);
+              } else if (event.type === 'done') {
+                setAvatarSpeaking(false);
+                setAgentSpeaking(false);
+                setAgentStatus('idle');
+                // 3秒后自动隐藏字幕
+                setTimeout(() => { setAvatarSpeech(''); setAgentMessage('在线待命'); }, 3000);
+              }
+            } catch { /* skip malformed SSE */ }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[workbench] SSE error:', e);
+      setAvatarSpeaking(false);
+      setAgentSpeaking(false);
+    }
+  }, [workbenchScenes, setAgentSpeaking, setAgentMessage, setAgentStatus]);
 
   // ═══ 渲染卡片 body — 按 category 分派 ═══
   const renderCardBody = (scene: Scene) => {
@@ -354,6 +411,14 @@ export function WorkbenchView() {
         </div>
       </div>
 
+      {/* ═══ Avatar 对话字幕（浮动覆盖层，不挤压卡片） ═══ */}
+      <div className="wb-subtitle-wrapper">
+        <div className={`wb-subtitle-bar${avatarSpeaking || avatarSpeech ? '' : ' wb-subtitle-hidden'}`}>
+          <div className="wb-subtitle-text">{avatarSpeech || '\u00A0'}</div>
+          <div className="wb-subtitle-name">— 坐山客 —</div>
+        </div>
+      </div>
+
       {/* ═══ Card Grid ═══ */}
       <div className="wb-card-grid">
         {loadingScenes ? (
@@ -399,8 +464,8 @@ export function WorkbenchView() {
         <input className="wb-float-bar-input" type="text"
           placeholder="💬 跟坐山客说你想看什么..."
           value={inputVal} onChange={e => setInputVal(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) setInputVal(''); }} />
-        <button className="wb-float-bar-send" onClick={() => { if (inputVal.trim()) setInputVal(''); }}>发送</button>
+          onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) sendWorkbenchChat(inputVal); }} />
+        <button className="wb-float-bar-send" onClick={() => { if (inputVal.trim()) sendWorkbenchChat(inputVal); }}>发送</button>
         <span className="wb-float-bar-hint">⌘K 唤起</span>
       </div>
     </div>
