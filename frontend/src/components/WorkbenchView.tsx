@@ -103,6 +103,9 @@ export function WorkbenchView() {
                 setAgentStatus('idle');
                 // 3秒后自动隐藏字幕
                 setTimeout(() => { setAvatarSpeech(''); setAgentMessage('在线待命'); }, 3000);
+              } else if (event.type?.startsWith('action:')) {
+                // Phase 2: 收到操作事件 → 刷新卡片
+                if (event.type === 'action:reload') loadScenes();
               }
             } catch { /* skip malformed SSE */ }
           }
