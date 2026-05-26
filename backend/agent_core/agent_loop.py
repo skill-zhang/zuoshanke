@@ -240,6 +240,11 @@ def call_llm_with_tools(
     try:
         route_cfg = get_settings("medium")
         _model = DEEPSEEK_MODEL_MAP.get(model, "deepseek-chat")
+
+        # ── Prompt Caching: 检测 Claude 模型自动注入 cache_control ──
+        from agent_core.prompt_caching import inject_prompt_cache_markers
+        cached_messages = inject_prompt_cache_markers(messages, model_name=_model)
+
         temp = route_cfg.get("temperature", temperature)
         if scene_config and isinstance(scene_config, dict) and "temperature" in scene_config:
             temp = float(scene_config["temperature"])
@@ -248,7 +253,7 @@ def call_llm_with_tools(
 
         payload = {
             "model": _model,
-            "messages": messages,
+            "messages": cached_messages,
             "temperature": temp,
             "max_tokens": mt,
             "tools": tools,

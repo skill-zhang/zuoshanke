@@ -166,6 +166,10 @@ def call_llm(messages: list[dict], route_cfg: dict, temperature: float = 0.7,
         _ai_log.error(f"[call_llm] 无法解析 provider，route_cfg={route_cfg}")
         return None
 
+    # ── Prompt Caching: 检测 Claude 模型自动注入 cache_control ──
+    from agent_core.prompt_caching import inject_prompt_cache_markers
+    cached_messages = inject_prompt_cache_markers(messages, model_name=model_name)
+
     mt = max_tokens if max_tokens is not None else route_cfg.get("max_tokens", 8192)
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -173,7 +177,7 @@ def call_llm(messages: list[dict], route_cfg: dict, temperature: float = 0.7,
 
     payload = {
         "model": model_name,
-        "messages": messages,
+        "messages": cached_messages,
         "max_tokens": mt,
         "temperature": temperature,
     }
@@ -213,6 +217,10 @@ def call_llm_stream(messages: list[dict], route_cfg: dict, temperature: float = 
         yield None
         return
 
+    # ── Prompt Caching: 检测 Claude 模型自动注入 cache_control ──
+    from agent_core.prompt_caching import inject_prompt_cache_markers
+    cached_messages = inject_prompt_cache_markers(messages, model_name=model_name)
+
     mt = max_tokens if max_tokens is not None else route_cfg.get("max_tokens", 8192)
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -220,7 +228,7 @@ def call_llm_stream(messages: list[dict], route_cfg: dict, temperature: float = 
 
     payload = {
         "model": model_name,
-        "messages": messages,
+        "messages": cached_messages,
         "max_tokens": mt,
         "temperature": temperature,
         "stream": True,

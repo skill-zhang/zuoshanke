@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from gateway.config import GatewayConfig, save_gateway_config, GATEWAY_ENV_FILE, ILINK_BASE_URL
+from gateway.config import GatewayConfig, save_gateway_config, ILINK_BASE_URL
+from gateway.config import GATEWAY_ENV_FILE_NEW as GATEWAY_ENV_FILE
 
 router = APIRouter(tags=["网关配置"])
 
