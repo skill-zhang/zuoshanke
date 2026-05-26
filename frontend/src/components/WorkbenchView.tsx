@@ -7,7 +7,7 @@
  *
  * 所有卡片数据从 scene.scene_config JSON 读取，不做文本解析。
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useStore } from '../stores/appStore';
 import { Scene } from '../api/client';
 
@@ -22,6 +22,7 @@ export function WorkbenchView() {
   const [barExpanded, setBarExpanded] = useState(true);
   const [avatarSpeech, setAvatarSpeech] = useState('');       // 🆕 Avatar 说话文字
   const [avatarSpeaking, setAvatarSpeaking] = useState(false); // 🆕 Avatar 是否在说话
+  const processingRef = useRef(false);  // 🆕 防重复提交锁
 
   useEffect(() => { loadScenes(); }, []);
 
@@ -63,6 +64,15 @@ export function WorkbenchView() {
   // ═══ 发送工作台聊天（SSE 流） ═══
   const sendWorkbenchChat = useCallback(async (text: string) => {
     if (!text.trim()) return;
+
+    // 🆕 忙锁：前一个请求未完成时拒绝
+    if (processingRef.current) {
+      setAvatarSpeech('⏳ 上一个任务还在处理，请稍候...');
+      setTimeout(() => { if (!processingRef.current) setAvatarSpeech(''); }, 3000);
+      return;
+    }
+    processingRef.current = true;
+
     setInputVal('');
     setAvatarSpeaking(true);
     setAvatarSpeech('');
@@ -101,6 +111,7 @@ export function WorkbenchView() {
                 setAvatarSpeaking(false);
                 setAgentSpeaking(false);
                 setAgentStatus('idle');
+                processingRef.current = false;
                 // 3秒后自动隐藏字幕
                 setTimeout(() => { setAvatarSpeech(''); setAgentMessage('在线待命'); }, 3000);
               } else if (event.type?.startsWith('action:')) {
@@ -115,6 +126,7 @@ export function WorkbenchView() {
       console.error('[workbench] SSE error:', e);
       setAvatarSpeaking(false);
       setAgentSpeaking(false);
+      processingRef.current = false;
     }
   }, [workbenchScenes, setAgentSpeaking, setAgentMessage, setAgentStatus]);
 

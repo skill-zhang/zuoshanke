@@ -57,7 +57,7 @@ def _parse_actions(text: str | None) -> list[dict]:
 
 
 def _execute_action(db: Session, action: dict) -> dict:
-    """执行单个动作，返回动作详情"""
+    """执行单个动作，不提交事务（由调用方统一 commit）"""
     atype = action.get("type", "")
     scene_id = action.get("scene_id", "")
     result = {"type": atype, "scene_id": scene_id}
@@ -67,36 +67,27 @@ def _execute_action(db: Session, action: dict) -> dict:
         _log.warning(f"[workbench_chat] scene not found: {scene_id}")
         return result
 
-    try:
-        if atype == "reorder":
-            new_pos = action.get("new_position")
-            if new_pos is not None:
-                scene.workbench_position = int(new_pos)
-                db.commit()
-                _log.info(f"[workbench_chat] reorder {scene.name} → pos {new_pos}")
+    if atype == "reorder":
+        new_pos = action.get("new_position")
+        if new_pos is not None:
+            scene.workbench_position = int(new_pos)
+            _log.info(f"[workbench_chat] reorder {scene.name} → pos {new_pos}")
 
-        elif atype == "pin":
-            scene.show_on_workbench = True
-            db.commit()
-            _log.info(f"[workbench_chat] pin {scene.name}")
+    elif atype == "pin":
+        scene.show_on_workbench = True
+        _log.info(f"[workbench_chat] pin {scene.name}")
 
-        elif atype == "unpin":
-            scene.show_on_workbench = False
-            db.commit()
-            _log.info(f"[workbench_chat] unpin {scene.name}")
+    elif atype == "unpin":
+        scene.show_on_workbench = False
+        _log.info(f"[workbench_chat] unpin {scene.name}")
 
-        elif atype == "update":
-            config = action.get("config", {})
-            if config:
-                existing = scene.scene_config or {}
-                existing.update(config)
-                scene.scene_config = existing
-                db.commit()
-                _log.info(f"[workbench_chat] update {scene.name} config")
-
-    except Exception as e:
-        _log.error(f"[workbench_chat] execute action error: {e}")
-        db.rollback()
+    elif atype == "update":
+        config = action.get("config", {})
+        if config:
+            existing = scene.scene_config or {}
+            existing.update(config)
+            scene.scene_config = existing
+            _log.info(f"[workbench_chat] update {scene.name} config")
 
     return result
 
@@ -182,12 +173,18 @@ def _generate_speech(req: WorkbenchChatRequest, db: Session):
                 actions = _parse_actions(intent_text)
                 _log.info(f"[workbench_chat] parsed {len(actions)} actions: {actions}")
 
-                for act in actions:
-                    result = _execute_action(db, act)
-                    yield sse_event(f"action:{result['type']}", **result)
-
                 if actions:
-                    yield sse_event("action:reload")
+                    # 统一事务：所有操作成功才 commit
+                    try:
+                        for act in actions:
+                            result = _execute_action(db, act)
+                            yield sse_event(f"action:{result['type']}", **result)
+                        db.commit()
+                        yield sse_event("action:reload")
+                    except Exception as e:
+                        db.rollback()
+                        _log.error(f"[workbench_chat] actions failed, rolled back: {e}")
+                        zhu.update_mood("annoyed", f"操作未完成：{e}")
 
         except Exception as e:
             _log.error(f"[workbench_chat] intent parse error: {e}")
