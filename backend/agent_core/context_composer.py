@@ -1,14 +1,14 @@
-"""
-Context Composer — Schema v1.0 上下文分层组合器
+"""Context Composer — Schema v1.0 上下文分层组合器
 
-将 LLM context 按 7 层独立组合，每层控制加载策略和 token 预算：
+将 LLM context 按 8 层独立组合，每层控制加载策略和 token 预算：
   1. prompt_layer     — 本体 prompt + 分身 prompt（不可压缩）
   2. memory_layer     — 按场景 scope 检索持久记忆
-  3. document_layer   — 场景声明的文档摘要
+  3. profile_layer    — 🆕 Schema v1.4 用户画像（正式库，结构化偏好）
   4. config_layer     — 当前生效的配置层叠
-  5. skill_layer      — 按相关性检索的 skill 摘要
-  6. history_layer    — 当前 session 全部聊天（带权重优先级）
-  7. work_output_layer — 最近 N 轮工具调用的关键帧 + diff
+  5. document_layer   — 场景声明的文档摘要
+  6. skill_layer      — 按相关性检索的 skill 摘要
+  7. history_layer    — 当前 session 全部聊天（带权重优先级）
+  8. work_output_layer — 最近 N 轮工具调用的关键帧 + diff
 
 使用方式：
     from agent_core.context_composer import compose_context
@@ -21,7 +21,12 @@ Context Composer — Schema v1.0 上下文分层组合器
 """
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Optional
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def compose_context(
@@ -78,28 +83,33 @@ def compose_context(
     if memory_block:
         messages.append({"role": "user", "content": memory_block})
 
-    # ── 3. Config Layer (当前生效的配置层叠) ──
+    # ── 3. Profile Layer (🆕 Schema v1.4 用户画像 — 正式库结构化偏好) ──
+    profile_block = _build_profile_layer(db, user_content)
+    if profile_block:
+        messages.append({"role": "user", "content": profile_block})
+
+    # ── 4. Config Layer (当前生效的配置层叠) ──
     config_block = _build_config_layer(scene_name, scene_id, db, fenshen_config, session_config)
     if config_block:
         messages.append({"role": "user", "content": config_block})
 
-    # ── 4. Document Layer (场景声明的文档摘要) ──
+    # ── 5. Document Layer (场景声明的文档摘要) ──
     doc_block = _build_document_layer(scene_id, db, resolved_doc_deps)
     if doc_block:
         messages.append({"role": "user", "content": doc_block})
 
-    # ── 5. Skill Layer (按相关性检索) ──
+    # ── 6. Skill Layer (按相关性检索) ──
     skill_block = _build_skill_layer(user_content)
     if skill_block:
         messages.append({"role": "user", "content": skill_block})
 
-    # ── 6. History Layer (全部聊天，带权重优先级) ──
+    # ── 7. History Layer (全部聊天，带权重优先级) ──
     if history_messages:
         for m in _build_history_layer(history_messages):
             role = "assistant" if m["role"] == "ai" else m["role"]
             messages.append({"role": role, "content": m["content"]})
 
-    # ── 7. Work Output Layer (最近 N 轮关键帧 + diff) ──
+    # ── 8. Work Output Layer (最近 N 轮关键帧 + diff) ──
     work_block = _build_work_output_layer(scene_id, db, resolved_window)
     if work_block:
         messages.append({"role": "user", "content": work_block})
@@ -327,6 +337,98 @@ def _build_memory_layer(db, user_content: str, scene_id: str) -> str:
         icon = level_icon.get(mem.get("priority_level", ""), "📝")
         lines.append(f"- {icon} {mem.get('key', '')}: {mem.get('content', '')}")
     return "\n".join(lines)
+
+
+def _build_profile_layer(db, user_content: str) -> str:
+    """Profile Layer — 🆕 Schema v1.4 用户画像（正式库结构化偏好）
+
+    P0 + P1 始终注入，P2 按话题匹配后选择性注入。
+    追踪注入次数（total_injections + last_injected_at）。
+    """
+    if db is None:
+        return ""
+    try:
+        from models import UserProfile
+        from sqlalchemy import desc
+
+        profiles = db.query(UserProfile).filter(
+            UserProfile.is_active == True,
+        ).order_by(
+            UserProfile.priority.asc(),  # P0 > P1 > P2 > P3
+            desc(UserProfile.total_injections),
+        ).all()
+
+        if not profiles:
+            return ""
+
+        important = []   # P0 + P1 always injected
+        topical = []     # P2 topic-matched
+
+        for p in profiles:
+            pri = p.priority or "P2"
+            if pri in ("P0", "P1"):
+                important.append(p)
+            else:
+                # P2+ 按话题匹配：检查用户消息是否包含画像关键词
+                p_keywords = (p.tags or []) + _extract_keywords(p.content)
+                if user_content and any(kw.lower() in user_content.lower() for kw in p_keywords if kw):
+                    topical.append(p)
+
+        # 格式化输出
+        lines = ["## 👤 用户画像（你正在跟这样的用户对话）"]
+
+        if important:
+            lines.append("")
+            for p in important:
+                p.total_injections = (p.total_injections or 0) + 1
+                p.last_injected_at = _utcnow()
+                # 自动将 source_scenes 中的场景名转为提示
+                scenes = ", ".join(p.source_scenes or []) if p.source_scenes else ""
+                source = f"（{scenes}）" if scenes else ""
+                lines.append(f"- {_pri_icon(p.priority)} {p.content} {source}")
+            lines.append("")
+
+        if topical:
+            lines.append("---")
+            lines.append("")
+            for p in topical:
+                p.total_injections = (p.total_injections or 0) + 1
+                p.last_injected_at = _utcnow()
+                lines.append(f"- {p.content}")
+
+        if len(lines) == 1:
+            return ""  # 只有 header，没有内容
+
+        # 批量写入注入计数
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return ""
+
+
+def _pri_icon(priority: str) -> str:
+    """优先级图标"""
+    return {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}.get(priority, "📝")
+
+
+def _extract_keywords(text: str, max_words: int = 5) -> list:
+    """从画像内容中提取核心关键词用于话题匹配"""
+    import re
+    # 去除非中英文和数字的字符，取前几个有意义的词
+    cleaned = re.findall(r'[\u4e00-\u9fff\w]+', text)
+    # 去重保留顺序
+    seen = set()
+    result = []
+    for w in cleaned:
+        if w and len(w) >= 2 and w not in seen:
+            seen.add(w)
+            result.append(w)
+    return result[:max_words]
 
 
 def _build_config_layer(
