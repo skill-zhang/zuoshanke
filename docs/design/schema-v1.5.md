@@ -459,7 +459,9 @@ if scope == "zhu":
 
 当你觉得缺少关键信息，或对某条记忆的准确性有疑问时：
 - 用 memory(read, scope='zhu', query='...') 检索完整记忆
-- 用 memory(action='correct_memory', ...) 修正不准确的记忆
+- 用 memory(action='replace', ...) 修正不准确的记忆
+
+> 注：`replace` 是实际可用的 action（`correct_memory` 为备选 REST API 端点，未暴露为 LLM 工具）。
 ```
 
 ---
