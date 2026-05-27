@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>车源管理系统</title>
+<style>
+:root{--bg:#121212;--surface:#1e1e1e;--surface2:#2a2a2a;--surface3:#333;--primary:#4fc3f7;--primary-dim:#1a6b8a;--text:#e0e0e0;--text2:#999;--danger:#ef5350;--success:#66bb6a;--warn:#ffa726;--radius:10px;--shadow:0 2px 12px rgba(0,0,0,.3)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
+.header{background:var(--surface);padding:16px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--surface3)}
+.header h1{font-size:20px;display:flex;align-items:center;gap:8px}
+.header h1 span{color:var(--primary)}
+.stats{display:flex;gap:12px;margin-top:10px;font-size:13px;flex-wrap:wrap}
+.stat{background:var(--surface2);padding:4px 12px;border-radius:20px;color:var(--text2)}
+.stat b{color:var(--text)}
+.toolbar{display:flex;gap:10px;padding:12px 16px;flex-wrap:wrap}
+.search-wrap{flex:1;min-width:160px;position:relative}
+.search-wrap input{width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--surface3);border-radius:var(--radius);color:var(--text);font-size:14px;outline:none;transition:border .2s}
+.search-wrap input:focus{border-color:var(--primary)}
+.btn{padding:10px 18px;border:none;border-radius:var(--radius);font-size:14px;cursor:pointer;transition:opacity .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn:active{opacity:.7}
+.btn-primary{background:var(--primary);color:#000;font-weight:600}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-outline{background:transparent;border:1px solid var(--surface3);color:var(--text)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-success{background:var(--success);color:#000}
+.filter-group{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 8px}
+.filter-tag{padding:4px 12px;border-radius:16px;font-size:12px;cursor:pointer;background:var(--surface2);color:var(--text2);border:1px solid transparent;transition:all .2s}
+.filter-tag.active{background:var(--primary-dim);color:var(--primary);border-color:var(--primary)}
+.car-list{padding:0 16px;display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:600px){.car-list{grid-template-columns:1fr 1fr}}
+@media(min-width:900px){.car-list{grid-template-columns:1fr 1fr 1fr}}
+.car-card{background:var(--surface);border-radius:var(--radius);padding:14px;position:relative;border:1px solid var(--surface3);transition:border .2s}
+.car-card:hover{border-color:var(--primary-dim)}
+.car-card .status-badge{position:absolute;top:10px;right:10px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.status-在售{background:#1b5e20;color:var(--success)}
+.status-已售{background:#b71c1c;color:var(--danger)}
+.status-预留{background:#e65100;color:var(--warn)}
+.status-下架{background:#424242;color:var(--text2)}
+.car-card .title{font-size:16px;font-weight:600;margin-bottom:6px;padding-right:60px}
+.car-card .title .brand{color:var(--primary)}
+.car-card .meta{font-size:13px;color:var(--text2);line-height:1.8}
+.car-card .meta span{margin-right:14px}
+.car-card .price{font-size:20px;font-weight:700;color:var(--warn);margin:6px 0}
+.car-card .actions{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty-state .icon{font-size:48px;margin-bottom:12px}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:20px}
+.modal h2{font-size:18px;margin-bottom:16px;color:var(--primary)}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--surface3);border-radius:6px;color:var(--text);font-size:14px;outline:none;transition:border .2s}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary)}
+.form-group textarea{resize:vertical;min-height:60px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--surface3)}
+/* toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text);padding:10px 20px;border-radius:8px;font-size:14px;z-index:2000;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid var(--surface3)}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🚗 <span>车源</span>管理系统</h1>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="toolbar">
+  <div class="search-wrap">
+    <input type="text" id="searchInput" placeholder="🔍 搜索品牌/型号/备注..." oninput="render()">
+  </div>
+  <button class="btn btn-primary" onclick="openForm()">＋ 入库</button>
+</div>
+
+<div class="filter-group" id="filterGroup"></div>
+
+<div class="car-list" id="carList"></div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="formTitle">新增车辆</h2>
+    <form id="carForm" onsubmit="saveCar(event)">
+      <input type="hidden" id="editId">
+      <div class="form-row">
+        <div class="form-group">
+          <label>品牌 *</label>
+          <input type="text" id="fBrand" required placeholder="如 宝马">
+        </div>
+        <div class="form-group">
+          <label>型号 *</label>
+          <input type="text" id="fModel" required placeholder="如 320Li">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>上牌年份</label>
+          <input type="number" id="fYear" min="1990" max="2030" placeholder="2020">
+        </div>
+        <div class="form-group">
+          <label>里程 (万公里)</label>
+          <input type="number" id="fMileage" step="0.1" min="0" placeholder="8.5">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>售价 (万元)</label>
+          <input type="number" id="fPrice" step="0.01" min="0" placeholder="15.8">
+        </div>
+        <div class="form-group">
+          <label>颜色</label>
+          <input type="text" id="fColor" placeholder="白色">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>燃油类型</label>
+          <select id="fFuel">
+            <option value="">请选择</option>
+            <option>汽油</option>
+            <option>柴油</option>
+            <option>电动</option>
+            <option>混动</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>变速箱</label>
+          <select id="fTrans">
+            <option value="">请选择</option>
+            <option>手动</option>
+            <option>自动</option>
+            <option>手自一体</option>
+            <option>CVT</option>
+            <option>双离合</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>排放标准</label>
+          <select id="fEmission">
+            <option value="">请选择</option>
+            <option>国三</option>
+            <option>国四</option>
+            <option>国五</option>
+            <option>国六</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="fStatus">
+            <option value="在售">在售</option>
+            <option value="已售">已售</option>
+            <option value="预留">预留</option>
+            <option value="下架">下架</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>备注</label>
+        <textarea id="fNote" placeholder="车况描述、改装信息等"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeForm()">取消</button>
+        <button type="submit" class="btn btn-primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ Data ============
+const STORAGE_KEY = 'used_cars_data';
+const STATUSES = ['在售','已售','预留','下架'];
+
+function loadData(){
+  try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch(e){return []}
+}
+function saveData(data){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+}
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+// ============ Render ============
+function render(){
+  const data=loadData();
+  const q=document.getElementById('searchInput').value.trim().toLowerCase();
+  const sf=document.getElementById('statusFilter')||'';
+  let list=data;
+  if(q) list=list.filter(c=>[c.brand,c.model,c.note].some(v=>(v||'').toLowerCase().includes(q)));
+  if(sf) list=list.filter(c=>c.status===sf);
+  renderStats(data,list);
+  renderFilters(data,sf);
+  renderList(list);
+}
+
+function renderStats(all,filtered){
+  const s=document.getElementById('stats');
+  const total=all.length;
+  const cnt={};STATUSES.forEach(st=>cnt[st]=all.filter(c=>c.status===st).length);
+  s.innerHTML=`<span class="stat">总计 <b>${total}</b> 辆</span>`+
+    STATUSES.map(st=>`<span class="stat">${st} <b>${cnt[st]||0}</b></span>`).join('');
+}
+
+function renderFilters(data,active){
+  const g=document.getElementById('filterGroup');
+  const cnt={};STATUSES.forEach(st=>cnt[st]=data.filter(c=>c.status===st).length);
+  g.innerHTML=`<span class="filter-tag${!active?' active':''}" onclick="setFilter('')">全部 (${data.length})</span>`+
+    STATUSES.map(st=>`<span class="filter-tag${active===st?' active':''}" onclick="setFilter('${st}')">${st} (${cnt[st]||0})</span>`).join('');
+}
+
+function setFilter(st){
+  document.getElementById('statusFilter')=st;
+  render();
+}
+
+function renderList(list){
+  const el=document.getElementById('carList');
+  if(!list.length){
+    el.innerHTML=`<div class="empty-state"><div class="icon">🚗</div><div>暂无车辆数据</div><div style="font-size:13px;margin-top:8px">点击右上角「入库」添加第一辆车</div></div>`;
+    return;
+  }
+  el.innerHTML=list.map(c=>{
+    const st=c.status||'在售';
+    return `<div class="car-card">
+      <span class="status-badge status-${st}">${st}</span>
+      <div class="title"><span class="brand">${esc(c.brand)}</span> ${esc(c.model)}</div>
+      <div class="price">${c.price?`¥${Number(c.price).toFixed(2)}万`:''}</div>
+      <div class="meta">
+        ${c.year?`<span>📅 ${c.year}年</span>`:''}
+        ${c.mileage?`<span>📏 ${c.mileage}万km</span>`:''}
+        ${c.color?`<span>🎨 ${esc(c.color)}</span>`:''}
+        ${c.fuel?`<span>⛽ ${c.fuel}</span>`:''}
+        ${c.trans?`<span>⚙ ${c.trans}</span>`:''}
+        ${c.emission?`<span>🌿 ${c.emission}</span>`:''}
+      </div>
+      ${c.note?`<div style="font-size:12px;color:var(--text2);margin-top:4px">📝 ${esc(c.note)}</div>`:''}
+      <div class="actions">
+        <button class="btn btn-sm btn-outline" onclick="openForm('${c.id}')">✏️ 编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteCar('${c.id}')">🗑 删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// ============ CRUD ============
+function openForm(id){
+  const overlay=document.getElementById('modalOverlay');
+  overlay.classList.add('show');
+  document.getElementById('editId').value='';
+  document.getElementById('formTitle').textContent='新增车辆';
+  document.getElementById('carForm').reset();
+  document.getElementById('fStatus').value='在售';
+  if(id){
+    const data=loadData();
+    const car=data.find(c=>c.id===id);
+    if(!car) return;
+    document.getElementById('formTitle').textContent='编辑车辆';
+    document.getElementById('editId').value=id;
+    document.getElementById('fBrand').value=car.brand||'';
+    document.getElementById('fModel').value=car.model||'';
+    document.getElementById('fYear').value=car.year||'';
+    document.getElementById('fMileage').value=car.mileage||'';
+    document.getElementById('fPrice').value=car.price||'';
+    document.getElementById('fColor').value=car.color||'';
+    document.getElementById('fFuel').value=car.fuel||'';
+    document.getElementById('fTrans').value=car.trans||'';
+    document.getElementById('fEmission').value=car.emission||'';
+    document.getElementById('fStatus').value=car.status||'在售';
+    document.getElementById('fNote').value=car.note||'';
+  }
+}
+
+function closeForm(){
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+function saveCar(e){
+  e.preventDefault();
+  const id=document.getElementById('editId').value;
+  const car={
+    brand:document.getElementById('fBrand').value.trim(),
+    model:document.getElementById('fModel').value.trim(),
+    year:document.getElementById('fYear').value,
+    mileage:document.getElementById('fMileage').value,
+    price:document.getElementById('fPrice').value,
+    color:document.getElementById('fColor').value.trim(),
+    fuel:document.getElementById('fFuel').value,
+    trans:document.getElementById('fTrans').value,
+    emission:document.getElementById('fEmission').value,
+    status:document.getElementById('fStatus').value,
+    note:document.getElementById('fNote').value.trim()
+  };
+  if(!car.brand||!car.model){toast('品牌和型号不能为空');return}
+  const data=loadData();
+  if(id){
+    const idx=data.findIndex(c=>c.id===id);
+    if(idx>-1){car.id=id;car.updatedAt=new Date().toISOString();data[idx]=car}
+  }else{
+    car.id=genId();car.createdAt=new Date().toISOString();car.updatedAt=car.createdAt;
+    data.unshift(car);
+  }
+  saveData(data);
+  closeForm();
+  render();
+  toast(id?'已更新车辆信息':'新车已入库');
+}
+
+function deleteCar(id){
+  if(!confirm('确定要删除这辆车吗？')) return;
+  const data=loadData().filter(c=>c.id!==id);
+  saveData(data);
+  render();
+  toast('已删除');
+}
+
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+// ============ Init ============
+// 添加示例数据（首次使用时）
+(function initDemo(){
+  if(localStorage.getItem(STORAGE_KEY)) return;
+  const demo=[
+    {id:genId(),brand:'宝马',model:'320Li',year:2020,mileage:6.2,price:16.8,color:'白色',fuel:'汽油',trans:'自动',emission:'国六',status:'在售',note:'一手车，原版原漆',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+    {id:genId(),brand:'奔驰',model:'C200L',year:2019,mileage:5.8,price:19.5,color:'黑色',fuel:'汽油',trans:'手自一体',emission:'国六',status:'在售',note:'精品车况，已过检测',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+    {id:genId(),brand:'奥迪',model:'Q5',year:2021,mileage:3.5,price:28.0,color:'灰色',fuel:'汽油',trans:'自动',emission:'国六',status:'预留',note:'准新车，下周提车',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+    {id:genId(),brand:'丰田',model:'凯美瑞',year:2018,mileage:9.2,price:12.3,color:'银色',fuel:'混动',trans:'CVT',emission:'国五',status:'已售',note:'已过户',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+    {id:genId(),brand:'大众',model:'帕萨特',year:2017,mileage:11.0,price:9.8,color:'黑色',fuel:'汽油',trans:'双离合',emission:'国五',status:'下架',note:'待整备',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+  ];
+  saveData(demo);
+})();
+
+render();
+</script>
+</body>
+</html>

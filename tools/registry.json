@@ -1702,6 +1702,86 @@
       "returns": "JSON {success, server_ip, proxy_type, sections: {frps_config, frpc_config, docker_commands, systemd_service, dashboard_info, port_check, setup_guide, verification}}",
       "category": "system",
       "verified": true
+    },
+    {
+      "name": "prophet_forecast",
+      "description": "Meta Prophet 时间序列预测配置生成器 — 根据数据描述生成 Prophet 模型配置、Python 代码、参数调优指南。适合销量/流量/温度等有强周期性的时间序列预测",
+      "file": "tools/prophet_tool.py",
+      "function": "prophet_forecast",
+      "parameters": {
+        "data_description": {
+          "type": "string",
+          "description": "数据描述，如「某电商平台2023-2025年日销售额」"
+        },
+        "data_freq": {
+          "type": "string",
+          "description": "数据频率：H=每小时, D=每天, W=每周, M=每月, Q=每季度, Y=每年",
+          "optional": true
+        },
+        "forecast_periods": {
+          "type": "integer",
+          "description": "预测步数（结合 freq 决定预测时间跨度），默认30",
+          "optional": true
+        },
+        "seasonality_mode": {
+          "type": "string",
+          "description": "季节性模式：additive=加法, multiplicative=乘法",
+          "optional": true
+        },
+        "growth": {
+          "type": "string",
+          "description": "趋势类型：linear=线性分段, logistic=带容量上限的S曲线",
+          "optional": true
+        },
+        "changepoint_prior_scale": {
+          "type": "number",
+          "description": "趋势灵活度(0.001~0.5)，越大趋势变化越灵敏，默认0.05",
+          "optional": true
+        },
+        "seasonality_prior_scale": {
+          "type": "number",
+          "description": "季节性灵活度(0.01~100)，越大季节性越强，默认10.0",
+          "optional": true
+        },
+        "holidays_prior_scale": {
+          "type": "number",
+          "description": "节假日灵活度(0.01~100)，越大节日效应越强，默认10.0",
+          "optional": true
+        },
+        "interval_width": {
+          "type": "number",
+          "description": "置信区间宽度(0~1)，默认0.80",
+          "optional": true
+        },
+        "add_custom_seasonality": {
+          "type": "string",
+          "description": "自定义季节性 JSON，如 [{\"name\":\"月度\",\"period\":30.5,\"fourier_order\":5}]",
+          "optional": true
+        },
+        "country_holidays": {
+          "type": "string",
+          "description": "国家代码(ISO 3166-1 alpha-2)，如 CN/US/JP，空=不用节假日",
+          "optional": true
+        },
+        "cap_value": {
+          "type": "number",
+          "description": "Logistic增长必填，饱和上限（如最大销量）",
+          "optional": true
+        },
+        "floor_value": {
+          "type": "number",
+          "description": "Logistic增长可选，饱和下限",
+          "optional": true
+        },
+        "mcmc_samples": {
+          "type": "integer",
+          "description": "MCMC采样数(0=不使用全贝叶斯)，>0更准确但极慢",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, summary, config_parameters, recommended_code, seasonality_guide, tuning_guide, installation, common_patterns, caveats}",
+      "category": "system",
+      "verified": true
     }
   ]
 }
