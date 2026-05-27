@@ -782,7 +782,7 @@
     },
     {
       "name": "diverge",
-      "description": "发散——向思维导图添加新节点。仅在用户正在做项目规划/需求梳理/方案设计时，发现用户提出了新需求、新维度、新约束时调用。注意：通用知识问答（如介绍历史、解释概念、闲聊等）不需要发散，直接回答即可。一次调用可添加多个节点。",
+      "description": "发散——向思维导图添加新节点。仅在用户正在做项目规划/需求梳理/方案设计时，发现用户提出了新需求、新维度、新约束时调用。注意：通用知识问答（如介绍历史、解释概念、闲聊等）不需要发散，直接回答即可。一次调用可添加多个节点。⚠️ 发散只创建节点，不会让 Thinking Map 的进度推进。只有调用 converge() 才能标记「本轮发散完成」。不调 converge() 则 Thinking Map 永远显示「发散进行中」。",
       "file": "tools/diverge_tool.py",
       "function": "diverge",
       "parameters": {
@@ -806,7 +806,7 @@
     },
     {
       "name": "converge",
-      "description": "收敛整理当前场景的 Thinking Map——合并相似节点、标记废弃、生成优先级队列。当你给出了完整的方案/分析、对话从探索进入行动阶段时，直接调用此工具（不要输出文本标记，直接用 function calling 调）。收敛完成后会生成优先级队列和行动手册。",
+      "description": "收敛整理当前场景的 Thinking Map——合并相似节点、标记废弃、生成优先级队列。只有调 converge() 才能标记「本轮发散已完成」。不调 converge() 则 Thinking Map 永远显示「发散进行中」。当你给出了完整的方案/分析、对话从探索进入行动阶段时，或完成 html 开发并通过验证后，直接调用此工具（不要输出文本标记，直接用 function calling 调）。收敛完成后会生成优先级队列和行动手册。",
       "file": "tools/converge_tool.py",
       "function": "converge",
       "parameters": {
@@ -1089,7 +1089,7 @@
     },
     {
       "name": "self_map_declare",
-      "description": "声明当前场景的架构自省图（初始化或全量覆盖）。调用后可在场景侧边栏查看可视化架构图。适合首次描述系统架构或大幅重画。",
+      "description": "声明当前场景的架构自省图（初始化或全量覆盖）。调用后可在场景侧边栏查看可视化架构图。适合首次描述系统架构或大幅重画。⚠️ 声明后不调 self_map_update 推进进度，则 Action Map 永远显示第一步。每完成一个步骤后，调 self_map_update(action='update_node', node={...加上 status/progress 字段}) 来推进。",
       "file": "tools/self_map_tool.py",
       "function": "do_self_map_declare",
       "parameters": {
@@ -1115,7 +1115,7 @@
     },
     {
       "name": "self_map_update",
-      "description": "增量更新当前场景的自省图。适合架构演进时局部修改——增删节点、更新标题、添加/移除流程图。初始化请用 self_map_declare。",
+      "description": "增量更新当前场景的自省图。适合架构演进时局部修改——增删节点、更新标题、添加/移除流程图。⚠️ 关键：每完成一个步骤或任务后，用 update_node 操作更新节点状态/progress/子步骤进度，否则 Action Map 永远停留在第一步。示例：self_map_update(action='update_node', node={'id':'step1','status':'completed','progress':100,'sublabel':'✅ 已完成'})。初始化请用 self_map_declare。",
       "file": "tools/self_map_tool.py",
       "function": "do_self_map_update",
       "parameters": {

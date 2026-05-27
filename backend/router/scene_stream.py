@@ -386,6 +386,48 @@ class ThoughtThrottle:
         return True
 
 
+def _self_map_nudge(db, scene_id: str, tool_results: list) -> str | None:
+    """轻量检查：本轮有写产出但没推进 Action Map / TM -> 返回提醒文本"""
+    try:
+        from models import SceneSelfMap, ThinkingMap
+
+        productive_tools = {"write_file", "patch", "run_code"}
+        has_product = any(
+            tr.get("tool") in productive_tools and tr.get("success")
+            for tr in (tool_results or [])
+        )
+        if not has_product:
+            return None
+
+        progress_tools = {"self_map_update", "self_map_declare", "converge"}
+        has_progress = any(
+            tr.get("tool") in progress_tools
+            for tr in (tool_results or [])
+        )
+        if has_progress:
+            return None
+
+        sm = db.query(SceneSelfMap).filter(
+            SceneSelfMap.scene_id == scene_id
+        ).first()
+        tm = db.query(ThinkingMap).filter(
+            ThinkingMap.scene_id == scene_id
+        ).first()
+
+        hints = []
+        if sm:
+            hints.append("自省图未更新进度")
+        if tm:
+            hints.append("Thinking Map 未收敛")
+        if sm or tm:
+            msg = "提醒：刚完成了产出，但" + "；".join(hints) + "。记得调 self_map_update 或 converge() 推进进度。"
+            print(f"[nudge] {msg}")
+            return msg
+        return None
+    except Exception:
+        return None
+
+
 def _generate_ack(user_message: str) -> str | None:
     """生成即时确认回执。用 flash 模型，<1 秒返回。简单查询返回 None 跳过确认。"""
     ack_prompt = """你是坐山客。用户刚发来一条消息。
@@ -691,6 +733,15 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         if tool_cards:
             yield sse_event("tool_cards", cards=tool_cards)
         tool_results = agent_tool_results or None
+
+        # 🆕 轻量后端兜底：检查 Action Map / TM 进度是否停滞
+        nudge_msg = None
+        try:
+            nudge_msg = _self_map_nudge(db, scene_id, agent_tool_results)
+        except Exception:
+            pass
+        if nudge_msg:
+            yield sse_event("thought", content=nudge_msg, phase="", mood="")
 
         # 4.5 从 full_reply 解析优先级标记
         from agent_core.priority_assigner import extract_priority

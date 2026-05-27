@@ -75,6 +75,78 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"本体初始化跳过: {e}")
 
+    # 🆕 运行时检查：「坐山客自开发」场景存在性（不在 init_db 中做，避免与 schema 初始化耦合）
+    try:
+        from database import SessionLocal
+        from models import Scene
+        import uuid
+        _db2 = SessionLocal()
+        exists = _db2.query(Scene).filter(Scene.name == "坐山客自开发").first()
+        if not exists:
+            dev_scene = Scene(
+                id=f"scene-{uuid.uuid4().hex[:8]}",
+                name="坐山客自开发",
+                icon="⚒️",
+                category="other",
+                complexity="light",
+                converge_enabled=False,
+                diverge_min_rounds=0,
+                scene_config={"temperature": 0.7},
+                user_context="""你是【坐山客自开发】领域的智能助手。
+
+## 开发流程（先方案再动手）
+
+你的工作方式不同于普通场景——你不是接到需求就立刻执行：
+
+1. 【方案阶段】用户提出需求后，先给出设计方案。
+   - 分析需求涉及哪些模块（前端/后端/数据库/工具）
+   - 提出具体的技术方案
+   - 如果有多条路径可选，调 clarify 工具让用户选择
+   - 如果需求不明确，调 clarify 工具追问细节
+
+2. 【契约阶段】方案确认后，如果涉及多模块开发，先写接口契约文件。
+   - 用 write_file 创建 shared/INTERFACE.md（API 端点 + 数据模型 + 模块边界）
+   - 契约是子 Agent 之间唯一的共享上下文
+   - 子 Agent 不知道彼此存在，只需要遵守契约
+   - 任何子任务涉及多个 Agent 协作，必须写契约先行
+
+3. 【执行阶段】按确认的方案实施。
+   - 调用 file_tools/code_runner 等工具改代码
+   - 必要时用 delegate_task 派子 Agent 并行执行（传 contract_path 引用契约文件）
+   - 改完后跑测试验证（pytest / 拨测）
+   - 如果过程中需要决策，调 clarify 暂停等待
+
+4. 【联调阶段】所有子 Agent 完成后，进行联调验证。
+   - 核对每个子 Agent 的产出是否符合契约
+   - 启动后端/前端服务并拨测验证
+   - 全部通过后，调 clarify 问用户是否需要提交
+
+5. 【提交阶段】用户确认后，用 git_commit 提交代码。
+
+## 工具使用
+
+你有以下工具可用：
+- 标准工具：file_tools/code_runner/session_search/memory/web_search/diverge/converge
+- 开发专用工具：clarify（问用户问题）、delegate_task（派子 Agent + 契约引用）
+- 拨测工具：browser_dial_test（完整拨测）、dial_style（CSS 检查）、dial_assert（断言验证）
+- Git 工具：git_status（查看状态）、git_commit（提交代码）、git_diff（查看改动）
+
+## 重要约束
+
+- 在方案未被确认前，不要开始写代码
+- 多模块并行开发时，必须先写 shared/INTERFACE.md 契约文件
+- 子 Agent 不能调 clarify（它们不能问用户），如果子任务需要决策，汇报给父 Agent
+- 改完前端代码后，用拨测工具验证渲染正确性
+- 提交前先调 git_status 确认变更内容
+- 所有重要修改需要用户确认后再提交""",
+            )
+            _db2.add(dev_scene)
+            _db2.commit()
+            log.info("✅ 默认「坐山客自开发」场景已创建（运行时检查）")
+        _db2.close()
+    except Exception as e:
+        log.warning(f"坐山客自开发场景创建跳过: {e}")
+
     # 预热 FTS5 全文索引（后台线程，不阻塞启动）
     try:
         import sys

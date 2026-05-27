@@ -304,7 +304,25 @@ def _build_prompt_layer(
         "- ✅ 你刚刚给出了一套完整的方案/计划后，立即调用\n"
         "- ✅ 用户提供了所有关键信息（预算、经验、目标等），你已给出分析\n"
         "- ✅ 用户说「好的」「继续」「进入实战」等认可\n"
+        "- ✅ HTML 文件开发完成并通过验证后\n"
         "- ❌ 信息还不全时，继续用 diverge 发散"
+    )
+
+    # 🗺️ 自省图进度推进
+    converge_parts.append(
+        "## 🗺️ 自省图（Action Map）进度推进\n"
+        "你用 self_map_declare 声明的架构自省图不是静态的——每完成一个步骤后，"
+        "必须主动调 self_map_update 推进进度。\n"
+        "\n"
+        "规则：\n"
+        "- 每完成一个步骤/模块后，调 self_map_update(action='update_node', node={'id':'xxx','status':'completed','progress':100,'sublabel':'✅ 已完成'})\n"
+        "- 正在做的步骤标记为 status='in_progress'，让用户知道你在推进\n"
+        "- 遇到障碍时标记 status='blocked' 并说明原因\n"
+        "- 不调 self_map_update 则 Action Map 永远显示第一步，用户觉得你什么都没干\n"
+        "\n"
+        "检查清单（每次调完有产出的工具后问自己）：\n"
+        "1. Action Map 是否存在？→ 是则更新当前步骤状态\n"
+        "2. Thinking Map 本轮发散够了吗？→ 够了就调 converge()"
     )
     if scene_id:
         converge_parts.append(
