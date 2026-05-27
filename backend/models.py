@@ -305,6 +305,12 @@ class AgentMemory(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+    # ── 🆕 v1.5 三层选择注入: Core Tier / 关键词 / 压缩摘要 ──
+    is_core = Column(Boolean, default=False)       # Core Tier 标记（始终注入）
+    compressed = Column(Text, nullable=True)        # 压缩摘要（≤200 字，Core Tier 注入用）
+    keywords = Column(JSON, default=list)           # 话题匹配用关键词（自动提取）
+    last_injected_at = Column(DateTime, nullable=True)  # 上次注入时间（保底机制用）
+
 
 
 # ═══ 多平台网关会话 ═══
