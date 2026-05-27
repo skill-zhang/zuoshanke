@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUNE · 女装精品</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #0f0f13;
+  color: #f0f0f5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+button { cursor: pointer; font-family: inherit; border: none; outline: none; background: none; color: inherit; }
+input, textarea { font-family: inherit; outline: none; border: none; }
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
+
+/* ===== Header ===== */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(15,15,19,0.92); backdrop-filter: blur(20px);
+  border-bottom: 1px solid #1e1e2a;
+  padding: 0 24px;
+}
+.header-inner {
+  max-width: 1280px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px;
+}
+.logo {
+  font-size: 22px; font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #f472b6, #ec4899);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo span { font-weight: 300; }
+.header-right { display: flex; align-items: center; gap: 20px; }
+.cart-btn {
+  position: relative; display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 10px;
+  background: #1a1a23; font-size: 14px; color: #c0c0d0;
+  transition: all 0.2s;
+}
+.cart-btn:hover { background: #22222e; color: #f0f0f5; }
+.cart-count {
+  position: absolute; top: -4px; right: -4px;
+  background: #ec4899; color: #fff;
+  font-size: 11px; font-weight: 600;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transform: scale(0); transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.cart-count.show { transform: scale(1); }
+
+/* ===== Search Bar ===== */
+.search-wrap {
+  max-width: 1280px; margin: 16px auto 0; padding: 0 24px;
+}
+.search-box {
+  display: flex; align-items: center;
+  background: #1a1a23; border-radius: 12px;
+  padding: 0 16px; border: 1px solid #1e1e2a;
+  transition: border-color 0.2s;
+}
+.search-box:focus-within { border-color: #ec4899; }
+.search-box svg { flex-shrink: 0; }
+.search-box input {
+  flex: 1; background: transparent; padding: 12px 12px;
+  font-size: 14px; color: #f0f0f5;
+}
+.search-box input::placeholder { color: #5a5a6a; }
+
+/* ===== Category Nav ===== */
+.category-wrap {
+  max-width: 1280px; margin: 16px auto 0; padding: 0 24px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.category-nav {
+  display: flex; gap: 8px; padding-bottom: 4px;
+}
+.category-btn {
+  flex-shrink: 0; padding: 8px 20px; border-radius: 20px;
+  font-size: 14px; color: #8b8ba3;
+  background: #1a1a23; border: 1px solid transparent;
+  transition: all 0.25s; white-space: nowrap;
+}
+.category-btn:hover { color: #d0d0e0; background: #22222e; }
+.category-btn.active {
+  color: #fff; background: linear-gradient(135deg, #ec4899, #db2777);
+  border-color: transparent; box-shadow: 0 4px 15px rgba(236,72,153,0.3);
+}
+
+/* ===== Product Grid ===== */
+.container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+@media (max-width: 1024px) { .product-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .product-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
+
+/* ===== Product Card ===== */
+.product-card {
+  background: #1a1a23; border-radius: 16px;
+  overflow: hidden; cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+  border: 1px solid #1e1e2a;
+  position: relative;
+}
+.product-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  border-color: #2a2a3a;
+}
+.card-img-wrap {
+  position: relative; overflow: hidden;
+  aspect-ratio: 3/4; background: #12121a;
+}
+.card-img-wrap img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform 0.5s;
+}
+.product-card:hover .card-img-wrap img { transform: scale(1.08); }
+.card-tags {
+  position: absolute; top: 10px; left: 10px;
+  display: flex; gap: 6px;
+}
+.tag {
+  padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+}
+.tag-new { background: #ec4899; color: #fff; }
+.tag-hot { background: #f59e0b; color: #1a1a23; }
+.tag-sale { background: #10b981; color: #fff; }
+.card-body { padding: 14px 16px 16px; }
+.card-name {
+  font-size: 15px; font-weight: 600; margin-bottom: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.card-price { font-size: 18px; font-weight: 700; color: #f472b6; }
+.card-price-original {
+  font-size: 13px; color: #5a5a6a; text-decoration: line-through;
+}
+.card-sales { font-size: 12px; color: #5a5a6a; }
+.card-rating { font-size: 12px; color: #f59e0b; }
+.card-desc {
+  font-size: 13px; color: #6a6a7a; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  grid-column: 1 / -1; text-align: center;
+  padding: 80px 20px; color: #5a5a6a;
+}
+.empty-state svg { margin-bottom: 16px; opacity: 0.4; }
+.empty-state p { font-size: 16px; }
+
+/* ===== Modal Overlay ===== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s;
+}
+.modal-overlay.open { display: flex; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ===== Product Detail Modal ===== */
+.modal-content {
+  background: #1a1a23; border-radius: 20px;
+  max-width: 800px; width: 100%; max-height: 90vh;
+  overflow-y: auto; display: flex; flex-direction: row;
+  border: 1px solid #2a2a3a;
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+}
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-close {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(0,0,0,0.5); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; transition: background 0.2s;
+}
+.modal-close:hover { background: rgba(0,0,0,0.8); }
+
+.modal-img-wrap {
+  flex: 1; min-width: 0;
+  background: #12121a; border-radius: 20px 0 0 20px;
+  overflow: hidden;
+}
+.modal-img-wrap img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.modal-info {
+  flex: 1; padding: 32px 28px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.modal-name { font-size: 22px; font-weight: 700; line-height: 1.3; }
+.modal-price-row { display: flex; align-items: baseline; gap: 12px; }
+.modal-price { font-size: 28px; font-weight: 700; color: #f472b6; }
+.modal-price-original { font-size: 16px; color: #5a5a6a; text-decoration: line-through; }
+.modal-rating { font-size: 14px; color: #f59e0b; }
+.modal-desc { font-size: 14px; color: #8b8ba3; line-height: 1.6; }
+.modal-section { }
+.modal-section-label {
+  font-size: 13px; color: #6a6a7a; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.color-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.color-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  transition: all 0.2s; position: relative;
+}
+.color-btn:hover { transform: scale(1.15); }
+.color-btn.active { border-color: #ec4899; box-shadow: 0 0 0 2px #1a1a23, 0 0 0 4px #ec4899; }
+
+.size-options { display: flex; gap: 8px; flex-wrap: wrap; }
+.size-btn {
+  padding: 8px 18px; border-radius: 8px;
+  border: 1px solid #2a2a3a; background: transparent;
+  font-size: 14px; color: #c0c0d0;
+  transition: all 0.2s;
+}
+.size-btn:hover { border-color: #4a4a5a; }
+.size-btn.active {
+  border-color: #ec4899; background: rgba(236,72,153,0.12); color: #f472b6;
+}
+.size-btn.disabled { opacity: 0.3; cursor: not-allowed; }
+
+.stock-info {
+  font-size: 13px; color: #6a6a7a;
+}
+.stock-info .low { color: #f59e0b; }
+.stock-info .out { color: #ef4444; }
+
+.add-cart-btn {
+  width: 100%; padding: 14px;
+  border-radius: 12px; font-size: 16px; font-weight: 600;
+  background: linear-gradient(135deg, #ec4899, #db2777);
+  color: #fff; transition: all 0.25s;
+  margin-top: auto;
+}
+.add-cart-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(236,72,153,0.35); }
+.add-cart-btn:active { transform: translateY(0); }
+
+@media (max-width: 640px) {
+  .modal-content { flex-direction: column; max-height: 95vh; }
+  .modal-img-wrap { border-radius: 20px 20px 0 0; max-height: 300px; }
+  .modal-info { padding: 20px; }
+}
+
+/* ===== Cart Sidebar ===== */
+.cart-sidebar {
+  position: fixed; top: 0; right: 0; z-index: 300;
+  width: 420px; max-width: 100vw; height: 100vh;
+  background: #1a1a23; border-left: 1px solid #2a2a3a;
+  display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+.cart-sidebar.open { transform: translateX(0); }
+.cart-sidebar-overlay {
+  position: fixed; inset: 0; z-index: 299;
+  background: rgba(0,0,0,0.5);
+  display: none;
+}
+.cart-sidebar-overlay.open { display: block; }
+
+.cart-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px; border-bottom: 1px solid #2a2a3a;
+}
+.cart-header h2 { font-size: 18px; font-weight: 600; }
+.cart-close {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: #2a2a3a; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; transition: background 0.2s;
+}
+.cart-close:hover { background: #3a3a4a; }
+
+.cart-items {
+  flex: 1; overflow-y: auto; padding: 16px 24px;
+}
+.cart-empty {
+  text-align: center; padding: 60px 0; color: #5a5a6a;
+}
+.cart-empty svg { margin-bottom: 12px; opacity: 0.3; }
+
+.cart-item {
+  display: flex; gap: 14px; padding: 14px 0;
+  border-bottom: 1px solid #1e1e2a;
+}
+.cart-item-img {
+  width: 72px; height: 96px; border-radius: 10px;
+  object-fit: cover; background: #12121a; flex-shrink: 0;
+}
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.cart-item-spec { font-size: 12px; color: #6a6a7a; margin-bottom: 6px; }
+.cart-item-price { font-size: 15px; font-weight: 600; color: #f472b6; }
+.cart-item-actions {
+  display: flex; align-items: center; gap: 12px; margin-top: 8px;
+}
+.qty-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: #2a2a3a; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; transition: background 0.2s;
+}
+.qty-btn:hover { background: #3a3a4a; }
+.qty-num { font-size: 14px; min-width: 24px; text-align: center; }
+.cart-item-del {
+  margin-left: auto; font-size: 12px; color: #5a5a6a;
+  padding: 4px 8px; border-radius: 6px; transition: all 0.2s;
+}
+.cart-item-del:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+
+.cart-footer {
+  padding: 20px 24px; border-top: 1px solid #2a2a3a;
+}
+.cart-total {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.cart-total-text { font-size: 14px; color: #8b8ba3; }
+.cart-total-price { font-size: 22px; font-weight: 700; color: #f472b6; }
+.checkout-btn {
+  width: 100%; padding: 14px; border-radius: 12px;
+  font-size: 16px; font-weight: 600;
+  background: linear-gradient(135deg, #ec4899, #db2777);
+  color: #fff; transition: all 0.25s;
+}
+.checkout-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(236,72,153,0.35); }
+.checkout-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ===== Checkout Modal ===== */
+.checkout-modal .modal-content {
+  max-width: 520px; flex-direction: column;
+}
+.checkout-modal .modal-info { padding: 32px; }
+.checkout-modal h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label {
+  display: block; font-size: 13px; color: #8b8ba3; margin-bottom: 6px;
+}
+.form-group input, .form-group textarea {
+  width: 100%; padding: 12px 14px; border-radius: 10px;
+  background: #12121a; border: 1px solid #2a2a3a;
+  font-size: 14px; color: #f0f0f5; transition: border-color 0.2s;
+}
+.form-group input:focus, .form-group textarea:focus { border-color: #ec4899; }
+.form-group textarea { resize: vertical; min-height: 80px; }
+.order-summary {
+  background: #12121a; border-radius: 10px; padding: 14px;
+  margin-bottom: 16px;
+}
+.order-summary-row { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; }
+.order-summary-row.total { font-size: 18px; font-weight: 700; color: #f472b6; border-top: 1px solid #2a2a3a; padding-top: 10px; margin-top: 6px; }
+.submit-order-btn {
+  width: 100%; padding: 14px; border-radius: 12px;
+  font-size: 16px; font-weight: 600;
+  background: linear-gradient(135deg, #ec4899, #db2777);
+  color: #fff; transition: all 0.25s;
+}
+.submit-order-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(236,72,153,0.35); }
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+  z-index: 500; padding: 14px 28px; border-radius: 12px;
+  background: #1a1a23; border: 1px solid #2a2a3a;
+  font-size: 14px; color: #f0f0f5;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  opacity: 0; transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: #10b981; }
+.toast.success::before { content: "✓ "; color: #10b981; }
+.toast.error { border-color: #ef4444; }
+.toast.error::before { content: "✗ "; color: #ef4444; }
+
+/* ===== Success Modal ===== */
+.success-modal .modal-content {
+  max-width: 400px; flex-direction: column; text-align: center;
+  padding: 48px 32px;
+}
+.success-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: rgba(16,185,129,0.12);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+}
+.success-icon svg { color: #10b981; }
+.success-modal h2 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.success-modal p { color: #8b8ba3; margin-bottom: 24px; }
+.success-btn {
+  padding: 12px 32px; border-radius: 10px;
+  background: linear-gradient(135deg, #ec4899, #db2777);
+  color: #fff; font-size: 15px; font-weight: 600;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">LUNE<span>.</span></div>
+    <div class="header-right">
+      <button class="cart-btn" onclick="openCart()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        购物车
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Search -->
+<div class="search-wrap">
+  <div class="search-box">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a5a6a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="searchInput" placeholder="搜索连衣裙、上衣、外套..." oninput="filterProducts()">
+  </div>
+</div>
+
+<!-- Category Nav -->
+<div class="category-wrap">
+  <nav class="category-nav" id="categoryNav">
+    <button class="category-btn active" data-cat="all" onclick="setCategory('all')">全部</button>
+    <button class="category-btn" data-cat="连衣裙" onclick="setCategory('连衣裙')">👗 连衣裙</button>
+    <button class="category-btn" data-cat="上衣" onclick="setCategory('上衣')">👚 上衣</button>
+    <button class="category-btn" data-cat="裤装" onclick="setCategory('裤装')">👖 裤装</button>
+    <button class="category-btn" data-cat="裙装" onclick="setCategory('裙装')">👘 裙装</button>
+    <button class="category-btn" data-cat="外套" onclick="setCategory('外套')">🧥 外套</button>
+    <button class="category-btn" data-cat="配饰" onclick="setCategory('配饰')">👜 配饰</button>
+  </nav>
+</div>
+
+<!-- Products -->
+<div class="container">
+  <div class="product-grid" id="productGrid"></div>
+</div>
+
+<!-- Product Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeDetail()">✕</button>
+    <div class="modal-img-wrap" id="modalImgWrap">
+      <img id="modalImg" src="" alt="">
+    </div>
+    <div class="modal-info" id="modalInfo"></div>
+  </div>
+</div>
+
+<!-- Cart Sidebar Overlay -->
+<div class="cart-sidebar-overlay" id="cartOverlay" onclick="closeCart()"></div>
+
+<!-- Cart Sidebar -->
+<div class="cart-sidebar" id="cartSidebar">
+  <div class="cart-header">
+    <h2>🛒 购物车</h2>
+    <button class="cart-close" onclick="closeCart()">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-footer" id="cartFooter">
+    <div class="cart-total">
+      <span class="cart-total-text">合计</span>
+      <span class="cart-total-price" id="cartTotal">¥0</span>
+    </div>
+    <button class="checkout-btn" onclick="openCheckout()">去结算</button>
+  </div>
+</div>
+
+<!-- Checkout Modal -->
+<div class="modal-overlay checkout-modal" id="checkoutModal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeCheckout()">✕</button>
+    <div class="modal-info">
+      <h2>📋 填写订单信息</h2>
+      <div class="form-group">
+        <label>收货人姓名</label>
+        <input type="text" id="orderName" placeholder="请输入收货人姓名">
+      </div>
+      <div class="form-group">
+        <label>联系电话</label>
+        <input type="text" id="orderPhone" placeholder="请输入手机号码">
+      </div>
+      <div class="form-group">
+        <label>收货地址</label>
+        <input type="text" id="orderAddress" placeholder="省/市/区/详细地址">
+      </div>
+      <div class="form-group">
+        <label>备注（可选）</label>
+        <textarea id="orderNote" placeholder="如有特殊要求请备注"></textarea>
+      </div>
+      <div class="order-summary" id="orderSummary"></div>
+      <button class="submit-order-btn" onclick="submitOrder()">提交订单</button>
+    </div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal-overlay success-modal" id="successModal">
+  <div class="modal-content">
+    <div class="success-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2>🎉 订单提交成功！</h2>
+    <p>感谢您的购买，我们会尽快安排发货</p>
+    <button class="success-btn" onclick="closeSuccess()">继续逛逛</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== DATA =====
+const products = [
+  {
+    id: 1, name: "法式方领碎花连衣裙", category: "连衣裙",
+    price: 299, originalPrice: 459,
+    description: "优雅法式方领设计，收腰显瘦版型，精选碎花面料，适合日常通勤与约会穿搭。",
+    image: "https://images.unsplash.com/photo-1612336307429-8a898d10e223?w=600&h=800&fit=crop",
+    rating: 4.8, sales: 2367,
+    colors: ["奶白碎花", "蓝色碎花", "粉色碎花"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-奶白碎花": 32, "M-奶白碎花": 28, "L-奶白碎花": 15, "XL-奶白碎花": 8, "S-蓝色碎花": 20, "M-蓝色碎花": 25, "L-蓝色碎花": 12, "XL-蓝色碎花": 5, "S-粉色碎花": 18, "M-粉色碎花": 22, "L-粉色碎花": 10, "XL-粉色碎花": 3 },
+    tags: ["新品","热销"]
+  },
+  {
+    id: 2, name: "纯色收腰A字连衣裙", category: "连衣裙",
+    price: 259, originalPrice: 389,
+    description: "简约纯色设计，收腰A字裙摆，通勤约会皆宜，显高显瘦不挑身材。",
+    image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=600&h=800&fit=crop",
+    rating: 4.7, sales: 1892,
+    colors: ["经典黑", "奶茶色", "雾霾蓝"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-经典黑": 45, "M-经典黑": 38, "L-经典黑": 20, "XL-经典黑": 10, "S-奶茶色": 30, "M-奶茶色": 35, "L-奶茶色": 18, "XL-奶茶色": 6, "S-雾霾蓝": 22, "M-雾霾蓝": 28, "L-雾霾蓝": 14, "XL-雾霾蓝": 4 },
+    tags: ["热销"]
+  },
+  {
+    id: 3, name: "V领碎花中长裙", category: "连衣裙",
+    price: 329, originalPrice: 499,
+    description: "浪漫V领碎花设计，飘逸中长裙摆，轻盈雪纺面料，春夏出游首选。",
+    image: "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=600&h=800&fit=crop",
+    rating: 4.9, sales: 3120,
+    colors: ["黄色碎花", "紫色碎花"],
+    sizes: ["S","M","L"],
+    stock: { "S-黄色碎花": 25, "M-黄色碎花": 30, "L-黄色碎花": 12, "S-紫色碎花": 20, "M-紫色碎花": 28, "L-紫色碎花": 10 },
+    tags: ["新品","热销"]
+  },
+  {
+    id: 4, name: "纯棉修身针织上衣", category: "上衣",
+    price: 159, originalPrice: 229,
+    description: "精选优质纯棉面料，修身版型，柔软亲肤，基础百搭款。",
+    image: "https://images.unsplash.com/photo-1434389677669-e08b4cda3a10?w=600&h=800&fit=crop",
+    rating: 4.6, sales: 4567,
+    colors: ["白色", "黑色", "灰色", "卡其"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-白色": 50, "M-白色": 45, "L-白色": 30, "XL-白色": 18, "S-黑色": 48, "M-黑色": 42, "L-黑色": 28, "XL-黑色": 15, "S-灰色": 35, "M-灰色": 38, "L-灰色": 22, "XL-灰色": 10, "S-卡其": 28, "M-卡其": 32, "L-卡其": 18, "XL-卡其": 8 },
+    tags: ["热销"]
+  },
+  {
+    id: 5, name: "法式泡泡袖衬衫", category: "上衣",
+    price: 199, originalPrice: 289,
+    description: "复古泡泡袖设计，法式优雅气质，小翻领修饰脸型，通勤约会皆可。",
+    image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&h=800&fit=crop",
+    rating: 4.7, sales: 2134,
+    colors: ["奶白色", "天蓝色", "碎花"],
+    sizes: ["S","M","L"],
+    stock: { "S-奶白色": 35, "M-奶白色": 30, "L-奶白色": 15, "S-天蓝色": 25, "M-天蓝色": 28, "L-天蓝色": 12, "S-碎花": 20, "M-碎花": 22, "L-碎花": 8 },
+    tags: ["新品"]
+  },
+  {
+    id: 6, name: "宽松条纹针织衫", category: "上衣",
+    price: 229, originalPrice: 339,
+    description: "经典条纹元素，宽松慵懒版型，柔软针织面料，秋冬内搭外穿皆宜。",
+    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=600&h=800&fit=crop",
+    rating: 4.5, sales: 1876,
+    colors: ["蓝白条纹", "黑白条纹"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-蓝白条纹": 30, "M-蓝白条纹": 35, "L-蓝白条纹": 20, "XL-蓝白条纹": 10, "S-黑白条纹": 28, "M-黑白条纹": 32, "L-黑白条纹": 18, "XL-黑白条纹": 8 },
+    tags: []
+  },
+  {
+    id: 7, name: "高腰直筒牛仔裤", category: "裤装",
+    price: 259, originalPrice: 369,
+    description: "高腰直筒版型，经典牛仔蓝，显腿长修饰腿型，四季百搭单品。",
+    image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=600&h=800&fit=crop",
+    rating: 4.8, sales: 5234,
+    colors: ["浅蓝", "深蓝", "黑色"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-浅蓝": 40, "M-浅蓝": 45, "L-浅蓝": 30, "XL-浅蓝": 15, "S-深蓝": 38, "M-深蓝": 42, "L-深蓝": 28, "XL-深蓝": 12, "S-黑色": 35, "M-黑色": 38, "L-黑色": 25, "XL-黑色": 10 },
+    tags: ["热销"]
+  },
+  {
+    id: 8, name: "垂感阔腿西装裤", category: "裤装",
+    price: 289, originalPrice: 419,
+    description: "垂感面料，阔腿版型，通勤气质款，修饰腿型显高显瘦。",
+    image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=600&h=800&fit=crop",
+    rating: 4.7, sales: 2987,
+    colors: ["黑色", "卡其", "烟灰"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-黑色": 35, "M-黑色": 40, "L-黑色": 25, "XL-黑色": 12, "S-卡其": 28, "M-卡其": 32, "L-卡其": 18, "XL-卡其": 8, "S-烟灰": 22, "M-烟灰": 28, "L-烟灰": 15, "XL-烟灰": 6 },
+    tags: ["新品"]
+  },
+  {
+    id: 9, name: "高腰百褶半身裙", category: "裙装",
+    price: 219, originalPrice: 319,
+    description: "浪漫百褶设计，高腰显瘦，灵动飘逸，搭配衬衫或针织衫皆宜。",
+    image: "https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=600&h=800&fit=crop",
+    rating: 4.6, sales: 3456,
+    colors: ["黑色", "卡其", "军绿"],
+    sizes: ["S","M","L"],
+    stock: { "S-黑色": 30, "M-黑色": 35, "L-黑色": 18, "S-卡其": 25, "M-卡其": 28, "L-卡其": 12, "S-军绿": 18, "M-军绿": 22, "L-军绿": 8 },
+    tags: ["热销"]
+  },
+  {
+    id: 10, name: "A字皮质短裙", category: "裙装",
+    price: 269, originalPrice: 389,
+    description: "质感PU皮革，A字版型，帅气与甜美兼具，秋冬搭配过膝靴。",
+    image: "https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=600&h=800&fit=crop",
+    rating: 4.4, sales: 1567,
+    colors: ["黑色", "棕色"],
+    sizes: ["S","M","L"],
+    stock: { "S-黑色": 28, "M-黑色": 32, "L-黑色": 15, "S-棕色": 18, "M-棕色": 22, "L-棕色": 8 },
+    tags: []
+  },
+  {
+    id: 11, name: "中长款风衣外套", category: "外套",
+    price: 459, originalPrice: 659,
+    description: "经典双排扣风衣，中长款设计，垂感面料，春秋百搭气质款。",
+    image: "https://images.unsplash.com/photo-1544022613-e87ca75a784a?w=600&h=800&fit=crop",
+    rating: 4.9, sales: 1876,
+    colors: ["卡其", "黑色", "米白"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-卡其": 25, "M-卡其": 30, "L-卡其": 18, "XL-卡其": 8, "S-黑色": 22, "M-黑色": 28, "L-黑色": 15, "XL-黑色": 6, "S-米白": 18, "M-米白": 22, "L-米白": 10, "XL-米白": 4 },
+    tags: ["新品","热销"]
+  },
+  {
+    id: 12, name: "短款牛仔夹克", category: "外套",
+    price: 329, originalPrice: 459,
+    description: "经典短款牛仔夹克，百搭不挑人，春秋叠穿必备单品。",
+    image: "https://images.unsplash.com/photo-1525450824786-227cbef707f8?w=600&h=800&fit=crop",
+    rating: 4.6, sales: 2345,
+    colors: ["浅蓝", "深蓝"],
+    sizes: ["S","M","L","XL"],
+    stock: { "S-浅蓝": 30, "M-浅蓝": 35, "L-浅蓝": 20, "XL-浅蓝": 10, "S-深蓝": 25, "M-深蓝": 30, "L-深蓝": 18, "XL-深蓝": 8 },
+    tags: ["热销"]
+  }
+];
+
+// Add image fallbacks for products that might share same image
+// Product 10 uses same as 9, let's give it a unique one
+products[9].image = "https://images.unsplash.com/photo-1565084888279-85d1b92a6c8e?w=600&h=800&fit=crop";
+
+// ===== STATE =====
+let currentCategory = 'all';
+let currentProduct = null;
+let selectedColor = '';
+let selectedSize = '';
+let cart = JSON.parse(localStorage.getItem('lune_cart') || '[]');
+let searchQuery = '';
+
+// ===== RENDER PRODUCTS =====
+function renderProducts() {
+  const grid = document.getElementById('productGrid');
+  const query = searchQuery.toLowerCase().trim();
+  let filtered = products.filter(p => {
+    if (currentCategory !== 'all' && p.category !== currentCategory) return false;
+    if (query) {
+      return p.name.toLowerCase().includes(query) ||
+             p.category.includes(query) ||
+             p.description.toLowerCase().includes(query);
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <p>没有找到匹配的商品</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => {
+    const tagsHtml = (p.tags || []).map(t => {
+      const cls = t === '新品' ? 'tag-new' : t === '热销' ? 'tag-hot' : 'tag-sale';
+      return `<span class="tag ${cls}">${t}</span>`;
+    }).join('');
+
+    return `
+      <div class="product-card" onclick="openDetail(${p.id})">
+        <div class="card-img-wrap">
+          <img src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=600&h=800&fit=crop'">
+          ${tagsHtml ? `<div class="card-tags">${tagsHtml}</div>` : ''}
+        </div>
+        <div class="card-body">
+          <div class="card-name">${p.name}</div>
+          <div class="card-meta">
+            <span class="card-price">¥${p.price}</span>
+            ${p.originalPrice ? `<span class="card-price-original">¥${p.originalPrice}</span>` : ''}
+          </div>
+          <div class="card-meta">
+            <span class="card-rating">★ ${p.rating}</span>
+            <span class="card-sales">已售 ${p.sales}</span>
+          </div>
+          <div class="card-desc">${p.description}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ===== CATEGORY =====
+function setCategory(cat) {
+  currentCategory = cat;
+  document.querySelectorAll('.category-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  renderProducts();
+}
+
+// ===== SEARCH =====
+function filterProducts() {
+  searchQuery = document.getElementById('searchInput').value;
+  renderProducts();
+}
+
+// ===== DETAIL MODAL =====
+function openDetail(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  currentProduct = p;
+  selectedColor = p.colors[0];
+  selectedSize = p.sizes[0];
+
+  document.getElementById('modalImg').src = p.image;
+  document.getElementById('modalImg').onerror = function() {
+    this.src = 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=600&h=800&fit=crop';
+  };
+
+  renderModalInfo();
+  document.getElementById('detailModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('detailModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function renderModalInfo() {
+  const p = currentProduct;
+  if (!p) return;
+  const el = document.getElementById('modalInfo');
+
+  const colorBtns = p.colors.map(c =>
+    `<button class="color-btn ${c === selectedColor ? 'active' : ''}" style="background:${getColorHex(c)}" onclick="selectColor('${c}')" title="${c}"></button>`
+  ).join('');
+
+  const sizeBtns = p.sizes.map(s => {
+    const key = `${s}-${selectedColor}`;
+    const stock = p.stock[key] || 0;
+    const disabled = stock === 0 ? 'disabled' : '';
+    return `<button class="size-btn ${s === selectedSize ? 'active' : ''} ${disabled}" onclick="selectSize('${s}')">${s}${disabled ? ' (无货)' : ''}</button>`;
+  }).join('');
+
+  const stockKey = `${selectedSize}-${selectedColor}`;
+  const stockVal = p.stock[stockKey] || 0;
+  let stockHtml = '';
+  if (stockVal === 0) stockHtml = '<span class="out">暂无库存</span>';
+  else if (stockVal <= 10) stockHtml = `<span class="low">仅剩 ${stockVal} 件</span>`;
+  else stockHtml = `库存 ${stockVal} 件`;
+
+  const tagsHtml = (p.tags || []).map(t => `<span class="tag ${t === '新品' ? 'tag-new' : 'tag-hot'}">${t}</span>`).join('');
+
+  el.innerHTML = `
+    <div class="modal-name">${p.name}</div>
+    ${tagsHtml ? `<div style="display:flex;gap:6px">${tagsHtml}</div>` : ''}
+    <div class="modal-price-row">
+      <span class="modal-price">¥${p.price}</span>
+      ${p.originalPrice ? `<span class="modal-price-original">¥${p.originalPrice}</span>` : ''}
+      <span class="modal-rating">★ ${p.rating}</span>
+    </div>
+    <div class="modal-desc">${p.description}</div>
+    <div class="modal-section">
+      <div class="modal-section-label">🎨 颜色</div>
+      <div class="color-options">${colorBtns}</div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-label">📏 尺码</div>
+      <div class="size-options">${sizeBtns}</div>
+    </div>
+    <div class="stock-info">${stockHtml}</div>
+    <button class="add-cart-btn" onclick="addToCart()" ${stockVal === 0 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+      ${stockVal === 0 ? '暂无库存' : '加入购物车'}
+    </button>
+  `;
+}
+
+function selectColor(c) {
+  selectedColor = c;
+  // Reset size if current size not available for this color
+  const p = currentProduct;
+  const key = `${selectedSize}-${c}`;
+  if (p && (p.stock[key] === undefined || p.stock[key] === 0)) {
+    const avail = p.sizes.find(s => (p.stock[`${s}-${c}`] || 0) > 0);
+    if (avail) selectedSize = avail;
+  }
+  renderModalInfo();
+}
+
+function selectSize(s) {
+  selectedSize = s;
+  renderModalInfo();
+}
+
+function getColorHex(name) {
+  const map = {
+    '奶白': '#f5f0e8', '奶白色': '#f5f0e8', '奶白碎花': '#f5f0e8',
+    '蓝色碎花': '#7ba7d4', '粉色碎花': '#f0b4c8',
+    '黄色碎花': '#f0d87a', '紫色碎花': '#c4a0d4',
+    '经典黑': '#1a1a1a', '奶茶色': '#d4b896', '雾霾蓝': '#8fa8c8',
+    '白色': '#f0f0f0', '黑色': '#1a1a1a', '灰色': '#a0a0a0', '卡其': '#c4a882',
+    '天蓝色': '#7ec8e3', '碎花': '#e8b4c8',
+    '蓝白条纹': '#7ba7d4', '黑白条纹': '#888',
+    '浅蓝': '#8fc8e8', '深蓝': '#3a5a7a',
+    '烟灰': '#8a8a9a', '军绿': '#6a8a5a',
+    '棕色': '#8a6a4a',
+    '米白': '#f0ece4',
+    '卡其': '#c4a882'
+  };
+  return map[name] || '#888';
+}
+
+// ===== CART =====
+function addToCart() {
+  const p = currentProduct;
+  if (!p) return;
+  const key = `${p.id}-${selectedSize}-${selectedColor}`;
+  const existing = cart.find(c => c.key === key);
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    cart.push({
+      key,
+      id: p.id,
+      name: p.name,
+      image: p.image,
+      price: p.price,
+      size: selectedSize,
+      color: selectedColor,
+      qty: 1
+    });
+  }
+  saveCart();
+  updateCartCount();
+  closeDetail();
+  showToast('已加入购物车', 'success');
+}
+
+function saveCart() {
+  localStorage.setItem('lune_cart', JSON.stringify(cart));
+}
+
+function updateCartCount() {
+  const total = cart.reduce((s, c) => s + c.qty, 0);
+  const el = document.getElementById('cartCount');
+  el.textContent = total;
+  el.classList.toggle('show', total > 0);
+}
+
+function openCart() {
+  renderCart();
+  document.getElementById('cartSidebar').classList.add('open');
+  document.getElementById('cartOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCart() {
+  document.getElementById('cartSidebar').classList.remove('open');
+  document.getElementById('cartOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function renderCart() {
+  const el = document.getElementById('cartItems');
+  const footer = document.getElementById('cartFooter');
+
+  if (cart.length === 0) {
+    el.innerHTML = `
+      <div class="cart-empty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <p>购物车还是空的</p>
+      </div>`;
+    footer.style.display = 'none';
+    return;
+  }
+
+  footer.style.display = 'block';
+  let total = 0;
+
+  el.innerHTML = cart.map(item => {
+    const subtotal = item.price * item.qty;
+    total += subtotal;
+    return `
+      <div class="cart-item">
+        <img class="cart-item-img" src="${item.image}" alt="${item.name}" onerror="this.src='https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=200&h=260&fit=crop'">
+        <div class="cart-item-info">
+          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-spec">${item.color} / ${item.size}</div>
+          <div class="cart-item-price">¥${item.price}</div>
+          <div class="cart-item-actions">
+            <button class="qty-btn" onclick="changeQty('${item.key}', -1)">−</button>
+            <span class="qty-num">${item.qty}</span>
+            <button class="qty-btn" onclick="changeQty('${item.key}', 1)">+</button>
+            <button class="cart-item-del" onclick="removeFromCart('${item.key}')">删除</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('cartTotal').textContent = `¥${total}`;
+}
+
+function changeQty(key, delta) {
+  const item = cart.find(c => c.key === key);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) {
+    cart = cart.filter(c => c.key !== key);
+  }
+  saveCart();
+  updateCartCount();
+  renderCart();
+}
+
+function removeFromCart(key) {
+  cart = cart.filter(c => c.key !== key);
+  saveCart();
+  updateCartCount();
+  renderCart();
+}
+
+// ===== CHECKOUT =====
+function openCheckout() {
+  if (cart.length === 0) return;
+  closeCart();
+  const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
+  document.getElementById('orderSummary').innerHTML = `
+    <div class="order-summary-row"><span>商品数量</span><span>${cart.reduce((s,c)=>s+c.qty,0)} 件</span></div>
+    <div class="order-summary-row total"><span>应付金额</span><span>¥${total}</span></div>
+  `;
+  document.getElementById('checkoutModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCheckout() {
+  document.getElementById('checkoutModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function submitOrder() {
+  const name = document.getElementById('orderName').value.trim();
+  const phone = document.getElementById('orderPhone').value.trim();
+  const address = document.getElementById('orderAddress').value.trim();
+
+  if (!name) { showToast('请填写收货人姓名', 'error'); return; }
+  if (!phone || !/^1\d{10}$/.test(phone)) { showToast('请填写正确的手机号码', 'error'); return; }
+  if (!address) { showToast('请填写收货地址', 'error'); return; }
+
+  closeCheckout();
+  cart = [];
+  saveCart();
+  updateCartCount();
+  document.getElementById('successModal').classList.add('open');
+}
+
+function closeSuccess() {
+  document.getElementById('successModal').classList.remove('open');
+  document.body.style.overflow = '';
+  renderProducts();
+}
+
+// ===== TOAST =====
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + (type || '');
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ===== CLOSE MODALS ON OVERLAY CLICK =====
+document.getElementById('detailModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDetail();
+});
+document.getElementById('checkoutModal').addEventListener('click', function(e) {
+  if (e.target === this) closeCheckout();
+});
+document.getElementById('successModal').addEventListener('click', function(e) {
+  if (e.target === this) closeSuccess();
+});
+
+// ===== INIT =====
+renderProducts();
+updateCartCount();
+</script>
+</body>
+</html>
