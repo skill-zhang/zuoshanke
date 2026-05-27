@@ -4,9 +4,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 9002,
+    port: 5173,
     proxy: {
-      '/api': 'http://localhost:9001',
+      '/api': 'http://localhost:8000',
     },
     allowedHosts: true, // 允许 Cloudflare Tunnel 等任意域名访问
   },

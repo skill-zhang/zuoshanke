@@ -178,7 +178,7 @@ start_frontend() {
     fi
 
     cd "$FRONTEND_DIR"
-    nohup env PATH="$HOME/.hermes/node/bin:$PATH" pnpm dev > "$FRONTEND_LOG" 2>&1 &
+    nohup node ./node_modules/vite/bin/vite.js --host 0.0.0.0 > "$FRONTEND_LOG" 2>&1 &
     local pid=$!
     log_info "PID: $pid，日志: $FRONTEND_LOG"
 
