@@ -39,6 +39,10 @@ def init_db():
             conn.execute(text("DROP TABLE IF EXISTS scenes"))
             conn.execute(text("DROP TABLE IF EXISTS projects"))
             conn.execute(text("DROP TABLE IF EXISTS channels"))
+            conn.execute(text("DROP TABLE IF EXISTS ai_providers"))
+            conn.execute(text("DROP TABLE IF EXISTS ai_models"))
+            conn.execute(text("DROP TABLE IF EXISTS settings"))
+            conn.execute(text("DROP TABLE IF EXISTS category_metas"))
             conn.commit()
         print("🗑  旧表已删除，准备重建 schema")
 

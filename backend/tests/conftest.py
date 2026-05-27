@@ -13,6 +13,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # 测试环境标记 — 让 database.py 不依赖外部 .env 等
 os.environ.setdefault("ZUOSHANKE_REBUILD_DB", "1")
 
+# 加载 .env（否则 seed data 的 API key 为空）
+try:
+    from dotenv import load_dotenv
+    from config.paths import HERMES_ENV
+    if HERMES_ENV.exists():
+        load_dotenv(HERMES_ENV)
+except Exception:
+    pass
+
 import pytest
 from fastapi.testclient import TestClient
 
