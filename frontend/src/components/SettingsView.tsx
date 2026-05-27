@@ -7,6 +7,8 @@ import {
   createModel, updateModel, deleteModel,
   getSettings, updateSettings, getServiceStatus, getDefaultPrompts,
   AiProviderData, AiModelData,
+  CatalogProvider, CatalogModel,
+  listCatalog, refreshCatalog,
   UserProfile, PendingTrait,
   listProfiles, updateProfile, deleteProfile,
   listPendingTraits, acceptPendingTrait, rejectPendingTrait, triggerProfileProcess,
@@ -57,6 +59,7 @@ export function SettingsView() {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
 
   // Provider modal
   const [provModal, setProvModal] = useState(false);
@@ -69,6 +72,12 @@ export function SettingsView() {
   const [editModel, setEditModel] = useState<{ pid: string; m: AiModelData | null }>({ pid: '', m: null });
   const [modelForm, setModelForm] = useState({ name: '', display_name: '', temperature: 0.7, max_tokens: 8192, context_length: 32768, repeat_penalty: 1.05, vision: false, function_calling: true });
   const [modelSaving, setModelSaving] = useState(false);
+
+  // Provider catalog (从 providers.md 读取)
+  const [catalog, setCatalog] = useState<CatalogProvider[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  // 当前选择的 catalog provider ID (用于模型下拉过滤)
+  const [selCatalogProvId, setSelCatalogProvId] = useState('');
 
   // Route editing
   const [editedRoutes, setEditedRoutes] = useState<Record<string, Partial<RouteConfig>>>({});
@@ -122,6 +131,13 @@ export function SettingsView() {
   }, []);
   const loadStatus = useCallback(async () => {
     try { setServiceStatus(await getServiceStatus()); } catch {}
+  }, []);
+
+  // ── Provider 目录 ──
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    try { setCatalog((await listCatalog()).catalog); } catch {}
+    setCatalogLoading(false);
   }, []);
 
   // ── 用户画像 ──
@@ -190,15 +206,37 @@ export function SettingsView() {
   };
 
   useEffect(() => {
-    if (activeTab === 'providers') loadP();
+    if (activeTab === 'providers') { loadP(); loadCatalog(); }
     else if (activeTab === 'routing' || activeTab === 'prompts') loadS();
     else if (activeTab === 'service') loadStatus();
     else if (activeTab === 'profile') loadProfile();
   }, [activeTab]);
 
   // ── Provider CRUD ──
-  const openNewProv = () => { setEditProv(null); setProvForm({ name: '', base_url: '', api_key: '', provider_type: 'openai-compatible' }); setProvModal(true); };
-  const openEditProv = (p: AiProviderData) => { setEditProv(p); setProvForm({ name: p.name, base_url: p.base_url, api_key: p.api_key || '', provider_type: p.provider_type }); setProvModal(true); };
+  const openNewProv = () => {
+    setEditProv(null);
+    setProvForm({ name: '', base_url: '', api_key: '', provider_type: 'openai-compatible' });
+    setSelCatalogProvId('');
+    setProvModal(true);
+  };
+  const openEditProv = (p: AiProviderData) => {
+    setEditProv(p);
+    setProvForm({ name: p.name, base_url: p.base_url, api_key: p.api_key || '', provider_type: p.provider_type });
+    setSelCatalogProvId('');
+    setProvModal(true);
+  };
+  const handleCatalogProvSelect = (catalogId: string) => {
+    setSelCatalogProvId(catalogId);
+    const cp = catalog.find(c => c.id === catalogId);
+    if (cp) {
+      setProvForm(f => ({
+        ...f,
+        name: cp.display_name,
+        base_url: cp.base_url,
+        provider_type: cp.provider_type,
+      }));
+    }
+  };
   const saveProv = async () => {
     if (!provForm.name.trim() || !provForm.base_url.trim()) return;
     setProvSaving(true);
@@ -215,8 +253,30 @@ export function SettingsView() {
   };
 
   // ── Model CRUD ──
-  const openNewModel = (pid: string) => { setEditModel({ pid, m: null }); setModelForm({ name: '', display_name: '', temperature: 0.7, max_tokens: 8192, context_length: 32768, repeat_penalty: 1.05, vision: false, function_calling: true }); setModelModal(true); };
+  const openNewModel = (pid: string) => {
+    setEditModel({ pid, m: null });
+    setSelCatalogProvId('');
+    setModelForm({ name: '', display_name: '', temperature: 0.7, max_tokens: 8192, context_length: 32768, repeat_penalty: 1.05, vision: false, function_calling: true });
+    setModelModal(true);
+  };
   const openEditModel = (pid: string, m: AiModelData) => { setEditModel({ pid, m }); setModelForm({ name: m.name, display_name: m.display_name || '', temperature: m.temperature, max_tokens: m.max_tokens, context_length: m.context_length, repeat_penalty: m.repeat_penalty, vision: m.vision, function_calling: m.function_calling }); setModelModal(true); };
+  const handleCatalogModelSelect = (modelName: string) => {
+    const cp = catalog.find(c => c.id === editModel.pid);
+    if (!cp) return;
+    const cm = cp.models.find(m => m.name === modelName);
+    if (cm) {
+      setModelForm({
+        name: cm.name,
+        display_name: cm.display_name,
+        temperature: cm.temperature,
+        max_tokens: cm.max_tokens,
+        context_length: cm.context_length,
+        repeat_penalty: cm.repeat_penalty,
+        vision: cm.vision,
+        function_calling: cm.function_calling,
+      });
+    }
+  };
   const saveModel = async () => {
     if (!modelForm.name.trim()) return;
     setModelSaving(true);
@@ -242,7 +302,11 @@ export function SettingsView() {
     try {
       const routing: Record<string, any> = {};
       for (const [k, v] of Object.entries(editedRoutes)) if (Object.keys(v).length > 0) routing[k] = v;
-      if (Object.keys(routing).length > 0) setSettings(await updateSettings({ routing }));
+      if (Object.keys(routing).length > 0) {
+        setSettings(await updateSettings({ routing }));
+        setSuccessMsg('✅ 路由配置已保存');
+        setTimeout(() => setSuccessMsg(''), 3000);
+      }
       setEditedRoutes({}); setDirty(false);
     } catch (e: any) { showAlert('保存失败: ' + (e.message || '')); }
     setRouteSaving(false);
@@ -543,6 +607,7 @@ export function SettingsView() {
             <div className="sv-route-actions" style={{ marginTop: 4 }}>
               <button className="btn btn-sm btn-primary" onClick={saveRoutes} disabled={routeSaving}>{routeSaving ? '保存中…' : '💾 保存路由配置'}</button>
               <button className="btn btn-sm btn-ghost" onClick={resetRoutes}>重置</button>
+              {successMsg && <span style={{ color: '#3fb950', fontSize: 13, marginLeft: 12 }}>{successMsg}</span>}
             </div>
           </div>
         )}
@@ -876,8 +941,30 @@ export function SettingsView() {
       <div className={`modal-overlay${provModal ? ' show' : ''}`} onClick={() => !provSaving && setProvModal(false)}>
         <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
           <div className="modal-title">{editProv ? '✏️ 编辑 Provider' : '➕ 添加 Provider'} <button className="modal-close" onClick={() => !provSaving && setProvModal(false)}>✕</button></div>
-          <div className="form-group"><label className="form-label">名称</label><input className="form-input" value={provForm.name} onChange={e => setProvForm(f => ({ ...f, name: e.target.value }))} placeholder="DeepSeek" autoFocus /></div>
-          <div className="form-group"><label className="form-label">Base URL</label><input className="form-input" value={provForm.base_url} onChange={e => setProvForm(f => ({ ...f, base_url: e.target.value }))} placeholder="https://api.deepseek.com" /></div>
+          {editProv ? (
+            <>
+              <div className="form-group"><label className="form-label">名称</label><input className="form-input" value={provForm.name} onChange={e => setProvForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
+              <div className="form-group"><label className="form-label">Base URL</label><input className="form-input" value={provForm.base_url} onChange={e => setProvForm(f => ({ ...f, base_url: e.target.value }))} /></div>
+            </>
+          ) : (
+            <>
+              <div className="form-group"><label className="form-label">从目录选择</label>
+                <div className="sv-catalog-select-wrap">
+                  <select className="sv-select sv-catalog-select" value={selCatalogProvId} onChange={e => handleCatalogProvSelect(e.target.value)}>
+                    <option value="">-- 选择 Provider --</option>
+                    {catalogLoading ? <option disabled>加载中…</option> : catalog.map(cp => (
+                      <option key={cp.id} value={cp.id}>{cp.display_name}</option>
+                    ))}
+                  </select>
+                  {catalog.length > 0 && !catalogLoading && (
+                    <button className="btn btn-xs btn-ghost sv-catalog-refresh" onClick={async () => { try { setCatalog((await refreshCatalog()).catalog); } catch {} }} title="刷新目录">🔄</button>
+                  )}
+                </div>
+              </div>
+              <div className="form-group"><label className="form-label">名称</label><input className="form-input sv-catalog-filled" value={provForm.name} onChange={e => setProvForm(f => ({ ...f, name: e.target.value }))} placeholder={selCatalogProvId ? '已从目录填充，可手动修改' : '手动输入名称'} /></div>
+              <div className="form-group"><label className="form-label">Base URL</label><input className="form-input sv-catalog-filled" value={provForm.base_url} onChange={e => setProvForm(f => ({ ...f, base_url: e.target.value }))} placeholder={selCatalogProvId ? '已从目录填充，可手动修改' : '手动输入 URL'} /></div>
+            </>
+          )}
           <div className="form-group"><label className="form-label">API Key</label><input className="form-input" value={provForm.api_key} onChange={e => setProvForm(f => ({ ...f, api_key: e.target.value }))} placeholder="sk-..." type="password" /></div>
           <div className="form-group"><label className="form-label">类型</label><select className="sv-select" value={provForm.provider_type} onChange={e => setProvForm(f => ({ ...f, provider_type: e.target.value }))}><option value="openai-compatible">☁️ 云端 (OpenAI 兼容)</option><option value="local">💻 本地 (llama-server)</option></select></div>
           <div className="modal-actions"><button className="btn" onClick={() => setProvModal(false)} disabled={provSaving}>取消</button><button className="btn btn-primary" onClick={saveProv} disabled={provSaving || !provForm.name.trim() || !provForm.base_url.trim()}>{provSaving ? '保存中…' : '保存'}</button></div>
@@ -889,8 +976,28 @@ export function SettingsView() {
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
           <div className="modal-title">{editModel.m ? '✏️ 编辑模型' : '➕ 添加模型'} <button className="modal-close" onClick={() => !modelSaving && setModelModal(false)}>✕</button></div>
           <div className="sv-modal-grid">
-            <div className="form-group"><label className="form-label">模型名称</label><input className="form-input" value={modelForm.name} onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))} placeholder="deepseek-v4-flash" /></div>
-            <div className="form-group"><label className="form-label">显示名称</label><input className="form-input" value={modelForm.display_name} onChange={e => setModelForm(f => ({ ...f, display_name: e.target.value }))} placeholder="DeepSeek v4 Flash" /></div>
+            {editModel.m ? (
+              <>
+                <div className="form-group"><label className="form-label">模型名称</label><input className="form-input" value={modelForm.name} onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))} /></div>
+                <div className="form-group"><label className="form-label">显示名称</label><input className="form-input" value={modelForm.display_name} onChange={e => setModelForm(f => ({ ...f, display_name: e.target.value }))} /></div>
+              </>
+            ) : (
+              <>
+                <div className="form-group"><label className="form-label">从目录选择</label>
+                  <select className="sv-select" value={modelForm.name ? modelForm.name : ''}
+                    onChange={e => handleCatalogModelSelect(e.target.value)}>
+                    <option value="">-- 选择模型 --</option>
+                    {catalogLoading ? <option disabled>加载中…</option> : (
+                      (catalog.find(c => c.id === editModel.pid)?.models || []).map(cm => (
+                        <option key={cm.name} value={cm.name}>{cm.display_name}</option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                <div className="form-group"><label className="form-label">模型名称</label><input className="form-input sv-catalog-filled" value={modelForm.name} onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))} placeholder="从目录选择后自动填充" /></div>
+                <div className="form-group"><label className="form-label">显示名称</label><input className="form-input sv-catalog-filled" value={modelForm.display_name} onChange={e => setModelForm(f => ({ ...f, display_name: e.target.value }))} placeholder="从目录选择后自动填充" /></div>
+              </>
+            )}
             <div className="form-group"><label className="form-label">Temperature</label><input className="form-input" type="number" step="0.05" min="0" max="2" value={modelForm.temperature} onChange={e => setModelForm(f => ({ ...f, temperature: parseFloat(e.target.value) || 0 }))} /></div>
             <div className="form-group"><label className="form-label">Max Tokens</label><input className="form-input" type="number" step="128" min="128" max="131072" value={modelForm.max_tokens} onChange={e => setModelForm(f => ({ ...f, max_tokens: parseInt(e.target.value) || 4096 }))} /></div>
             <div className="form-group"><label className="form-label">Context Length</label><input className="form-input" type="number" step="1024" min="1024" max="2097152" value={modelForm.context_length} onChange={e => setModelForm(f => ({ ...f, context_length: parseInt(e.target.value) || 32768 }))} /></div>

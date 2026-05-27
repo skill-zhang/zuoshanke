@@ -9,8 +9,24 @@ from database import get_db
 from models import AiProvider, AiModel
 from utils import make_id, utcnow
 from secret_redact import _mask_secret
+from provider_catalog import get_catalog as get_provider_catalog, invalidate_cache as invalidate_catalog_cache
 
 router = APIRouter(prefix="/api/providers", tags=["AI Provider"])
+
+
+# ─── Provider 目录（从 providers.md 读取） ───
+
+@router.get("/catalog")
+def list_catalog():
+    """获取已知 Provider/Model 目录（供前端下拉列表使用）"""
+    return {"catalog": get_provider_catalog()}
+
+
+@router.post("/catalog/refresh")
+def refresh_catalog():
+    """强制刷新目录缓存（每次更新 providers.md 后调用）"""
+    invalidate_catalog_cache()
+    return {"catalog": get_provider_catalog(force_refresh=True)}
 
 
 # ─── Schemas ───

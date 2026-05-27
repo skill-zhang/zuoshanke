@@ -8,5 +8,6 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8000',
     },
+    allowedHosts: true, // 允许 Cloudflare Tunnel 等任意域名访问
   },
 })

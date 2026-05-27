@@ -982,6 +982,32 @@ export interface AiModelData {
   sort_order: number;
 }
 
+// ─── Provider 目录（从 providers.md 读取） ───
+export interface CatalogModel {
+  name: string;
+  display_name: string;
+  temperature: number;
+  max_tokens: number;
+  context_length: number;
+  repeat_penalty: number;
+  vision: boolean;
+  function_calling: boolean;
+}
+
+export interface CatalogProvider {
+  id: string;
+  display_name: string;
+  base_url: string;
+  provider_type: string;
+  models: CatalogModel[];
+}
+
+export const listCatalog = () =>
+  request<{ catalog: CatalogProvider[] }>('/providers/catalog');
+
+export const refreshCatalog = () =>
+  request<{ catalog: CatalogProvider[] }>('/providers/catalog/refresh', { method: 'POST' });
+
 export const listProviders = () =>
   request<{ providers: AiProviderData[] }>('/providers');
 

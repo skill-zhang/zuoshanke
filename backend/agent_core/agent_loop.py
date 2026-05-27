@@ -749,9 +749,6 @@ def run_agent_loop(
                     result.get("result") or result.get("error", ""),
                     ensure_ascii=False,
                 )
-                # 截断过长结果
-                if len(tool_result_content) > 5000:
-                    tool_result_content = tool_result_content[:5000] + "\n...(结果过长已截断)"
 
                 messages.append({
                     "role": "tool",

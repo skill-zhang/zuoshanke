@@ -63,14 +63,13 @@ def _ensure_path():
         sys.path.insert(0, TOOLS_DIR)
 
 
-def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None, max_result_len: int = 3000) -> dict:
+def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None) -> dict:
     """执行指定工具
 
     Args:
         name: 工具名（与 registry 中的 name 一致）
         params: 参数 dict
         extra_kwargs: 额外关键字参数（用于注入回调等，如 clarify callback）
-        max_result_len: 结果最大截断长度（防 context 撑爆）
 
     Returns:
         {"success": bool, "result": any, "error": str | None}
@@ -115,8 +114,6 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None, max_
             result = func(**params, **extra_kwargs)
         else:
             result = func(**params)
-        # 截断超大结果（安全截断，不破坏 JSON）
-        result = _safe_truncate_result(result, max_result_len)
         return {"success": True, "result": result, "error": None}
     except Exception as e:
         return {"success": False, "result": None, "error": str(e)}
@@ -124,34 +121,7 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None, max_
 
 def _safe_truncate_result(result, max_len: int):
     """安全截断工具结果：对 dict/list 做深度截断，避免 JSON 解析错误"""
-    result_str = json.dumps(result, ensure_ascii=False)
-    if len(result_str) <= max_len:
-        return result
-
-    if isinstance(result, dict):
-        # 截断长文本字段
-        truncated = {}
-        for k, v in result.items():
-            if isinstance(v, str) and len(v) > 200:
-                truncated[k] = v[:200] + "..."
-            elif isinstance(v, list) and len(v) > 8:
-                truncated[k] = v[:8] + ["..."]
-            else:
-                truncated[k] = v
-        # 如果截断后还是太长，只保留关键字段
-        result_str2 = json.dumps(truncated, ensure_ascii=False)
-        if len(result_str2) > max_len:
-            # 关键字段优先
-            key_fields = ["city", "category", "label", "desc", "temp", "total",
-                          "items", "must_have", "recommended"]
-            minimal = {k: truncated[k] for k in key_fields if k in truncated}
-            return minimal
-        return truncated
-    elif isinstance(result, list):
-        return result[:5] + ["..."]
-    else:
-        # 兜底：返回摘要
-        return {"summary": result_str[:max_len]}
+    return result
 
 
 # ═══════════════════════════════════════════

@@ -153,8 +153,6 @@ def _run_loop_blocking(
                     result.get("result") or result.get("error", ""),
                     ensure_ascii=False,
                 )
-                if len(tool_result_content) > 5000:
-                    tool_result_content = tool_result_content[:5000] + "\n...(结果过长已截断)"
 
                 messages.append({
                     "role": "tool",

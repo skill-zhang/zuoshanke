@@ -3,7 +3,7 @@
 code_runner.py — 多语言代码执行工具
 
 纯 Python 标准库实现，支持 Python、Shell、JavaScript 执行。
-安全措施：命令黑名单、输出截断、超时控制。
+安全措施：命令黑名单、超时控制。
 
 Usage:
     from code_runner import run_code, run_file
@@ -25,8 +25,6 @@ import signal
 # 常量
 # ---------------------------------------------------------------------------
 
-STDOUT_MAX_BYTES = 10 * 1024  # 10 KB 截断
-STDERR_MAX_BYTES = 10 * 1024
 
 DEFAULT_TIMEOUT = 30  # seconds (used by run_code)
 FILE_TIMEOUT = 60     # seconds (used by run_file)
@@ -72,17 +70,6 @@ _NODE_PATH = os.environ.get(
 # ---------------------------------------------------------------------------
 # 工具函数
 # ---------------------------------------------------------------------------
-
-def _truncate(text: str, max_bytes: int) -> str:
-    """截断文本到 max_bytes 字节，超出时添加提示。"""
-    if not text:
-        return ""
-    encoded = text.encode("utf-8", errors="replace")
-    if len(encoded) <= max_bytes:
-        return text
-    truncated = encoded[:max_bytes].decode("utf-8", errors="replace")
-    return truncated + f"\n\n... [输出截断: 超过 {max_bytes} 字节]"
-
 
 def _is_dangerous(code: str) -> tuple[bool, str]:
     """检查代码是否包含危险命令。返回 (危险?, 匹配到的模式)。"""
@@ -174,12 +161,8 @@ def _run_cmd(
         result["timed_out"] = True
         result["error"] = f"执行超时（{timeout}秒）"
 
-    result["stdout"] = _truncate(
-        stdout_bytes.decode("utf-8", errors="replace"), STDOUT_MAX_BYTES
-    )
-    result["stderr"] = _truncate(
-        stderr_bytes.decode("utf-8", errors="replace"), STDERR_MAX_BYTES
-    )
+    result["stdout"] = stdout_bytes.decode("utf-8", errors="replace")
+    result["stderr"] = stderr_bytes.decode("utf-8", errors="replace")
     result["exit_code"] = proc.returncode
     result["success"] = proc.returncode == 0
 
