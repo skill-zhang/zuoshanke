@@ -135,6 +135,9 @@ class MemoryCreate(BaseModel):
     base_weight: int = Field(default=2, ge=1, le=10)
     source: str = Field(default="user", description="auto | llm | user")
     is_narrative: bool = Field(default=False, description="🆕 v2 叙事型关系记忆（历程/决策/迭代故事）")
+    # 🆕 scope 支持
+    scope: str = Field(default="zhu", description="zhu | scene | channel")
+    context_id: Optional[str] = Field(default=None, description="场景或频道 UUID")
 
 
 class MemoryUpdate(BaseModel):
@@ -206,6 +209,8 @@ def create_memory(body: MemoryCreate, db: Session = Depends(get_db)):
         base_weight=body.base_weight,
         source=body.source,
         is_narrative=body.is_narrative,
+        scope=body.scope,
+        context_id=body.context_id,
     )
     return {"success": True, "data": {"id": mem.id, "key": mem.key}}
 
