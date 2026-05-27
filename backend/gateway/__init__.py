@@ -15,5 +15,6 @@
 from .adapters.base import BasePlatformAdapter, RETRY_DELAY_SECONDS, BACKOFF_DELAY_SECONDS, MAX_CONSECUTIVE_FAILURES
 from .adapters.config import get_enabled_platforms, check_platform_ready
 from .run import AdapterManager, main
+from utils import get_version
 
-__version__ = "0.2.0"
+__version__ = get_version()

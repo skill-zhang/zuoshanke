@@ -1,6 +1,20 @@
 """通用工具函数"""
+import os
 import uuid
 from datetime import datetime, timezone
+
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def get_version() -> str:
+    """从项目根目录 VERSION 文件读取版本号，无文件时返回 unknown"""
+    path = os.path.join(_PROJECT_ROOT, "VERSION")
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "unknown"
 
 
 def make_id(prefix: str = "") -> str:

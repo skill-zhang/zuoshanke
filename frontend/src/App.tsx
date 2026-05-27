@@ -68,6 +68,15 @@ export default function App() {
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // 从 /api/health 获取版本号
+  const [version, setVersion] = useState('...');
+  useEffect(() => {
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(d => setVersion(d.version || '?'))
+      .catch(() => setVersion('offline'));
+  }, []);
+
   // ═══ 角色动画联动 — AI原生自洽（稳定选择器防 getSnapshot 警告） ═══
   const agentStatus = useStore(selectAgentStatus);
   const agentMessage = useStore(selectAgentMessage);
@@ -334,7 +343,7 @@ export default function App() {
       </div>
 
       <div className="statusbar">
-        <span className="dot green" /> 坐山客 v0.2
+        <span className="dot green" /> 坐山客 v{version}
         <span>|</span> API: http://localhost:9001
       </div>
 

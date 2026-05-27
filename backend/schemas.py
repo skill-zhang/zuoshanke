@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_serializer, field_validator
-from utils import iso_utc
+from utils import get_version, iso_utc
 
 
 # ═══ 项目 ═══
@@ -87,7 +87,7 @@ class ScenePublishRequest(BaseModel):
 
 class SceneExportOut(BaseModel):
     """场景导入导出格式（JSON）"""
-    schema_version: str = "1.0"
+    schema_version: str = Field(default_factory=get_version)
     name: str
     icon: Optional[str] = None
     description: str = ""

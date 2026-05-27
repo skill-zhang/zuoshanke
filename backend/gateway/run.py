@@ -45,6 +45,7 @@ from gateway.adapters.config import (
     get_enabled_platforms,
     BUILTIN_PLATFORMS,
 )
+from utils import get_version
 
 logger = logging.getLogger("gateway")
 
@@ -191,7 +192,7 @@ class AdapterManager:
 
 def print_banner() -> None:
     print("=" * 56)
-    print("  坐山客 Gateway v0.2")
+    print(f"  坐山客 Gateway v{get_version()}")
     print("  多平台消息网关 (20+ 平台)")
     print("=" * 56)
     print()
