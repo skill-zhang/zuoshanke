@@ -100,6 +100,11 @@ class CachedMemory:
     is_immortal: bool
     priority_level: str
     cached_weight: float
+    # 🆕 v1.5
+    is_core: bool
+    compressed: Optional[str]
+    keywords: list
+    last_injected_at: Optional[datetime]
 
     @classmethod
     def from_orm(cls, mem: "AgentMemory") -> "CachedMemory":
@@ -129,6 +134,11 @@ class CachedMemory:
             is_immortal=mem.is_immortal,
             priority_level=mem.priority_level,
             cached_weight=w,
+            # 🆕 v1.5
+            is_core=mem.is_core or False,
+            compressed=mem.compressed,
+            keywords=mem.keywords or [],
+            last_injected_at=mem.last_injected_at,
         )
 
     def to_dict(self) -> dict:
@@ -147,6 +157,11 @@ class CachedMemory:
             "explicit_boost": self.explicit_boost,
             "times_accessed": self.times_accessed,
             "weight": round(self.cached_weight, 2),
+            # 🆕 v1.5
+            "is_core": self.is_core,
+            "compressed": self.compressed,
+            "keywords": self.keywords,
+            "last_injected_at": self.last_injected_at.isoformat() if self.last_injected_at else None,
         }
 
 

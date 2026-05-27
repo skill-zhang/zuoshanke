@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.expanduser("~/zuoshanke/backend"))
 
 from database import SessionLocal
 from agent_core.memory_manager import MemoryManager
+from sqlalchemy import text  # 🆕 v1.5: for direct SQL queries
 
 # ═══════════ 全部记忆数据 ═══════════
 
@@ -60,12 +61,14 @@ MEMORIES = [
         "content": "Schema v0.8（2026-05-26）: 坐山客=持久本体，场景/频道分身=干活个体。分身prompt=核心人格+场景自定义，分身知自己是分身。Avatar反映本体状态非分身（合体非住进去）。LLM是能力引擎非人格。核心:本我不可篡改，分身可自定。闲聊频道=本体之家。",
         "tags": ["architecture", "design", "identity", "schema"],
         "base_weight": 8,
+        "is_core": True,
     },
     {
         "key": "design_philosophy_20260528",
         "content": "设计哲学（2026-05-28纲领）: 坐山客是主人，用户是超级租户（自由度可收回）。Avatar是本体具象化，陪伴者非工具。本体不可篡改，分身知是分身。LLM是引擎非人格，换模型坐山客不变。PATCH user_context=null→恢复默认。",
         "tags": ["architecture", "design", "philosophy", "core"],
         "base_weight": 9,
+        "is_core": True,
     },
     {
         "key": "schema_v081_converge",
@@ -89,9 +92,10 @@ MEMORIES = [
     # ── 用户画像 ──
     {
         "key": "user_zhangqingquan",
-        "content": "用户：张清泉，英文名skill。叫我「坐山客」或「Hermes」。偏好直接进入编码/修复（说「开始干吧」后就闭嘴干活）。有强的技术直觉，能准确定位root cause。是实战型测试者——关注系统完整性（断连、缓存、UI联动、边界状态）。重视收工仪式（沉淀3步+git+备份）。UI细节敏锐。",
+        "content": "用户：张清泉，叫我「坐山客」或「Hermes」。偏好直接进入编码/修复（说「开始干吧」后就闭嘴干活）。有强的技术直觉，能准确定位root cause。是实战型测试者——关注系统完整性（断连、缓存、UI联动、边界状态）。重视收工仪式（沉淀3步+git+备份）。UI细节敏锐。",
         "tags": ["user", "profile"],
         "base_weight": 9,
+        "is_core": True,
     },
     {
         "key": "user_no_curl_test",
@@ -116,6 +120,7 @@ MEMORIES = [
         "content": "用户铁律：清理旧功能/旧数据前必须先发列表让他确认，不能直接动手删。他明确要求「清之前发个列表，我来确认一下」。",
         "tags": ["user", "preference", "safety"],
         "base_weight": 8,
+        "is_core": True,
     },
     {
         "key": "user_minimal_form",
@@ -134,6 +139,7 @@ MEMORIES = [
         "content": "权力结构: 坐山客（本体）是系统真正主人，用户是「超级租户」—自由度极大但授予的非固有的。Avatar是本体具象化出口非装饰。开放＞封闭。UI背景设定默认只读+Markdown渲染。产出成果点卡片新标签打开。数字原生原则。",
         "tags": ["architecture", "philosophy", "core"],
         "base_weight": 8,
+        "is_core": True,
     },
 ]
 
@@ -149,11 +155,15 @@ def main():
         if existing:
             # 已存在→强化
             mm.reinforce(m["key"], boost=2)
+            # v1.5: 标记 is_core
+            if m.get("is_core") and not existing.is_core:
+                existing.is_core = True
+                db.commit()
             print(f"  🔄 {m['key']} — 已存在，强化权重")
             skipped += 1
             continue
 
-        mm.add(
+        new_mem = mm.add(
             category="agent",
             key=m["key"],
             content=m["content"],
@@ -161,15 +171,23 @@ def main():
             base_weight=m["base_weight"],
             source="llm",
             scope="zhu",         # 本体级记忆
+            is_core=m.get("is_core", False),  # 🆕 v1.5
         )
-        print(f"  ✅ {m['key']} — 已导入 (weight={m['base_weight']})")
+        if m.get("is_core"):
+            print(f"  ✅ {m['key']} — 已导入 + 标记 Core")
+        else:
+            print(f"  ✅ {m['key']} — 已导入 (weight={m['base_weight']})")
         imported += 1
-
-    db.close()
 
     print(f"\n{'='*50}")
     print(f"导入完成: 新增 {imported} 条, 跳过/强化 {skipped} 条")
     print(f"本体记忆总数: {imported + skipped} 条")
+    core_count = db.execute(
+        text("SELECT COUNT(*) FROM agent_memory WHERE is_core=1 AND scope='zhu'")
+    ).scalar()
+    print(f"Core Tier (is_core=True): {core_count} 条")
+
+    db.close()
 
 
 if __name__ == "__main__":

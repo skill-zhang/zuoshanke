@@ -101,6 +101,69 @@ class MemoryManager:
             return "P2"
         return "P3"
 
+    # ── 🆕 v1.5: 关键词自动提取 ─────────────────────
+
+    @staticmethod
+    def extract_keywords(text: str, max_count: int = 10) -> list[str]:
+        """从记忆文本提取关键词，用于话题匹配。
+
+        不需要 NLP 库——用 bigram 词频 + 停用词过滤。
+        中文分字取双字组合，英文保留完整单词。
+
+        Args:
+            text: 记忆内容文本
+            max_count: 最大返回关键词数
+
+        Returns:
+            关键词列表（按频率降序）
+        """
+        import re
+        from collections import Counter
+
+        if not text:
+            return []
+
+        # 中文双字组合
+        chars = re.findall(r'[\u4e00-\u9fff]', text)
+        bigrams = [chars[i] + chars[i+1] for i in range(len(chars)-1)]
+
+        # 英文/数字单词（小写）
+        words = re.findall(r'[a-zA-Z]\w+', text.lower())
+
+        # 数字（纯数字）
+        numbers = [n for n in re.findall(r'\d+', text) if n.isdigit()]
+
+        counter = Counter(bigrams + words + numbers)
+
+        # 停用词
+        stopwords = {
+            '的', '了', '是', '在', '有', '和', '也', '就', '不', '人',
+            '都', '一', '个', '上', '很', '到', '说', '要', '去', '你',
+            '我', '他', '这', '那', '它', '她', '为', '与', '中', '让',
+            '着', '过', '吧', '吗', '啊', '呢', '哦', '哈', '嗯', '哇',
+            '被', '把', '对', '从', '以', '而', '但', '所', '如', '可',
+            '会', '能', '该', '等', '之', '其', '将', '或', '已', '没',
+            '还', '多', '么', '出', '时', '后', '前', '先', '再', '做',
+            'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+            'not', 'but', 'for', 'with', 'that', 'this', 'it', 'its',
+            'and', 'or', 'in', 'on', 'of', 'to', 'at', 'by', 'as',
+            'do', 'does', 'did', 'has', 'have', 'had', 'can', 'will',
+            'would', 'should', 'could', 'may', 'might', 'shall',
+        }
+
+        # 单字/单字母停用
+        result = []
+        for w, c in counter.most_common(max_count * 2):
+            if len(w) < 2:
+                continue
+            if w in stopwords:
+                continue
+            result.append(w)
+            if len(result) >= max_count:
+                break
+
+        return result
+
     # ── CRUD ──────────────────────────────────────
 
     def add(self, category: str, key: str, content: str,
@@ -111,6 +174,7 @@ class MemoryManager:
             scope: str = "zhu",
             context_id: Optional[str] = None,
             is_narrative: bool = False,
+            is_core: bool = False,  # 🆕 v1.5: Core Tier 标记
             commit: bool = True,  # 🆕 控制是否立即提交，批量操作时传 False
             ) -> AgentMemory:
         """新建记忆
@@ -126,6 +190,7 @@ class MemoryManager:
             scope: zhu | scene | channel（2026-05-27: 记忆隔离）
             context_id: 场景/频道ID（scope=zhu 时传 None）
             is_narrative: 🆕 v2 标记为叙事型关系记忆
+            is_core: 🆕 v1.5 标记为 Core Tier（始终注入）
             commit: 🆕 False 时 caller 自行 db.commit()，配合批量操作
 
         Returns:
@@ -144,7 +209,10 @@ class MemoryManager:
             scope=scope,           # 🆕
             context_id=context_id, # 🆕
             is_narrative=is_narrative,  # 🆕 v2
+            is_core=is_core,            # 🆕 v1.5: Core Tier
             is_immortal=(scope == "zhu"),  # 🆕 v2: scope=zhu 自动不朽
+            # 🆕 v1.5: 自动提取关键词
+            keywords=self.extract_keywords(content),
         )
         # 初始等级推算
         w = self.calc_weight(mem)
@@ -309,6 +377,7 @@ class MemoryManager:
         2. 更新为 new_content
         3. explicit_boost += 2（修正即强化）
         4. 自动标记 is_immortal 如果 scope=zhu
+        5. 🆕 v1.5: 重新提取关键词
         """
         import json
         mem = self.get(key)
@@ -323,6 +392,8 @@ class MemoryManager:
         })
         mem.correction_trail = json.dumps(trail, ensure_ascii=False)
         mem.content = new_content
+        # 🆕 v1.5: 内容变了，重新提取关键词
+        mem.keywords = self.extract_keywords(new_content)
         mem.explicit_boost = (mem.explicit_boost or 0) + 2  # 修正即强化
         # 本体记忆自动不朽
         if mem.scope == "zhu" and not mem.is_immortal:
@@ -587,4 +658,9 @@ class MemoryManager:
             "correction_trail": json.loads(m.correction_trail or "[]"),  # 🆕 v2
             "last_accessed_at": m.last_accessed_at.isoformat() if m.last_accessed_at else None,
             "created_at": m.created_at.isoformat() if m.created_at else None,
+            # 🆕 v1.5: 三层选择注入
+            "is_core": m.is_core,
+            "compressed": m.compressed,
+            "keywords": m.keywords or [],
+            "last_injected_at": m.last_injected_at.isoformat() if m.last_injected_at else None,
         }
