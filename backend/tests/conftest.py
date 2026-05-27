@@ -58,7 +58,7 @@ def _db_cleanup():
         tables = ["messages", "think_nodes", "thinking_maps",
                    "web_sessions", "gateway_sessions",
                    "agent_memory", "cross_refs", "memory_contexts",
-                   "user_profiles", "pending_traits",
+                   "user_profiles", "pending_user_traits",
                    "output_refs", "cmd_templates",
                    "scene_self_map", "document_summaries",
                    "dialog_states"]
