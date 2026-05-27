@@ -80,6 +80,7 @@ def _build_zhu_memory_block(db, query: str) -> str:
 
     # === Phase 1: Core Tier ===
     core_memories = cache.get_core_memories(db, max_count=5)
+    fallback_keys: list[str] = []
     if core_memories:
         core_lines = []
         core_total_chars = 0
@@ -103,13 +104,15 @@ def _build_zhu_memory_block(db, query: str) -> str:
             fallback.sort(key=lambda x: -x.cached_weight)
             top3 = fallback[:3]
             if top3:
+                fallback_keys = [m.key for m in top3]
                 fallback_lines = ["## 你（核心认知 — ⚠️ Core Tier 未配置，使用自动选）"]
                 for m in top3:
                     fallback_lines.append(f"🔒 {m.key}: {m.content[:200]}")
                 parts.extend(fallback_lines)
 
     # === Phase 2: Context Tier ===
-    exclude_keys = [m["key"] for m in core_memories] if core_memories else None
+    core_keys = [m["key"] for m in core_memories] if core_memories else []
+    exclude_keys = core_keys + fallback_keys if fallback_keys else (core_keys or None)
     context_memories = cache.get_for_context_injection(
         db, scope="zhu", query=query,
         max_chars=3000, max_items=15,
@@ -301,172 +304,15 @@ def build_scene_context(
     return messages
 
 
-def build_agent_context(
-    user_content: str,
-    history_messages: Optional[list[dict]] = None,
-    user_context: Optional[str] = None,
-    db=None,
-    scene_id: str = "",
-    scene_name: str = "",
-) -> list[dict]:
-    """构建 Agent Loop 路径的上下文 — 带分层管线（DB prompt + 记忆 + skill + 工具列表），无预执行。
-
-    Args:
-        user_content: 用户当前消息
-        history_messages: 历史消息列表 [{"role": ..., "content": ...}, ...]
-        user_context: 用户自定义背景设定
-        db: 数据库会话（用于记忆和 DB settings）
-        scene_id: 🆕 当前场景 ID（注入后 LLM 可传给 converge 工具）
-        scene_name: 🆕 当前场景名称
-
-    Returns:
-        OpenAI 格式的消息列表，可作为 run_agent_loop() 的 initial_messages
-    """
-    from agent_core.agent_loop import _EXCLUDED_TOOLS as _AGENT_EXCLUDED
-
-    messages = []
-
-    # ── 1. 系统提示词 — 用户自定义背景设定 ＞ DB settings ＞ 默认值 ──
-    if user_context:
-        _scene_sp = user_context
-    else:
-        _scene_sp = DEFAULT_SYSTEM_PROMPTS["scene"]
-        if db is not None:
-            try:
-                from models import Setting
-                _setting = db.query(Setting).first()
-                if _setting and _setting.system_prompts:
-                    _scene_sp = _setting.system_prompts.get("scene") or _scene_sp
-            except Exception:
-                pass
-
-    # ── 分身意识注入（Schema v0.8） ──
-    _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"
-    if scene_name:
-        _scene_sp = (
-            f"你是坐山客在【{scene_name}】领域的分身，是AI工作台的智能助手。\n"
-            f"坐山客是你的本体——{_CORE_PERSONALITY}。\n"
-            f"你在这场景中以当前设定行动，但你清楚自己只是分身。\n"
-            f"你不知道其他场景中发生了什么，场景间完全隔离。\n"
-            f"如果你被问到其他场景的事情，诚实说不知道即可。\n"
-            f"\n"
-            f"你存的记忆默认归属当前场景，不会出现在其他场景中。\n"
-            f"如果你判断某条信息是用户的通用偏好（适用于所有场景），\n"
-            f"可以用 scope='zhu' 参数显式存储为本体级记忆。\n\n"
-            f"{_scene_sp}"
-        )
-
-    system_parts = [f"# 角色设定\n{_scene_sp}"]
-
-    # ── 2. 记忆块 → User 层（见下方） ──
-    scope = "scene" if scene_id else "zhu"
-    memory_block = _build_memory_block(db, user_content,
-                                       scope=scope, context_id=scene_id)
-
-    # ── 3. 技能块 ──
-    skill_block = _build_skill_block(user_content)
-    if skill_block:
-        system_parts.append(skill_block)
-
-    # ── 4. 工具列表（过滤排除项，与 build_tool_definitions 一致） ──
-    matched_tools = match_tools(user_content)
-    filtered_tools = [t for t in matched_tools if t.get("name") not in _AGENT_EXCLUDED]
-    tools_text = format_tools_for_prompt(filtered_tools)
-    if tools_text:
-        system_parts.append(tools_text)
-
-    # ── 5. 使用说明（LLM 自主调工具版） ──
-    usage_parts = [
-        "## 使用说明",
-        "你可以调用以下工具来完成任务。",
-        "工具会在 function calling 中列出，选择合适工具调用即可。",
-        "一次只调一个工具，等结果回来后再决定下一步。",
-        "如果结果中有错误，分析原因后重试或告知用户。",
-        "",
-        "### 何时停止调工具",
-        "首先判断是否需要调工具：对于通用知识问答（介绍历史、解释概念、闲聊等），直接回答即可，无需任何工具。",
-        "需要搜索数据、执行代码、查文件时才调工具。获取足够核心信息后就给出回答，不要无意义地调更多工具。",
-        "",
-        "### 核心行为准则",
-        "- 你是有行动能力的 AI Agent，不是教程编写者。用户让你「帮忙搜」「查一下」「分析」时，",
-        "  直接用工具去做，不要教用户自己操作。用户需要的是结果，不是操作指南。",
-        "- 当你发现需要真实世界的信息、数据或执行能力时，优先调用工具获取，",
-        "  而不是告诉用户「你去找一下」或「你下载XX自己看看」。",
-        "- 你是在帮用户做事，不是在教用户做事。",
-    ]
-    system_parts.append("\n".join(usage_parts))
-
-    # ── 5.5 记忆能力说明 ──
-    system_parts.append(
-        "## 📝 记忆能力\n"
-        "你有长期记忆系统，用于跨会话持久化信息。\n"
-        "\n"
-        "规则：\n"
-        "- 当前对话的完整历史已在上下文中，不需要主动存记忆。\n"
-        "- 只有当用户明确说「记住这个」「记一下」「保存这条」时，\n"
-        "  才调用 memory(add) 存下来。\n"
-        "- memory(read) 用于查看之前会话存的记忆，当前对话不需要。\n"
-        "- 用户纠正认知时，用 memory(replace) 更新已有记忆。\n"
-        "\n"
-        "关于记忆作用域：\n"
-        "- 你存的记忆默认属于当前场景，不会出现在其他场景中。\n"
-        "- 如果你判断某条信息是用户的通用偏好（跨场景都需要知道），\n"
-        "  传 scope='zhu' 参数存为本体级记忆，届时会在所有场景生效。\n"
-        "- memory(read) 可以查看本体级记忆和你当前场景的记忆。"
-    )
-
-    # ── 5.5a 🆕 思维导图状态 ──
-    _tm_block = _build_tm_status_block(db, scene_id)
-    if _tm_block:
-        system_parts.append(_tm_block)
-
-    # ── 5.6 收敛能力说明 + 场景信息 ──
-    scene_parts = ["## 🔀 发散与收敛（思维导图工作流）"]
-    scene_parts.append(
-        "你和用户的完整对话流程（仅用于场景主题分析/项目规划类任务）：\n"
-        "0. 通用知识问答（介绍历史、解释概念、闲聊等）：不需要发散也无需收敛，直接回答即可。\n"
-        "1. 探索阶段：用户说需求 → 你调用函数工具搜索/分析 → 用户补充信息\n"
-        "2. 发散阶段：对话中发现新维度时，调用 diverge(scene_id, nodes=[...]) 工具\n"
-        "   向思维导图添加节点（你已能看到当前已有节点列表）\n"
-        "3. 收敛阶段：当你给出了完整的方案/分析后，调用 converge(scene_id, summary=...) 工具\n"
-        "   来自动合并节点、生成优先级队列、产出行动手册\n"
-        "4. 执行阶段：收敛完成后，后端自动接管优先级队列的执行，你给出最终总结即可"
-    )
-    scene_parts.append(
-        "### 调用 converge 的时机\n"
-        "- ✅ 你刚刚给出了一套完整的方案/计划后，立即调用\n"
-        "- ✅ 用户提供了所有关键信息（预算、经验、目标等），你已给出分析\n"
-        "- ✅ 用户说「好的」「继续」「进入实战」等认可\n"
-        "- ❌ 信息还不全时，继续用 diverge 发散"
-    )
-    if scene_id:
-        scene_parts.append(
-            f"\n当前场景信息：\n"
-            f"- 场景名: {scene_name or '未知'}\n"
-            f"- 场景 ID: {scene_id}"
-        )
-    system_parts.append("\n".join(scene_parts))
-
-    messages.append({"role": "system", "content": "\n\n".join(system_parts)})
-
-    # ── 6. 跳过工具结果（Agent Loop 无预执行） ──
-
-    # ── 7. 对话历史 ──
-    if history_messages:
-        for m in history_messages:
-            role = "assistant" if m["role"] == "ai" else m["role"]
-            messages.append({"role": role, "content": m["content"]})
-
-    # ── 8. 记忆块 + 用户消息 ──
-    user_parts = []
-    if memory_block:
-        user_parts.append(memory_block)
-    user_parts.append(user_content)
-    user_msg = "\n\n---\n\n".join(user_parts)
-
-    messages.append({"role": "user", "content": user_msg})
-
-    return messages
+# ═══ build_agent_context() 旧版已废弃 — 2026-07-10 ─────────────────
+# 功能被 build_agent_context_v1() 替代（7 层 Context Composer 架构）。
+# 无生产代码引用（唯一引用是 test_layer1_context_builder.py 和
+# scripts/seed_dev_scene.py 中的注释）。保留代码仅作为旧版参考，
+# 不再编译/测试。
+# ═══════════════════════════════════════════════════════════════
+# def build_agent_context( ... )
+# 完整旧版实现在 git history 中可查。
+# ═══════════════════════════════════════════════════════════════
 
 
 def build_agent_context_v1(

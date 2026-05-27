@@ -319,7 +319,7 @@ class MemoryCache:
         bucket = self._by_scope.get("zhu:")
         if bucket:
             core = [m for m in bucket.memories if m.is_core]
-            core.sort(key=lambda x: -x.cached_weight)
+            core.sort(key=lambda x: -x.base_weight)
             return [m.to_dict() for m in core[:max_count]]
 
         # 缓存未加载时 fallback
