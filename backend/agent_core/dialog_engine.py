@@ -63,7 +63,7 @@ PHASE_NEXT = {
 }
 
 # ── 阶段转移信号（LLM 回复中包含 [PHASE:xxx] 标记） ──
-PHASE_TRANSITION_RE = re.compile(r'\[PHASE:\s*(\w+)\s*\]')
+PHASE_TRANSITION_RE = re.compile(r'\[PHASE:\s*(\w+)\s*\]', re.IGNORECASE)
 
 
 class DialogEngine:
