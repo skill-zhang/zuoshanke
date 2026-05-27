@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>🚗 车源管理系统 V2 — 二手车全生命周期管理</title>
+<style>
+/* ═══════════ Reset & Variables ═══════════ */
+:root{--bg:#0f0f13;--surface:#1a1a23;--surface2:#24242f;--surface3:#2e2e3d;--primary:#7c5cfc;--primary-dim:#4a2fbc;--primary-glow:rgba(124,92,252,.3);--text:#e8e8f0;--text2:#9090a8;--danger:#ef5350;--success:#4caf7d;--warn:#ffb74d;--info:#4fc3f7;--radius:12px;--radius-sm:8px;--shadow:0 4px 24px rgba(0,0,0,.4);--font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:100px;overflow-x:hidden}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+
+/* ═══════════ Layout ═══════════ */
+.header{background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);padding:20px 24px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--surface3);backdrop-filter:blur(12px)}
+.header-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.header h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px}
+.header h1 span.grad{background:linear-gradient(135deg,var(--primary),var(--warn));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Stats Bar */
+.stats-bar{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.stat-card{background:var(--surface2);border-radius:var(--radius-sm);padding:10px 16px;min-width:90px;border:1px solid var(--surface3);flex:1}
+.stat-card .num{font-size:20px;font-weight:700;color:var(--primary)}
+.stat-card .num.green{color:var(--success)}
+.stat-card .num.orange{color:var(--warn)}
+.stat-card .num.red{color:var(--danger)}
+.stat-card .label{font-size:11px;color:var(--text2);margin-top:2px}
+
+/* Toolbar */
+.toolbar{display:flex;gap:10px;padding:16px 24px;flex-wrap:wrap;align-items:center}
+.search-wrap{flex:1;min-width:200px;position:relative}
+.search-wrap input{width:100%;padding:11px 16px 11px 38px;background:var(--surface2);border:1px solid var(--surface3);border-radius:var(--radius);color:var(--text);font-size:14px;outline:none;transition:border .2s}
+.search-wrap input:focus{border-color:var(--primary)}
+.search-wrap .sicon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text2);font-size:16px}
+.sort-group{display:flex;gap:6px}
+.sort-btn{padding:8px 14px;border-radius:var(--radius-sm);font-size:12px;border:1px solid var(--surface3);background:var(--surface2);color:var(--text2);cursor:pointer;transition:all .2s}
+.sort-btn.active{background:var(--primary-dim);color:var(--primary);border-color:var(--primary)}
+.sort-btn:hover{border-color:var(--primary-dim)}
+
+/* Buttons */
+.btn{padding:10px 20px;border:none;border-radius:var(--radius);font-size:13px;cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;font-weight:500}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.btn:active{transform:translateY(0)}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-dim));color:#fff}
+.btn-sm{padding:6px 12px;font-size:11px;border-radius:6px}
+.btn-outline{background:transparent;border:1px solid var(--surface3);color:var(--text)}
+.btn-outline:hover{background:var(--surface2);border-color:var(--text2)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-success{background:var(--success);color:#fff}
+.btn-info{background:var(--info);color:#000}
+.btn-warn{background:var(--warn);color:#000}
+
+/* Filter tags */
+.filter-group{display:flex;gap:8px;flex-wrap:wrap;padding:0 24px 12px}
+.filter-tag{padding:5px 14px;border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface2);color:var(--text2);border:1px solid transparent;transition:all .2s}
+.filter-tag.active{background:var(--primary-dim);color:var(--primary);border-color:var(--primary)}
+.filter-tag:hover{border-color:var(--primary-dim)}
+.filter-tag .cnt{opacity:.6;margin-left:4px}
+
+/* Price Range */
+.price-range-wrap{padding:0 24px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.price-range-wrap label{font-size:12px;color:var(--text2);white-space:nowrap}
+.price-range-wrap input[type=range]{width:140px;accent-color:var(--primary)}
+.price-range-wrap .val{font-size:12px;color:var(--text);background:var(--surface2);padding:2px 10px;border-radius:12px}
+
+/* ═══════════ Car Grid ═══════════ */
+.car-list{padding:0 24px;display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:640px){.car-list{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){.car-list{grid-template-columns:1fr 1fr 1fr}}
+@media(min-width:1400px){.car-list{grid-template-columns:1fr 1fr 1fr 1fr}}
+
+.car-card{background:var(--surface);border-radius:var(--radius);overflow:hidden;border:1px solid var(--surface3);transition:transform .2s,border-color .2s,box-shadow .2s;cursor:pointer;position:relative}
+.car-card:hover{transform:translateY(-3px);border-color:var(--primary-dim);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.car-card.selected{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-glow)}
+.car-card .img-wrap{width:100%;height:180px;overflow:hidden;background:var(--surface2);position:relative}
+.car-card .img-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .4s}
+.car-card:hover .img-wrap img{transform:scale(1.05)}
+.car-card .img-wrap .placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;color:var(--text2)}
+.car-card .status-badge{position:absolute;top:10px;right:10px;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:600;z-index:2;backdrop-filter:blur(4px)}
+.status-在售{background:rgba(76,175,125,.25);color:var(--success);border:1px solid rgba(76,175,125,.4)}
+.status-已售{background:rgba(239,83,80,.2);color:var(--danger);border:1px solid rgba(239,83,80,.4)}
+.status-预留{background:rgba(255,183,77,.2);color:var(--warn);border:1px solid rgba(255,183,77,.4)}
+.status-下架{background:rgba(144,144,168,.2);color:var(--text2);border:1px solid rgba(144,144,168,.4)}
+
+.car-card .body{padding:14px}
+.car-card .title{font-size:15px;font-weight:600;margin-bottom:4px}
+.car-card .title .brand{color:var(--primary)}
+.car-card .price-row{display:flex;align-items:baseline;justify-content:space-between;margin:6px 0 8px}
+.car-card .price{font-size:20px;font-weight:700;background:linear-gradient(135deg,var(--warn),#ff8a65);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.car-card .price.old{-webkit-text-fill-color:var(--text2);font-size:13px;text-decoration:line-through;font-weight:400}
+.car-card .profit{font-size:11px;color:var(--success);background:rgba(76,175,125,.15);padding:2px 8px;border-radius:10px;margin-left:8px}
+.car-card .profit.neg{color:var(--danger);background:rgba(239,83,80,.15)}
+.car-card .meta{font-size:12px;color:var(--text2);line-height:1.7;display:flex;flex-wrap:wrap;gap:6px}
+.car-card .meta .tag{background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:11px;border:1px solid var(--surface3)}
+.car-card .actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.car-card .actions .btn{flex:1}
+.car-card .select-chk{position:absolute;top:10px;left:10px;z-index:3;width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;color:transparent;font-size:12px;backdrop-filter:blur(4px)}
+.car-card.selected .select-chk{background:var(--primary);border-color:var(--primary);color:#fff}
+.car-card .owner-badge{font-size:10px;background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--text2)}
+
+/* ═══════════ Empty State ═══════════ */
+.empty-state{text-align:center;padding:80px 20px;color:var(--text2);grid-column:1/-1}
+.empty-state .icon{font-size:64px;margin-bottom:16px;opacity:.5}
+.empty-state h3{font-size:18px;margin-bottom:8px;color:var(--text)}
+
+/* ═══════════ Modal ═══════════ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:24px;border:1px solid var(--surface3);box-shadow:var(--shadow)}
+.modal h2{font-size:18px;margin-bottom:16px;background:linear-gradient(135deg,var(--primary),var(--warn));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.modal h3{font-size:14px;color:var(--text2);margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--surface3)}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--surface3);border-radius:6px;color:var(--text);font-size:13px;outline:none;transition:border .2s}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary)}
+.form-group textarea{resize:vertical;min-height:60px;font-family:var(--font)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--surface3)}
+
+/* ═══════════ Detail Modal ═══════════ */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.detail-item{padding:8px 12px;background:var(--surface2);border-radius:6px}
+.detail-item .dl{font-size:11px;color:var(--text2)}
+.detail-item .dv{font-size:13px;color:var(--text);margin-top:2px;font-weight:500}
+.detail-full{grid-column:1/-1}
+.detail-img{width:100%;max-height:300px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:12px}
+
+/* ═══════════ Toast ═══════════ */
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text);padding:12px 24px;border-radius:var(--radius-sm);font-size:13px;z-index:2000;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;border:1px solid var(--surface3);box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.success{border-color:var(--success);background:rgba(76,175,125,.15)}
+.toast.error{border-color:var(--danger);background:rgba(239,83,80,.15)}
+
+/* ═══════════ Compare Panel ═══════════ */
+.compare-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--surface3);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:500;transform:translateY(100%);transition:transform .3s;gap:12px}
+.compare-bar.show{transform:translateY(0)}
+.compare-bar .info{font-size:13px;color:var(--text2)}
+.compare-bar .info b{color:var(--text)}
+
+/* ═══════════ Stats Dashboard ═══════════ */
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:0 24px 12px}
+.dash-card{background:var(--surface2);border-radius:var(--radius-sm);padding:14px;border:1px solid var(--surface3);text-align:center}
+.dash-card .d-num{font-size:24px;font-weight:700}
+.dash-card .d-label{font-size:11px;color:var(--text2);margin-top:4px}
+
+/* ═══════════ Test Drive Log ═══════════ */
+.test-drive-item{padding:10px;background:var(--surface2);border-radius:6px;margin-bottom:6px;font-size:12px;border:1px solid var(--surface3)}
+.test-drive-item .td-date{color:var(--primary);font-weight:500}
+
+/* ═══════════ Responsive tweaks ═══════════ */
+@media(max-width:480px){
+  .header{padding:14px 16px}
+  .toolbar{padding:12px 16px}
+  .car-list{padding:0 16px;gap:12px}
+  .filter-group{padding:0 16px 8px}
+  .price-range-wrap{padding:0 16px 8px;flex-wrap:wrap}
+  .car-card .img-wrap{height:150px}
+  .form-row,.form-row-3{grid-template-columns:1fr}
+  .detail-grid{grid-template-columns:1fr}
+  .dashboard{grid-template-columns:1fr 1fr}
+  .stats-bar{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .stat-card{min-width:80px;flex:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════ Header ════════ -->
+<div class="header">
+  <div class="header-top">
+    <h1>🚗 <span class="grad">车源管理</span> V2</h1>
+    <div class="header-actions">
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 导出CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="showImport()">📤 导入</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleCompare()">⚖️ 对比</button>
+      <button class="btn btn-primary" onclick="openForm()">＋ 入库</button>
+    </div>
+  </div>
+  <div class="stats-bar" id="statsBar"></div>
+</div>
+
+<!-- ════════ Dashboard ════════ -->
+<div class="dashboard" id="dashboard"></div>
+
+<!-- ════════ Toolbar ════════ -->
+<div class="toolbar">
+  <div class="search-wrap">
+    <span class="sicon">🔍</span>
+    <input type="text" id="searchInput" placeholder="搜索品牌 / 型号 / VIN / 备注..." oninput="render()">
+  </div>
+  <div class="sort-group">
+    <button class="sort-btn active" data-sort="newest" onclick="setSort('newest')">最新</button>
+    <button class="sort-btn" data-sort="price" onclick="setSort('price')">价格↓</button>
+    <button class="sort-btn" data-sort="price_asc" onclick="setSort('price_asc')">价格↑</button>
+    <button class="sort-btn" data-sort="year" onclick="setSort('year')">年份↓</button>
+    <button class="sort-btn" data-sort="mileage" onclick="setSort('mileage')">里程↓</button>
+  </div>
+</div>
+
+<!-- ════════ Filter Tags ════════ -->
+<div class="filter-group" id="filterGroup"></div>
+
+<!-- ════════ Price Range ════════ -->
+<div class="price-range-wrap">
+  <label>💰 价格区间:</label>
+  <input type="range" id="priceMin" min="0" max="100" value="0" step="1" oninput="render()">
+  <span class="val" id="priceMinLabel">¥0万</span>
+  <span>—</span>
+  <input type="range" id="priceMax" min="0" max="100" value="100" step="1" oninput="render()">
+  <span class="val" id="priceMaxLabel">¥100万+</span>
+  <button class="btn btn-sm btn-outline" onclick="document.getElementById('priceMin').value=0;document.getElementById('priceMax').value=100;render()">重置</button>
+</div>
+
+<!-- ════════ Body Type Filter ════════ -->
+<div class="price-range-wrap" style="padding-top:0">
+  <label>🚙 车身:</label>
+  <select id="bodyFilter" onchange="render()" style="background:var(--surface2);border:1px solid var(--surface3);color:var(--text);padding:4px 10px;border-radius:6px;font-size:12px">
+    <option value="">全部</option>
+    <option>轿车</option>
+    <option>SUV</option>
+    <option>MPV</option>
+    <option>跑车</option>
+    <option>新能源</option>
+  </select>
+  <label style="margin-left:8px">🏷️ 标签:</label>
+  <select id="tagFilter" onchange="render()" style="background:var(--surface2);border:1px solid var(--surface3);color:var(--text);padding:4px 10px;border-radius:6px;font-size:12px">
+    <option value="">全部</option>
+    <option>精品车况</option>
+    <option>准新车</option>
+    <option>一手车</option>
+    <option>原版原漆</option>
+    <option>已整备</option>
+    <option>特价</option>
+  </select>
+</div>
+
+<!-- ════════ Car Grid ════════ -->
+<div class="car-list" id="carList"></div>
+
+<!-- ════════ Compare Bar ════════ -->
+<div class="compare-bar" id="compareBar">
+  <div class="info">已选 <b id="compareCount">0</b>/3 辆车</div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-sm btn-outline" onclick="clearCompare()">取消</button>
+    <button class="btn btn-sm btn-primary" onclick="showCompare()" id="compareBtn" disabled>对比</button>
+  </div>
+</div>
+
+<!-- ════════ Add/Edit Modal ════════ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="formTitle">🚗 新增车辆</h2>
+    <form id="carForm" onsubmit="saveCar(event)">
+      <input type="hidden" id="editId">
+      <div class="form-row">
+        <div class="form-group">
+          <label>品牌 *</label>
+          <input type="text" id="fBrand" required placeholder="如 宝马">
+        </div>
+        <div class="form-group">
+          <label>型号 *</label>
+          <input type="text" id="fModel" required placeholder="如 530Li">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>上牌日期</label>
+          <input type="date" id="fRegDate">
+        </div>
+        <div class="form-group">
+          <label>里程 (万km)</label>
+          <input type="number" id="fMileage" step="0.1" min="0" placeholder="6.5">
+        </div>
+        <div class="form-group">
+          <label>售价 (万元)</label>
+          <input type="number" id="fPrice" step="0.01" min="0" placeholder="32.8">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>收购价 (万元)</label>
+          <input type="number" id="fCost" step="0.01" min="0" placeholder="28.0">
+        </div>
+        <div class="form-group">
+          <label>整备费用 (万元)</label>
+          <input type="number" id="fPrep" step="0.01" min="0" value="0" placeholder="0.5">
+        </div>
+        <div class="form-group">
+          <label>车身类型</label>
+          <select id="fBody">
+            <option value="">请选择</option>
+            <option>轿车</option>
+            <option>SUV</option>
+            <option>MPV</option>
+            <option>跑车</option>
+            <option>新能源</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>颜色</label>
+          <input type="text" id="fColor" placeholder="白色">
+        </div>
+        <div class="form-group">
+          <label>燃油类型</label>
+          <select id="fFuel">
+            <option value="">请选择</option>
+            <option>汽油</option><option>柴油</option><option>电动</option><option>混动</option><option>增程</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>排量</label>
+          <select id="fDisp">
+            <option value="">请选择</option>
+            <option>1.0T</option><option>1.4T</option><option>1.5L</option><option>1.5T</option>
+            <option>2.0L</option><option>2.0T</option><option>2.5L</option><option>3.0T</option>
+            <option>4.0T</option><option>电动</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>变速箱</label>
+          <select id="fTrans">
+            <option value="">请选择</option>
+            <option>手动</option><option>自动</option><option>手自一体</option><option>CVT</option><option>双离合</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>驱动方式</label>
+          <select id="fDrive">
+            <option value="">请选择</option>
+            <option>前驱</option><option>后驱</option><option>四驱</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>座位数</label>
+          <select id="fSeats">
+            <option value="">请选择</option>
+            <option>2</option><option>4</option><option>5</option><option>6</option><option>7</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>VIN (车架号)</label>
+          <input type="text" id="fVin" placeholder="LFV...">
+        </div>
+        <div class="form-group">
+          <label>过户次数</label>
+          <select id="fOwners">
+            <option value="0">0次 (一手)</option>
+            <option value="1">1次</option>
+            <option value="2">2次</option>
+            <option value="3">3次+</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>排放标准</label>
+          <select id="fEmission">
+            <option value="">请选择</option>
+            <option>国三</option><option>国四</option><option>国五</option><option>国六</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>事故记录</label>
+          <select id="fAccident">
+            <option value="无事故">✅ 无事故</option>
+            <option value="有小刮擦">🔶 有小刮擦</option>
+            <option value="有事故修复">⚠️ 有事故修复</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="fStatus">
+            <option value="在售">在售</option>
+            <option value="已售">已售</option>
+            <option value="预留">预留</option>
+            <option value="下架">下架</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>图片URL</label>
+          <input type="url" id="fImage" placeholder="https://images.unsplash.com/photo-...?w=400">
+        </div>
+        <div class="form-group">
+          <label>标签 (逗号分隔)</label>
+          <input type="text" id="fTags" placeholder="精品车况, 准新车">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>备注 (车况/配置/改装等)</label>
+        <textarea id="fNote" placeholder="详细描述车况、配置、改装、维保记录等"></textarea>
+      </div>
+      <div class="form-group" id="priceHistoryGroup" style="display:none">
+        <label>调价记录</label>
+        <div id="priceHistoryList"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeForm()">取消</button>
+        <button type="submit" class="btn btn-primary">💾 保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ════════ Detail Modal ════════ -->
+<div class="modal-overlay" id="detailOverlay">
+  <div class="modal" style="max-width:720px">
+    <h2 id="detailTitle">车辆详情</h2>
+    <div id="detailContent"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--surface3)">
+      <button class="btn btn-outline btn-sm" onclick="closeDetail()">关闭</button>
+      <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="">✏️ 编辑</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ Compare Modal ════════ -->
+<div class="modal-overlay" id="compareOverlay">
+  <div class="modal" style="max-width:900px">
+    <h2>⚖️ 车辆对比</h2>
+    <div id="compareContent" style="overflow-x:auto"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('compareOverlay').classList.remove('show')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ Import Modal ════════ -->
+<div class="modal-overlay" id="importOverlay">
+  <div class="modal" style="max-width:500px">
+    <h2>📤 导入数据</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">粘贴 JSON 格式的车辆数据</p>
+    <textarea id="importData" rows="10" style="width:100%;background:var(--surface2);border:1px solid var(--surface3);border-radius:6px;color:var(--text);padding:10px;font-size:12px;font-family:monospace"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeImport()">取消</button>
+      <button class="btn btn-primary" onclick="doImport()">导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ Test Drive Modal ════════ -->
+<div class="modal-overlay" id="tdOverlay">
+  <div class="modal" style="max-width:450px">
+    <h2>📋 试驾记录</h2>
+    <div id="tdContent"></div>
+    <div class="form-row" style="margin-top:12px">
+      <div class="form-group">
+        <label>客户姓名</label>
+        <input type="text" id="tdName" placeholder="张先生">
+      </div>
+      <div class="form-group">
+        <label>联系电话</label>
+        <input type="text" id="tdPhone" placeholder="138****8888">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <textarea id="tdNote" placeholder="试驾体验反馈等" style="min-height:40px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeTD()">取消</button>
+      <button class="btn btn-primary" id="tdSaveBtn">📝 记录试驾</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ Toast ════════ -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════
+// Data Layer
+// ════════════════════════════════════════
+const STORAGE_KEY = 'used_cars_v2';
+const STATUSES = ['在售','已售','预留','下架'];
+let currentSort = 'newest';
+let currentFilter = '';
+let compareList = [];
+let selectedCarForDetail = null;
+let selectedCarForTD = null;
+
+function loadData(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveData(data){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function utcnow(){ return new Date().toISOString(); }
+
+// ════════════════════════════════════════
+// Demo Data (12 cars with real images)
+// ════════════════════════════════════════
+const DEMO_IMAGES = {
+  bmw5: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=400&q=80',
+  benzE: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=400&q=80',
+  audiQ5: 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?w=400&q=80',
+  porsche: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400&q=80',
+  toyota: 'https://images.unsplash.com/photo-1550353127-b0da3aeaa0ca?w=400&q=80',
+  vw: 'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=400&q=80',
+  tesla: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=400&q=80',
+  honda: 'https://images.unsplash.com/photo-1619769916555-0051a2f2d900?w=400&q=80',
+  bmwX5: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=400&q=80',
+  volvo: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&q=80',
+  lexus: 'https://images.unsplash.com/photo-1583267746897-2cf415887172?w=400&q=80',
+  byd: 'https://images.unsplash.com/photo-1617788138017-80ad40651399?w=400&q=80'
+};
+
+function createDemoCars(){
+  return [
+    {id:genId(),brand:'宝马',model:'530Li 尊享',year:2022,mileage:3.8,price:38.5,cost:34.0,prep:0.4,color:'碳黑',fuel:'汽油',trans:'手自一体',body:'轿车',disp:'2.0T',drive:'后驱',seats:'5',vin:'LBVKY5104NSX12345',owners:'0',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.bmw5,tags:'精品车况,原版原漆',note:'2022年7月上牌，一手车，4S店全程保养，原版原漆，加装HUD和哈曼卡顿。',regDate:'2022-07-15',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'奔驰',model:'E300L 豪华',year:2021,mileage:5.2,price:42.8,cost:37.5,prep:0.6,color:'黑曜石',fuel:'汽油',trans:'手自一体',body:'轿车',disp:'2.0T',drive:'后驱',seats:'5',vin:'LE4ZG8JB7ML567890',owners:'1',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.benzE,tags:'精品车况',note:'2021年3月上牌，次顶配，柏林之声音响，全景天窗，座椅通风。',regDate:'2021-03-20',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'奥迪',model:'Q5L 45TFSI',year:2023,mileage:1.2,price:33.6,cost:30.0,prep:0.2,color:'天云灰',fuel:'汽油',trans:'双离合',body:'SUV',disp:'2.0T',drive:'四驱',seats:'5',vin:'LFV3B28U7P3123456',owners:'0',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.audiQ5,tags:'准新车,原版原漆',note:'2023年9月上牌，准新车，仅1.2万公里，原厂质保期内。',regDate:'2023-09-08',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'保时捷',model:'Cayenne 3.0T',year:2020,mileage:4.8,price:68.0,cost:60.0,prep:1.2,color:'月光蓝',fuel:'汽油',trans:'手自一体',body:'SUV',disp:'3.0T',drive:'四驱',seats:'5',vin:'WP1AA29Y5LDA12345',owners:'1',emission:'国六',accident:'有小刮擦',status:'在售',image:DEMO_IMAGES.porsche,tags:'豪华',note:'2020年5月上牌，BOSE音响，空气悬架，21寸轮毂，右后门有轻微划痕已修复。',regDate:'2020-05-12',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'丰田',model:'汉兰达 双擎',year:2022,mileage:2.5,price:26.8,cost:24.0,prep:0.3,color:'珍珠白',fuel:'混动',trans:'CVT',body:'SUV',disp:'2.5L',drive:'四驱',seats:'7',vin:'LVGDN56A4NG678901',owners:'0',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.toyota,tags:'精品车况,一手车',note:'2022年12月上牌，7座四驱版，电动尾门，全景天窗，全程4S保养。',regDate:'2022-12-03',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'大众',model:'迈腾 380TSI',year:2021,mileage:4.2,price:15.6,cost:13.2,prep:0.5,color:'凯撒金',fuel:'汽油',trans:'双离合',body:'轿车',disp:'2.0T',drive:'前驱',seats:'5',vin:'LFV3A23C5M3123456',owners:'1',emission:'国六',accident:'无事故',status:'已售',image:DEMO_IMAGES.vw,tags:'已整备',note:'2021年6月上牌，380TSI高功率，液晶仪表，翻毛皮座椅，已售出。',regDate:'2021-06-18',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[{name:'李先生',phone:'139****1234',note:'试驾后当天订车',date:'2024-01-15'}],priceHistory:[{from:16.8,to:15.6,date:'2024-01-10',reason:'年前促销'}]},
+    {id:genId(),brand:'特斯拉',model:'Model Y 长续航',year:2023,mileage:1.8,price:27.9,cost:25.5,prep:0.1,color:'冷光银',fuel:'电动',trans:'自动',body:'新能源',disp:'电动',drive:'四驱',seats:'5',vin:'LRWYGFEK8PC123456',owners:'0',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.tesla,tags:'准新车,一手车',note:'2023年11月上牌，长续航全轮驱动版，白色内饰，FSD选装，准新车状态。',regDate:'2023-11-02',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'本田',model:'CR-V 锐·混动',year:2020,mileage:6.8,price:14.2,cost:12.0,prep:0.4,color:'彩晶黑',fuel:'混动',trans:'CVT',body:'SUV',disp:'2.0L',drive:'前驱',seats:'5',vin:'LVHRE1877L6101234',owners:'2',emission:'国六',accident:'有小刮擦',status:'在售',image:DEMO_IMAGES.honda,tags:'特价',note:'2020年8月上牌，混动净致版，前后杠补漆，其他原版，性价比高。',regDate:'2020-08-14',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'宝马',model:'X5 xDrive40i',year:2023,mileage:0.9,price:72.8,cost:65.0,prep:0.3,color:'宝石青',fuel:'汽油',trans:'手自一体',body:'SUV',disp:'3.0T',drive:'四驱',seats:'5',vin:'LBVFX510XPSZ54321',owners:'0',emission:'国六',accident:'无事故',status:'预留',image:DEMO_IMAGES.bmwX5,tags:'准新车,精品车况',note:'2023年12月上牌，仅900公里，顶配，激光大灯，空气悬架，宝华韦健音响，下周五提车。',regDate:'2023-12-20',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[{name:'王先生',phone:'137****5678',note:'已付定金，约定下周五提车',date:'2024-02-20'}],priceHistory:[]},
+    {id:genId(),brand:'沃尔沃',model:'XC60 B5',year:2022,mileage:3.5,price:23.8,cost:20.5,prep:0.4,color:'牛仔蓝',fuel:'混动',trans:'手自一体',body:'SUV',disp:'2.0T',drive:'四驱',seats:'5',vin:'YV1UZ8BC7N2098765',owners:'1',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.volvo,tags:'精品车况',note:'2022年5月上牌，B5四驱智远豪华版，水晶挡杆，宝华韦健音响，座椅加热通风。',regDate:'2022-05-09',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'雷克萨斯',model:'ES300h 卓越',year:2021,mileage:4.0,price:29.2,cost:26.0,prep:0.3,color:'超音速钛银',fuel:'混动',trans:'CVT',body:'轿车',disp:'2.5L',drive:'前驱',seats:'5',vin:'JTHBZ1B28M5001234',owners:'0',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.lexus,tags:'原版原漆,一手车',note:'2021年10月上牌，一手车，全程4S保养，原版原漆，马克莱文森音响。',regDate:'2021-10-22',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]},
+    {id:genId(),brand:'比亚迪',model:'汉 EV 四驱',year:2023,mileage:2.1,price:22.5,cost:19.8,prep:0.2,color:'极光蓝',fuel:'电动',trans:'自动',body:'新能源',disp:'电动',drive:'四驱',seats:'5',vin:'LC0CE6CB7P0123456',owners:'0',emission:'国六',accident:'无事故',status:'在售',image:DEMO_IMAGES.byd,tags:'准新车',note:'2023年8月上牌，四驱高性能版，0-100仅3.9s，丹拿音响，电光蓝内饰。',regDate:'2023-08-15',createdAt:utcnow(),updatedAt:utcnow(),tdLog:[],priceHistory:[]}
+  ];
+}
+
+// ════════════════════════════════════════
+// Init
+// ════════════════════════════════════════
+(function init(){
+  if(!localStorage.getItem(STORAGE_KEY)){
+    saveData(createDemoCars());
+  }
+  render();
+})();
+
+// ════════════════════════════════════════
+// Render
+// ════════════════════════════════════════
+function render(){
+  const data = loadData();
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sf = currentFilter;
+  const pMin = parseFloat(document.getElementById('priceMin').value) || 0;
+  const pMax = parseFloat(document.getElementById('priceMax').value) || 100;
+  const bodyType = document.getElementById('bodyFilter').value;
+  const tagType = document.getElementById('tagFilter').value;
+
+  let list = data;
+  if(q) list = list.filter(c => [c.brand,c.model,c.note,c.vin].some(v => (v||'').toLowerCase().includes(q)));
+  if(sf) list = list.filter(c => c.status === sf);
+  if(pMin > 0) list = list.filter(c => (c.price||0) >= pMin);
+  if(pMax < 100) list = list.filter(c => (c.price||0) <= pMax);
+  if(bodyType) list = list.filter(c => c.body === bodyType);
+  if(tagType) list = list.filter(c => (c.tags||'').includes(tagType));
+
+  // Sort
+  list = [...list].sort((a,b) => {
+    switch(currentSort){
+      case 'price': return (b.price||0) - (a.price||0);
+      case 'price_asc': return (a.price||0) - (b.price||0);
+      case 'year': return (b.year||0) - (a.year||0);
+      case 'mileage': return (a.mileage||0) - (b.mileage||0);
+      default: return new Date(b.createdAt||0) - new Date(a.createdAt||0);
+    }
+  });
+
+  renderStats(data);
+  renderDashboard(data);
+  renderFilters(data, sf);
+  updatePriceLabels();
+  renderList(list, data);
+  updateSortButtons();
+}
+
+function renderStats(all){
+  const el = document.getElementById('statsBar');
+  const total = all.length;
+  const cnt = {}; STATUSES.forEach(s => cnt[s] = all.filter(c => c.status===s).length);
+  const sold = all.filter(c => c.status==='已售');
+  const avgMargin = sold.length ? (sold.reduce((s,c) => s + calcProfit(c), 0) / sold.length).toFixed(1) : 0;
+  el.innerHTML =
+    `<div class="stat-card"><div class="num">${total}</div><div class="label">🏎️ 总库存</div></div>` +
+    STATUSES.map(s => `<div class="stat-card"><div class="num ${s==='在售'?'green':s==='已售'?'orange':s==='预留'?'orange':'red'}">${cnt[s]||0}</div><div class="label">${s}</div></div>`).join('') +
+    `<div class="stat-card"><div class="num">${avgMargin}万</div><div class="label">📊 平均利润</div></div>`;
+}
+
+function renderDashboard(all){
+  const el = document.getElementById('dashboard');
+  const total = all.length;
+  const cnt = {}; STATUSES.forEach(s => cnt[s] = all.filter(c => c.status===s).length);
+  const selling = all.filter(c => c.status==='在售');
+  const avgPrice = selling.length ? (selling.reduce((s,c)=>s+(c.price||0),0)/selling.length).toFixed(1) : 0;
+  const avgMileage = selling.length ? (selling.reduce((s,c)=>s+(c.mileage||0),0)/selling.length).toFixed(1) : 0;
+  const totalProfit = all.reduce((s,c) => s + calcProfit(c), 0);
+  const days = selling.map(c => {
+    const dd = c.regDate ? (new Date() - new Date(c.regDate)) / 86400000 : 0;
+    return Math.round(dd);
+  });
+  const avgAge = days.length ? Math.round(days.reduce((a,b)=>a+b,0)/days.length) : 0;
+  el.innerHTML =
+    `<div class="dash-card"><div class="d-num" style="color:var(--primary)">${total}</div><div class="d-label">🏎️ 总库存</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--success)">${cnt['在售']||0}</div><div class="d-label">🟢 在售</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--danger)">${cnt['已售']||0}</div><div class="d-label">🔴 已售</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--warn)">${cnt['预留']||0}</div><div class="d-label">🟡 预留</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--text2)">${cnt['下架']||0}</div><div class="d-label">⚪ 下架</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--primary)">${avgPrice}万</div><div class="d-label">📈 平均售价</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--success)">${totalProfit.toFixed(1)}万</div><div class="d-label">💰 总利润</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--warn)">${avgMileage}万</div><div class="d-label">📏 平均里程</div></div>` +
+    `<div class="dash-card"><div class="d-num" style="color:var(--info)">${avgAge}天</div><div class="d-label">📅 平均库龄</div></div>`;
+}
+
+function renderFilters(data, active){
+  const g = document.getElementById('filterGroup');
+  const cnt = {}; STATUSES.forEach(s => cnt[s] = data.filter(c => c.status===s).length);
+  g.innerHTML = `<span class="filter-tag${!active?' active':''}" onclick="setFilter('')">全部 <span class="cnt">${data.length}</span></span>` +
+    STATUSES.map(s => `<span class="filter-tag${active===s?' active':''}" onclick="setFilter('${s}')">${s} <span class="cnt">${cnt[s]||0}</span></span>`).join('');
+}
+
+function setFilter(st){
+  currentFilter = st;
+  render();
+}
+
+function updatePriceLabels(){
+  const pMin = parseFloat(document.getElementById('priceMin').value);
+  const pMax = parseFloat(document.getElementById('priceMax').value);
+  document.getElementById('priceMinLabel').textContent = '¥' + pMin + '万';
+  document.getElementById('priceMaxLabel').textContent = pMax >= 100 ? '¥100万+' : '¥' + pMax + '万';
+}
+
+function setSort(s){
+  currentSort = s;
+  render();
+}
+
+function updateSortButtons(){
+  document.querySelectorAll('.sort-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sort === currentSort);
+  });
+}
+
+function renderList(list, all){
+  const el = document.getElementById('carList');
+  if(!list.length){
+    el.innerHTML = `<div class="empty-state"><div class="icon">🚗</div><h3>没有找到匹配的车辆</h3><p style="font-size:13px;color:var(--text2);margin-top:8px">试试调整搜索条件</p></div>`;
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const st = c.status || '在售';
+    const profitVal = calcProfit(c);
+    const profitStr = profitVal > 0 ? `+${profitVal.toFixed(1)}万` : `${profitVal.toFixed(1)}万`;
+    const profitCls = profitVal >= 0 ? 'profit' : 'profit neg';
+    const isSelected = compareList.includes(c.id);
+    return `<div class="car-card${isSelected?' selected':''}" onclick="showDetail('${c.id}')">
+      <div class="select-chk" onclick="event.stopPropagation();toggleCompareCar('${c.id}')">${isSelected?'✓':''}</div>
+      <span class="status-badge status-${st}">${st}</span>
+      <div class="img-wrap">
+        ${c.image ? `<img src="${esc(c.image)}" alt="${esc(c.brand+' '+c.model)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="placeholder" style="display:none">🚗</div>`
+                   : `<div class="placeholder">🚗</div>`}
+      </div>
+      <div class="body">
+        <div class="title"><span class="brand">${esc(c.brand)}</span> ${esc(c.model)}</div>
+        <div class="price-row">
+          <span class="price">¥${Number(c.price||0).toFixed(1)}万</span>
+          <span class="${profitCls}">${profitStr}</span>
+        </div>
+        ${(c.cost||c.prep) ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;display:flex;gap:8px">
+          ${c.cost ? `<span>💰 收购 <b style="color:var(--text)">${Number(c.cost).toFixed(1)}万</b></span>` : ''}
+          ${c.prep && parseFloat(c.prep)>0 ? `<span>🔧 整备 <b style="color:var(--text)">${Number(c.prep).toFixed(1)}万</b></span>` : ''}
+          ${c.price > 0 ? `<span>📊 利润率 <b style="color:${profitVal>=0?'var(--success)':'var(--danger)'}">${((profitVal/(parseFloat(c.cost||0)+parseFloat(c.prep||0)||1))*100).toFixed(1)}%</b></span>` : ''}
+        </div>` : ''}
+        <div class="meta">
+          <span class="tag">📅 ${c.year||'-'}年</span>
+          <span class="tag">📏 ${c.mileage||'-'}万km</span>
+          <span class="tag">⛽ ${c.fuel||'-'}</span>
+          <span class="tag">⚙ ${c.trans||'-'}</span>
+          ${c.body ? `<span class="tag">${c.body}</span>` : ''}
+          ${c.owners == 0 ? `<span class="owner-badge">👤 一手</span>` : ''}
+        </div>
+        ${c.tags ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${c.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span style="font-size:10px;background:var(--primary-dim);color:var(--primary);padding:1px 7px;border-radius:10px">${esc(t)}</span>`).join('')}</div>` : ''}
+        <div class="actions" onclick="event.stopPropagation()">
+          <button class="btn btn-sm btn-outline" onclick="openForm('${c.id}')">✏️ 编辑</button>
+          <button class="btn btn-sm btn-outline" onclick="showTD('${c.id}')">📋 试驾</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteCar('${c.id}')">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function calcProfit(c){
+  const price = parseFloat(c.price) || 0;
+  const cost = parseFloat(c.cost) || 0;
+  const prep = parseFloat(c.prep) || 0;
+  return price - cost - prep;
+}
+
+function esc(s){
+  if(s === null || s === undefined) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+// ════════════════════════════════════════
+// CRUD
+// ════════════════════════════════════════
+function openForm(id){
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('show');
+  document.getElementById('editId').value = '';
+  document.getElementById('formTitle').textContent = '🚗 新增车辆';
+  document.getElementById('carForm').reset();
+  document.getElementById('fStatus').value = '在售';
+  document.getElementById('fOwners').value = '0';
+  document.getElementById('fAccident').value = '无事故';
+  document.getElementById('fPrep').value = '0';
+  document.getElementById('priceHistoryGroup').style.display = 'none';
+
+  if(id){
+    const data = loadData();
+    const car = data.find(c => c.id === id);
+    if(!car) return;
+    document.getElementById('formTitle').textContent = '✏️ 编辑车辆';
+    document.getElementById('editId').value = id;
+    document.getElementById('fBrand').value = car.brand||'';
+    document.getElementById('fModel').value = car.model||'';
+    document.getElementById('fRegDate').value = car.regDate||'';
+    document.getElementById('fMileage').value = car.mileage||'';
+    document.getElementById('fPrice').value = car.price||'';
+    document.getElementById('fCost').value = car.cost||'';
+    document.getElementById('fPrep').value = car.prep||'0';
+    document.getElementById('fBody').value = car.body||'';
+    document.getElementById('fColor').value = car.color||'';
+    document.getElementById('fFuel').value = car.fuel||'';
+    document.getElementById('fDisp').value = car.disp||'';
+    document.getElementById('fTrans').value = car.trans||'';
+    document.getElementById('fDrive').value = car.drive||'';
+    document.getElementById('fSeats').value = car.seats||'';
+    document.getElementById('fVin').value = car.vin||'';
+    document.getElementById('fOwners').value = car.owners||'0';
+    document.getElementById('fEmission').value = car.emission||'';
+    document.getElementById('fAccident').value = car.accident||'无事故';
+    document.getElementById('fStatus').value = car.status||'在售';
+    document.getElementById('fImage').value = car.image||'';
+    document.getElementById('fTags').value = car.tags||'';
+    document.getElementById('fNote').value = car.note||'';
+    // Show price history
+    if(car.priceHistory && car.priceHistory.length){
+      document.getElementById('priceHistoryGroup').style.display = 'block';
+      document.getElementById('priceHistoryList').innerHTML = car.priceHistory.map(ph =>
+        `<div style="font-size:12px;color:var(--text2);padding:4px 0">${ph.date}: ¥${ph.from}万 → ¥${ph.to}万 (${ph.reason||'调价'})</div>`
+      ).join('');
+    }
+  }
+}
+
+function closeForm(){
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+function saveCar(e){
+  e.preventDefault();
+  const id = document.getElementById('editId').value;
+  const newPrice = parseFloat(document.getElementById('fPrice').value) || 0;
+  const car = {
+    brand: document.getElementById('fBrand').value.trim(),
+    model: document.getElementById('fModel').value.trim(),
+    regDate: document.getElementById('fRegDate').value,
+    mileage: document.getElementById('fMileage').value,
+    price: newPrice,
+    cost: document.getElementById('fCost').value,
+    prep: document.getElementById('fPrep').value || '0',
+    body: document.getElementById('fBody').value,
+    color: document.getElementById('fColor').value.trim(),
+    fuel: document.getElementById('fFuel').value,
+    disp: document.getElementById('fDisp').value,
+    trans: document.getElementById('fTrans').value,
+    drive: document.getElementById('fDrive').value,
+    seats: document.getElementById('fSeats').value,
+    vin: document.getElementById('fVin').value.trim(),
+    owners: document.getElementById('fOwners').value,
+    emission: document.getElementById('fEmission').value,
+    accident: document.getElementById('fAccident').value,
+    status: document.getElementById('fStatus').value,
+    image: document.getElementById('fImage').value.trim(),
+    tags: document.getElementById('fTags').value.trim(),
+    note: document.getElementById('fNote').value.trim()
+  };
+  if(!car.brand || !car.model){ toast('品牌和型号不能为空','error'); return; }
+
+  // Compute year from regDate
+  if(car.regDate) car.year = parseInt(car.regDate.split('-')[0]);
+  else car.year = parseInt(document.getElementById('fYear')?.value) || 0;
+
+  const data = loadData();
+  if(id){
+    const idx = data.findIndex(c => c.id === id);
+    if(idx > -1){
+      const oldPrice = parseFloat(data[idx].price) || 0;
+      // Track price change — prompt for reason
+      if(oldPrice !== newPrice && oldPrice > 0){
+        const reason = prompt(`调价说明：¥${oldPrice.toFixed(1)}万 → ¥${newPrice.toFixed(1)}万\n请输入调价原因：`, '');
+        if(reason === null){
+          toast('❌ 已取消调价，价格未保存','error');
+          return;
+        }
+        if(!data[idx].priceHistory) data[idx].priceHistory = [];
+        data[idx].priceHistory.push({
+          from: oldPrice, to: newPrice, date: new Date().toISOString().slice(0,10),
+          reason: reason.trim() || '调价'
+        });
+      }
+      car.id = id;
+      car.createdAt = data[idx].createdAt;
+      car.tdLog = data[idx].tdLog || [];
+      car.priceHistory = data[idx].priceHistory || [];
+      car.updatedAt = utcnow();
+      data[idx] = car;
+    }
+  } else {
+    car.id = genId();
+    car.year = car.regDate ? parseInt(car.regDate.split('-')[0]) : new Date().getFullYear();
+    car.createdAt = utcnow();
+    car.updatedAt = car.createdAt;
+    car.tdLog = [];
+    car.priceHistory = [];
+    data.unshift(car);
+  }
+  saveData(data);
+  closeForm();
+  render();
+  toast(id ? '✅ 车辆信息已更新' : '✅ 新车已入库', 'success');
+}
+
+function deleteCar(id){
+  if(!confirm('确定要删除这辆车吗？')) return;
+  const data = loadData().filter(c => c.id !== id);
+  saveData(data);
+  compareList = compareList.filter(cid => cid !== id);
+  render();
+  toast('🗑 已删除', 'success');
+}
+
+// ════════════════════════════════════════
+// Detail View
+// ════════════════════════════════════════
+function showDetail(id){
+  const data = loadData();
+  const car = data.find(c => c.id === id);
+  if(!car) return;
+  selectedCarForDetail = car;
+  document.getElementById('detailTitle').textContent = `${car.brand} ${car.model} — 详细信息`;
+  document.getElementById('detailEditBtn').onclick = () => { closeDetail(); openForm(id); };
+  const st = car.status || '在售';
+  const profitVal = calcProfit(car);
+  const marginPct = car.price > 0 ? ((profitVal / car.price) * 100).toFixed(1) : 0;
+
+  document.getElementById('detailContent').innerHTML = `
+    ${car.image ? `<img src="${esc(car.image)}" alt="${esc(car.brand+' '+car.model)}" class="detail-img" onerror="this.style.display='none'">` : ''}
+    <span class="status-badge status-${st}" style="position:static;display:inline-block;margin-bottom:10px">${st}</span>
+    <div class="detail-grid">
+      <div class="detail-item ${car.cost ? '' : 'detail-full'}">
+        <div class="dl">售价 / 成本</div>
+        <div class="dv" style="color:var(--warn)">¥${car.price.toFixed(1)}万
+          ${car.cost ? `<span style="color:var(--text2);font-size:12px;font-weight:400"> | 成本 ¥${(parseFloat(car.cost)+parseFloat(car.prep||0)).toFixed(1)}万</span>` : ''}
+          ${car.price > 0 ? `<span style="color:${profitVal>=0?'var(--success)':'var(--danger)'};font-size:12px;font-weight:400"> | ${profitVal>=0?'+':''}${profitVal.toFixed(1)}万 (${marginPct}%)</span>` : ''}
+        </div>
+      </div>
+      <div class="detail-item"><div class="dl">上牌日期</div><div class="dv">${car.regDate||car.year+'年'||'-'}</div></div>
+      <div class="detail-item"><div class="dl">里程</div><div class="dv">${car.mileage||'-'} 万公里</div></div>
+      <div class="detail-item"><div class="dl">车身类型</div><div class="dv">${car.body||'-'}</div></div>
+      <div class="detail-item"><div class="dl">颜色</div><div class="dv">${car.color||'-'}</div></div>
+      <div class="detail-item"><div class="dl">燃油 / 排量</div><div class="dv">${car.fuel||'-'} ${car.disp||''}</div></div>
+      <div class="detail-item"><div class="dl">变速箱</div><div class="dv">${car.trans||'-'}</div></div>
+      <div class="detail-item"><div class="dl">驱动 / 座位</div><div class="dv">${car.drive||'-'} / ${car.seats||'-'}座</div></div>
+      <div class="detail-item"><div class="dl">VIN</div><div class="dv" style="font-family:monospace;font-size:11px">${car.vin||'-'}</div></div>
+      <div class="detail-item"><div class="dl">过户次数</div><div class="dv">${car.owners == 0 ? '0次 (一手车)' : (car.owners||'0')+'次'}</div></div>
+      <div class="detail-item"><div class="dl">排放标准</div><div class="dv">${car.emission||'-'}</div></div>
+      <div class="detail-item"><div class="dl">事故记录</div><div class="dv">${car.accident||'无事故'}</div></div>
+      ${car.tags ? `<div class="detail-item detail-full"><div class="dl">标签</div><div class="dv" style="display:flex;gap:4px;flex-wrap:wrap">${car.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span style="font-size:11px;background:var(--primary-dim);color:var(--primary);padding:2px 8px;border-radius:10px">${esc(t)}</span>`).join('')}</div></div>` : ''}
+      ${car.note ? `<div class="detail-item detail-full"><div class="dl">备注</div><div class="dv">${esc(car.note)}</div></div>` : ''}
+    </div>
+    ${(car.tdLog && car.tdLog.length) ? `
+      <h3>📋 试驾记录 (${car.tdLog.length}次)</h3>
+      ${car.tdLog.map(td => `<div class="test-drive-item"><span class="td-date">${td.date}</span> ${esc(td.name)} (${esc(td.phone)}) — ${esc(td.note||'')}</div>`).join('')}
+    ` : ''}
+    ${(car.priceHistory && car.priceHistory.length) ? `
+      <h3>📊 调价记录 (${car.priceHistory.length}次)</h3>
+      ${car.priceHistory.map(ph => `<div class="test-drive-item">${ph.date}: <span style="color:var(--text2);text-decoration:line-through">¥${ph.from}万</span> → <span style="color:var(--warn)">¥${ph.to}万</span> (${ph.reason||'调价'})</div>`).join('')}
+    ` : ''}
+  `;
+  document.getElementById('detailOverlay').classList.add('show');
+}
+
+function closeDetail(){
+  document.getElementById('detailOverlay').classList.remove('show');
+}
+
+// ════════════════════════════════════════
+// Compare
+// ════════════════════════════════════════
+function toggleCompare(){
+  document.getElementById('compareBar').classList.toggle('show');
+}
+
+function toggleCompareCar(id){
+  const idx = compareList.indexOf(id);
+  if(idx > -1) compareList.splice(idx, 1);
+  else if(compareList.length < 3) compareList.push(id);
+  else { toast('最多对比3辆车','error'); return; }
+  updateCompareBar();
+  render();
+}
+
+function updateCompareBar(){
+  document.getElementById('compareCount').textContent = compareList.length;
+  document.getElementById('compareBtn').disabled = compareList.length < 2;
+}
+
+function clearCompare(){
+  compareList = [];
+  updateCompareBar();
+  render();
+}
+
+function showCompare(){
+  if(compareList.length < 2) return;
+  const data = loadData();
+  const cars = compareList.map(id => data.find(c => c.id === id)).filter(Boolean);
+  const fields = [
+    {key:'price',label:'售价'}, {key:'cost',label:'成本'},
+    {key:'mileage',label:'里程'}, {key:'year',label:'年份'},
+    {key:'fuel',label:'燃油'}, {key:'trans',label:'变速箱'},
+    {key:'body',label:'车身'}, {key:'disp',label:'排量'},
+    {key:'drive',label:'驱动'}, {key:'seats',label:'座位'},
+    {key:'owners',label:'过户'}, {key:'accident',label:'事故'},
+    {key:'emission',label:'排放'}
+  ];
+
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr>
+      <th style="padding:10px 12px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--surface3);position:sticky;top:0">项目</th>
+      ${cars.map(c => `<th style="padding:10px 12px;text-align:center;background:var(--surface2);border-bottom:1px solid var(--surface3);position:sticky;top:0">
+        <div style="font-weight:600">${esc(c.brand)} ${esc(c.model)}</div>
+        <div style="font-size:11px;color:var(--text2)">${c.year||'-'}</div>
+      </th>`).join('')}
+    </tr></thead><tbody>
+    ${fields.map(f => `<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--surface3);color:var(--text2);font-weight:500">${f.label}</td>
+      ${cars.map(c => {
+        let val = c[f.key];
+        if(f.key === 'price') val = '¥' + Number(val||0).toFixed(1) + '万';
+        else if(f.key === 'cost') val = '¥' + Number(val||0).toFixed(1) + '万';
+        else if(f.key === 'owners') val = val == 0 ? '一手' : (val||'-')+'次';
+        return `<td style="padding:8px 12px;border-bottom:1px solid var(--surface3);text-align:center">${val||'-'}</td>`;
+      }).join('')}
+    </tr>`).join('')}
+    ${(() => {
+      const profits = cars.map(c => calcProfit(c).toFixed(1)+'万');
+      return `<tr style="background:var(--surface2)"><td style="padding:10px 12px;font-weight:600;color:var(--success)">💰 预估利润</td>
+        ${profits.map(p => `<td style="padding:10px 12px;text-align:center;font-weight:600;color:var(--warn)">${p}</td>`).join('')}</tr>`;
+    })()}
+  </tbody></table>`;
+
+  document.getElementById('compareContent').innerHTML = html;
+  document.getElementById('compareOverlay').classList.add('show');
+}
+
+// ════════════════════════════════════════
+// Test Drive
+// ════════════════════════════════════════
+function showTD(id){
+  selectedCarForTD = id;
+  const data = loadData();
+  const car = data.find(c => c.id === id);
+  if(!car) return;
+  document.getElementById('tdContent').innerHTML = `
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px">${esc(car.brand)} ${esc(car.model)}</div>
+    ${(car.tdLog && car.tdLog.length) ? '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">历史试驾:</div>' +
+      car.tdLog.map(td => `<div class="test-drive-item"><span class="td-date">${td.date}</span> ${esc(td.name)} ${esc(td.phone||'')} — ${esc(td.note||'')}</div>`).join('')
+      : '<div style="font-size:12px;color:var(--text2);margin-bottom:8px">暂无试驾记录</div>'}
+  `;
+  document.getElementById('tdName').value = '';
+  document.getElementById('tdPhone').value = '';
+  document.getElementById('tdNote').value = '';
+  document.getElementById('tdSaveBtn').onclick = saveTD;
+  document.getElementById('tdOverlay').classList.add('show');
+}
+
+function closeTD(){
+  document.getElementById('tdOverlay').classList.remove('show');
+}
+
+function saveTD(){
+  const name = document.getElementById('tdName').value.trim();
+  if(!name){ toast('请输入客户姓名','error'); return; }
+  const data = loadData();
+  const car = data.find(c => c.id === selectedCarForTD);
+  if(!car) return;
+  if(!car.tdLog) car.tdLog = [];
+  car.tdLog.unshift({
+    name: name,
+    phone: document.getElementById('tdPhone').value.trim(),
+    note: document.getElementById('tdNote').value.trim(),
+    date: new Date().toISOString().slice(0,10)
+  });
+  saveData(data);
+  closeTD();
+  render();
+  toast('✅ 试驾已记录','success');
+}
+
+// ════════════════════════════════════════
+// CSV Export
+// ════════════════════════════════════════
+function exportCSV(){
+  const data = loadData();
+  const headers = ['品牌','型号','年份','上牌日期','里程','售价','收购价','整备费','利润','颜色','燃油','排量','变速箱','驱动','座位','VIN','过户','排放','事故','车身','状态','标签','备注','试驾次数','调价次数'];
+  const rows = data.map(c => [
+    c.brand, c.model, c.year, c.regDate, c.mileage, c.price, c.cost, c.prep, calcProfit(c).toFixed(1),
+    c.color, c.fuel, c.disp, c.trans, c.drive, c.seats, c.vin, c.owners, c.emission, c.accident, c.body, c.status,
+    c.tags, c.note, (c.tdLog||[]).length, (c.priceHistory||[]).length
+  ].map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(','));
+
+  const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `二手车库存_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('📥 CSV已导出','success');
+}
+
+// ════════════════════════════════════════
+// Import
+// ════════════════════════════════════════
+function showImport(){
+  document.getElementById('importData').value = '';
+  document.getElementById('importOverlay').classList.add('show');
+}
+function closeImport(){
+  document.getElementById('importOverlay').classList.remove('show');
+}
+function doImport(){
+  try{
+    const parsed = JSON.parse(document.getElementById('importData').value);
+    const arr = Array.isArray(parsed) ? parsed : [parsed];
+    const data = loadData();
+    arr.forEach(c => { if(c.brand && c.model){ c.id = genId(); c.createdAt = utcnow(); data.push(c); } });
+    saveData(data);
+    closeImport();
+    render();
+    toast(`✅ 已导入 ${arr.length} 辆车`,'success');
+  } catch(e){
+    toast('❌ JSON格式错误: '+e.message,'error');
+  }
+}
+
+// ════════════════════════════════════════
+// Toast
+// ════════════════════════════════════════
+function toast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (type ? ' '+type : '');
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ════════════════════════════════════════
+// Keyboard shortcut
+// ════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){
+    document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
+  }
+});
+</script>
+</body>
+</html>
