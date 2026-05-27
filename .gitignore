@@ -1,16 +1,22 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*.egg-info/
 .venv/
 .venv-test/
 venv/
-*.egg-info/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # Node
 node_modules/
 frontend/dist/
 frontend/.vite/
+dist/
+.next/
 
 # Generated
 shared/
@@ -28,20 +34,15 @@ zuoshanke.db-journal
 .env
 .env.local
 
+# Uploads
+uploads/*
+
+# Outputs
+outputs/*
+
+# Models (too large for git)
+models/
+
 # OS
 .DS_Store
 Thumbs.db
-
-# TypeScript build artifacts
-*.tsbuildinfo
-
-# Outputs / temp
-outputs/
-*.bak
-*.bak.*
-
-# Hermes
-.hermes/
-
-# Data
-data/*.db
