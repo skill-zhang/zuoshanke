@@ -25,8 +25,8 @@ def _build_memory_block(db, query: str,
                         context_id: Optional[str] = None) -> str:
     """从记忆系统提取相关记忆，格式化为注入文本
 
-    v2: scope='zhu' 时全量注入本体记忆（不裁剪权重）；
-        其他scope保持top-5筛选。
+    v1.5: scope='zhu' 时使用三层选择注入（Core + Context + On-Demand）；
+          其他 scope 保持 top-5 筛选不变。
 
     返回格式为「仅供参考」的 User Prompt 层内容，不再是 System Prompt 铁律。
 
@@ -38,8 +38,13 @@ def _build_memory_block(db, query: str,
     """
     if db is None:
         return ""
-    from agent_core.memory_cache import MemoryCache
 
+    # 🆕 v1.5: 本体走三层选择注入
+    if scope == "zhu":
+        return _build_zhu_memory_block(db, query)
+
+    # 分身场景：走原逻辑 top-5
+    from agent_core.memory_cache import MemoryCache
     cache = MemoryCache.get_instance()
     memories = cache.get_top_for_context(
         query=query,
@@ -48,15 +53,88 @@ def _build_memory_block(db, query: str,
     )
     if not memories:
         return ""
-    # 本体全量返回，分身取 Top-5
-    selected = memories if scope == "zhu" else memories[:5]
+    selected = memories[:5]
     lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
     for mem in selected:
         level_icon = {"P0": "🔒", "P1": "⭐", "P2": "📝", "P3": "💤"}
         icon = level_icon.get(mem["priority_level"], "📝")
-        prefix = "📖 " if mem.get("is_narrative") else ""  # 🆕 v2 叙事型标记
+        prefix = "📖 " if mem.get("is_narrative") else ""
         lines.append(f"- {prefix}{icon} {mem['key']}: {mem['content']}")
     return "\n".join(lines)
+
+
+# 🆕 v1.5: 本体三层选择注入
+
+
+def _build_zhu_memory_block(db, query: str) -> str:
+    """本体记忆三层选择注入（替代旧的全量注入）
+
+    - Core Tier: is_core=True 的记忆，用 compressed 摘要，始终注入（≤5条/800字）
+    - Context Tier: 按话题匹配 + 时效性 + 重要性排序，受 max_chars 约束
+    - On-Demand Tier: 不注入，尾部提示 LLM 自行检索
+    """
+    from agent_core.memory_cache import MemoryCache
+
+    cache = MemoryCache.get_instance()
+    parts = []
+
+    # === Phase 1: Core Tier ===
+    core_memories = cache.get_core_memories(db, max_count=5)
+    if core_memories:
+        core_lines = []
+        core_total_chars = 0
+        for mem in core_memories:
+            text = mem.get("compressed") or mem.get("content", "")[:200]
+            line = f"🔒 {mem['key']}: {text}"
+            if core_total_chars + len(line) <= 800:
+                core_lines.append(line)
+                core_total_chars += len(line)
+            else:
+                break
+
+        if core_lines:
+            parts.append("## 你（核心认知）")
+            parts.extend(core_lines)
+    else:
+        # Core Tier 空时：退化为 weight 最高且 is_immortal=True 的 3 条
+        bucket = cache._by_scope.get("zhu:")
+        if bucket:
+            fallback = [m for m in bucket.memories if m.is_immortal]
+            fallback.sort(key=lambda x: -x.cached_weight)
+            top3 = fallback[:3]
+            if top3:
+                fallback_lines = ["## 你（核心认知 — ⚠️ Core Tier 未配置，使用自动选）"]
+                for m in top3:
+                    fallback_lines.append(f"🔒 {m.key}: {m.content[:200]}")
+                parts.extend(fallback_lines)
+
+    # === Phase 2: Context Tier ===
+    exclude_keys = [m["key"] for m in core_memories] if core_memories else None
+    context_memories = cache.get_for_context_injection(
+        db, scope="zhu", query=query,
+        max_chars=3000, max_items=15,
+        exclude_keys=exclude_keys,
+    )
+    if context_memories:
+        if parts:
+            parts.append("")
+        parts.append("## 与当前对话相关的记忆")
+        for mem in context_memories:
+            icon = "📖 " if mem.get("is_narrative") else ""
+            level = mem.get("priority_level", "P1")
+            prefix = {"P0": "🔒", "P1": "⭐", "P2": "📝"}.get(level, "📝")
+            parts.append(f"- {icon}{prefix} {mem['key']}: {mem.get('content', '')[:150]}")
+
+    # === Phase 3: 没有任何记忆 ===
+    if not parts:
+        return ""
+
+    # === 追加 On-Demand 提示 ===
+    parts.append("")
+    parts.append("> 以上是你核心 Identity（🔒）和当前相关记忆（⭐）。")
+    parts.append("> 如果你需要查阅更早或更详细的记忆，请使用 memory(read, scope='zhu')。")
+
+    return "\n".join(parts)
 
 
 def _build_skill_block(query: str) -> str:

@@ -5,6 +5,7 @@
 """
 
 import math
+import re
 import logging
 import threading
 from datetime import datetime, timezone
@@ -25,6 +26,19 @@ logger = logging.getLogger(__name__)
 P0_THRESHOLD = 8.0
 P1_THRESHOLD = 4.0
 P2_THRESHOLD = 2.0
+
+# 🆕 v1.5 关键词提取停用词集
+STOPWORDS = frozenset({
+    '的', '了', '是', '在', '有', '和', '也', '就', '不', '人',
+    '都', '一', '个', '上', '很', '到', '说', '要', '去', '你',
+    '我', '他', '她', '它', '们', '这', '那', '么', '会', '可',
+    '以', '能', '让', '把', '被', '从', '与', '而', '或', '但',
+    '所', '为', '对', '等', '之', '中', '还', '没', '又', '再',
+    '已', '经', '做', '用', '给', '跟', '比', '于', '向',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were',
+    'not', 'but', 'for', 'with', 'that', 'this', 'it',
+    'and', 'or', 'in', 'on', 'to', 'of', 'be', 'we', 'you',
+})
 
 
 # ════════════════════════════════════════════════════════
@@ -94,6 +108,7 @@ class CachedMemory:
     times_accessed: int
     last_accessed_at: Optional[datetime]
     last_reinforced_at: Optional[datetime]
+    created_at: Optional[datetime]
     scope: str
     context_id: Optional[str]
     is_narrative: bool
@@ -128,6 +143,7 @@ class CachedMemory:
             times_accessed=mem.times_accessed or 0,
             last_accessed_at=mem.last_accessed_at,
             last_reinforced_at=mem.last_reinforced_at,
+            created_at=mem.created_at,
             scope=mem.scope,
             context_id=mem.context_id,
             is_narrative=mem.is_narrative,
@@ -283,6 +299,239 @@ class MemoryCache:
             return [m.to_dict() for m in scored[:10]]
 
         return [m.to_dict() for m in bucket.memories]
+
+    # ── 🆕 v1.5 Core Tier ────────────────────────
+
+    def get_core_memories(self, db: Session, max_count: int = 5) -> list[dict]:
+        """获取 Core Tier 记忆（is_core=True），按 base_weight 降序
+
+        Core Tier 定义了坐山客「是谁」——设计哲学、铁律、本体 Identity。
+        使用 compressed 摘要（如有），原始体积受 800 字符硬预算约束。
+
+        Args:
+            db: 数据库会话（fallback 使用）
+            max_count: 最多返回条数（默认 5）
+
+        Returns:
+            记忆 dict 列表，按 base_weight 降序
+        """
+        # 优先从缓存读取
+        bucket = self._by_scope.get("zhu:")
+        if bucket:
+            core = [m for m in bucket.memories if m.is_core]
+            core.sort(key=lambda x: -x.cached_weight)
+            return [m.to_dict() for m in core[:max_count]]
+
+        # 缓存未加载时 fallback
+        rows = db.query(AgentMemory).filter(
+            AgentMemory.scope == "zhu",
+            AgentMemory.is_core == True,
+        ).order_by(AgentMemory.base_weight.desc()).limit(max_count).all()
+
+        result = []
+        for mem in rows:
+            w = calc_weight(
+                base_weight=mem.base_weight,
+                is_immortal=mem.is_immortal,
+                times_accessed=mem.times_accessed or 0,
+                explicit_boost=mem.explicit_boost or 1,
+                last_accessed_at=mem.last_accessed_at,
+                created_at=mem.created_at,
+            )
+            result.append({
+                "id": mem.id,
+                "key": mem.key,
+                "content": mem.content,
+                "compressed": mem.compressed,
+                "scope": mem.scope,
+                "is_core": True,
+                "priority_level": auto_level(w),
+                "is_narrative": mem.is_narrative,
+                "cached_weight": w,
+            })
+        return result
+
+    # ── 🆕 v1.5 Context Tier ─────────────────────
+
+    def get_for_context_injection(
+        self,
+        db: Session,
+        scope: str = "zhu",
+        query: str = "",
+        max_chars: int = 3000,
+        max_items: int = 15,
+        exclude_keys: Optional[list[str]] = None,
+    ) -> list[dict]:
+        """本体/分身记忆的选择性注入 —— 三因子排序 + 保底机制
+
+        召回算法：
+          1. 关键词重叠（tags + keywords + content） 权重 0.4
+          2. 时效性（最近访问时间）                    权重 0.3
+          3. 记忆自身重要性（base_weight + boost）    权重 0.3
+
+        Args:
+            db: 数据库会话（用于 batch update last_injected_at）
+            scope: 作用域（默认 "zhu"）
+            query: 用户当前查询，用于关键词匹配
+            max_chars: Context Tier 总字符上限（含格式开销，默认 3000）
+            max_items: 最多注入条数（默认 15）
+            exclude_keys: 已在 Core Tier 中的 key 列表，避免重复
+
+        Returns:
+            排序后的记忆 dict 列表
+        """
+        # ── Step 1: 从缓存取非核心记忆 ──
+        bucket = self._by_scope.get(f"{scope}:")
+        if not bucket:
+            return []
+
+        candidates = [m for m in bucket.memories if not m.is_core]
+        if not candidates:
+            return []
+
+        query_kw = self._extract_query_keywords(query)
+        exclude = set(exclude_keys or [])
+
+        # ── Step 2: 三因子打分 ──
+        scored: list[tuple[float, CachedMemory]] = []
+        for mem in candidates:
+            score = self._calc_injection_score(mem, query_kw)
+            if score >= 0.3:  # min_score 阈值
+                scored.append((score, mem))
+
+        # 按分数降序，同分按创建时间降序
+        scored.sort(key=lambda x: (-x[0], -(x[1].last_accessed_at or x[1].cached_weight)))
+
+        # ── Step 3: 保底机制 —— 最近 3 条（按 updated_at/created_at） ──
+        safety_net = sorted(
+            [m for m in candidates if m.key not in exclude],
+            key=lambda m: m.last_accessed_at or m.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )[:3]
+
+        safety_keys = {m.key for m in safety_net}
+
+        # ── Step 4: 合并 —— 高分优先，保底兜底 ──
+        result: list[CachedMemory] = []
+        seen_keys: set[str] = set(exclude)
+
+        # 先取高分
+        for _, mem in scored:
+            if mem.key in seen_keys:
+                continue
+            if len(result) >= max_items:
+                break
+            result.append(mem)
+            seen_keys.add(mem.key)
+
+        # 补充保底（不在高分列表中的）
+        for mem in safety_net:
+            if mem.key in seen_keys:
+                continue
+            if len(result) >= max_items:
+                break
+            result.append(mem)
+            seen_keys.add(mem.key)
+
+        # ── Step 5: 字符预算检查（至少保留 3 条） ──
+        total_chars = 0
+        for mem in result:
+            total_chars += len(f"- {mem.key}: {mem.content[:150]}")
+        while total_chars > max_chars and len(result) > 3:
+            removed = result.pop()
+            total_chars -= len(f"- {removed.key}: {removed.content[:150]}")
+
+        # ── Step 6: 更新 last_injected_at ──
+        injected_keys = [m.key for m in result]
+        self._batch_update_injected(db, injected_keys)
+
+        return [m.to_dict() for m in result]
+
+    # ── 🆕 v1.5 注入评分 ────────────────────────
+
+    @staticmethod
+    def _calc_injection_score(mem: CachedMemory, query_kw: set[str]) -> float:
+        """三因子加权排序
+
+        因子 1：关键词重叠（tags + keywords + content 前 50 字） × 0.4
+        因子 2：时效性（最近访问时间）                           × 0.3
+        因子 3：记忆重要性（base_weight + explicit_boost）        × 0.3
+        """
+        score = 0.0
+
+        # —— 因子 1：关键词重叠 0.4 ——
+        mem_kw = set(mem.keywords or [])
+        # tags 也作为关键词
+        if mem.tags:
+            mem_kw.update(t.lower() for t in mem.tags if isinstance(t, str))
+        # content 前 50 字提取关键词
+        content_head = mem.content[:50]
+        content_kw = set(re.findall(r'[\u4e00-\u9fff\w]+', content_head)) - STOPWORDS
+        mem_kw.update(content_kw)
+
+        if query_kw and mem_kw:
+            overlap = len(query_kw & mem_kw)
+            score += (overlap / max(len(query_kw), 1)) * 0.4
+        elif not query_kw:
+            # 无查询时给中性分
+            score += 0.2
+
+        # —— 因子 2：时效性 0.3 ——
+        if mem.last_accessed_at:
+            now = datetime.now(timezone.utc)
+            last = mem.last_accessed_at
+            if isinstance(last, datetime) and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            days = max(0, (now - last).total_seconds() / 86400.0)
+            score += max(0.0, 1.0 - days / 90.0) * 0.3  # 90 天内线性衰减
+        elif mem.created_at:
+            now = datetime.now(timezone.utc)
+            created = mem.created_at
+            if isinstance(created, datetime) and created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            days = max(0, (now - created).total_seconds() / 86400.0)
+            score += max(0.0, 1.0 - days / 90.0) * 0.3
+        else:
+            score += 0.1  # 无时间信息的默认分
+
+        # —— 因子 3：重要性 0.3 ——
+        importance = (mem.base_weight + (mem.explicit_boost or 0)) / 10.0
+        score += min(importance, 1.0) * 0.3
+
+        return score
+
+    # ── 🆕 v1.5 关键词提取工具 ──────────────────
+
+    @staticmethod
+    def _extract_query_keywords(query: str) -> set[str]:
+        """从用户查询提取关键词集合
+
+        提取中文字符、英文单词，去掉停用词。
+        """
+        if not query:
+            return set()
+        words = set(re.findall(r'[\u4e00-\u9fff\w]+', query))
+        return words - STOPWORDS
+
+    # ── 🆕 v1.5 批量更新注入时间 ───────────────
+
+    @staticmethod
+    def _batch_update_injected(db: Session, keys: list[str]):
+        """批量更新 last_injected_at（一次 commit）"""
+        if not keys or db is None:
+            return
+        try:
+            now = datetime.now(timezone.utc)
+            db.query(AgentMemory).filter(
+                AgentMemory.key.in_(keys)
+            ).update(
+                {"last_injected_at": now},
+                synchronize_session=False,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.warning("批量更新 last_injected_at 失败（不影响注入流程）")
 
     # ── 写穿透回调 ────────────────────────────────────
 

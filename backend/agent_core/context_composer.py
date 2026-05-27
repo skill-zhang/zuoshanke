@@ -312,12 +312,22 @@ def _build_prompt_layer(
 
 
 def _build_memory_layer(db, user_content: str, scene_id: str) -> str:
-    """Memory Layer — 从缓存按 scope 检索持久记忆"""
+    """Memory Layer — 从缓存按 scope 检索持久记忆
+
+    🆕 v1.5: scope='zhu' 时使用三层选择注入（Context Composer 路径也覆盖）
+    """
     if db is None:
         return ""
+
+    # 🆕 v1.5: 本体走三层选择注入
+    if not scene_id:
+        from agent_core.context_builder import _build_zhu_memory_block
+        return _build_zhu_memory_block(db, user_content)
+
+    # 分身场景：保持 top-5 不变
     from agent_core.memory_cache import MemoryCache
 
-    scope = "scene" if scene_id else "zhu"
+    scope = "scene"
     cache = MemoryCache.get_instance()
     memories = cache.get_top_for_context(
         query=user_content,
@@ -325,7 +335,6 @@ def _build_memory_layer(db, user_content: str, scene_id: str) -> str:
     )
     if not memories:
         return ""
-    # context composer 自行截取 Top-5（按 weight 已预排序）
     selected = memories[:5]
     lines = ["## 关于你的一些已知信息（仅供参考，不相关可忽略）"]
     for mem in selected:
@@ -336,7 +345,9 @@ def _build_memory_layer(db, user_content: str, scene_id: str) -> str:
 
 
 def _build_profile_layer(db, user_content: str) -> str:
-    """Profile Layer — 🆕 Schema v1.4 用户画像（正式库结构化偏好）
+    """Profile Layer — Schema v1.4 用户画像（正式库结构化偏好）
+
+    @deprecated("v1.5: 合并入 Core Tier — P0+P1 已自动同步为 AgentMemory(is_core=True)")
 
     P0 + P1 始终注入，P2 按话题匹配后选择性注入。
     ⚠️ 只读操作 —— 不修改数据库，不追踪注入次数（tracking 由上层异步处理）
