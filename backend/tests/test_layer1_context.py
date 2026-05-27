@@ -87,7 +87,7 @@ class TestPromptLayer:
         """包含记忆能力说明"""
         from agent_core.context_composer import compose_context
         msgs = compose_context(user_content="hi", scene_id="scene-p3")
-        assert "## 📝 记忆能力" in msgs[0]["content"]
+        assert "## 📝 记忆体系" in msgs[0]["content"]
 
     def test_contains_honesty_principle(self):
         """包含诚实原则"""

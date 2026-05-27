@@ -152,8 +152,25 @@ def _build_prompt_layer(
 
     parts = []
 
-    # 角色设定 — 从 DB 读取（不再硬编码）
-    if db and scene_id:
+    # 角色设定 — 🆕 优先级: custom_prompt > DB settings > 硬编码
+    custom_prompt = (fenshen_config or {}).get("custom_prompt", "")
+
+    if custom_prompt:
+        # 用户自定义 prompt 优先（来自 user_context 或 fenshen_config）
+        scene_sp = f"# 角色设定\n{custom_prompt.strip()}\n\n"
+        parts.append(scene_sp)
+        if scene_name or scene_id:
+            parts.append(
+                "## 系统约束\n"
+                "你在这场景中以当前设定行动，但你清楚自己只是分身。\n"
+                "你不知道其他场景中发生了什么，场景间完全隔离。\n"
+                "如果你被问到其他场景的事情，诚实说不知道即可。\n"
+                "\n"
+                "你存的记忆默认归属当前场景，不会出现在其他场景中。\n"
+                "如果你判断某条信息是用户的通用偏好（适用于所有场景），\n"
+                "可以用 scope='zhu' 参数显式存储为本体级记忆。\n\n"
+            )
+    elif db and scene_id:
         try:
             from models import Setting
             setting = db.query(Setting).first()
@@ -254,24 +271,18 @@ def _build_prompt_layer(
         "Agent Loop 超过 10 轮后自然降低频率。"
     )
 
-    # 记忆能力说明
+    # 记忆体系说明（Schema v1.5 三层结构）
     from agent_core.priority_assigner import PRIORITY_GUIDE
     parts.append(
-        "## 📝 记忆能力\n"
-        "你有长期记忆系统，用于跨会话持久化信息。\n"
+        "## 📝 记忆体系\n"
+        "坐山客拥有三层记忆体系：\n"
+        "1. 核心 Identity（🔒）已注入——你是谁、用户是谁、关键设计决策\n"
+        "2. 当前相关记忆（⭐）——与本次对话主题相关的长期知识\n"
+        "3. 全部记忆池——可用 memory(read, scope='zhu') 手动检索\n"
         "\n"
-        "规则：\n"
-        "- 当前对话的完整历史已在上下文中，不需要主动存记忆。\n"
-        "- 只有当用户明确说「记住这个」「记一下」「保存这条」时，\n"
-        "  才调用 memory(add) 存下来。\n"
-        "- memory(read) 用于查看之前会话存的记忆，当前对话不需要。\n"
-        "- 用户纠正认知时，用 memory(replace) 更新已有记忆。\n"
-        "\n"
-        "关于记忆作用域：\n"
-        "- 你存的记忆默认属于当前场景，不会出现在其他场景中。\n"
-        "- 如果你判断某条信息是用户的通用偏好（跨场景都需要知道），\n"
-        "  传 scope='zhu' 参数存为本体级记忆，届时会在所有场景生效。\n"
-        "- memory(read) 可以查看本体级记忆和你当前场景的记忆。"
+        "当你觉得缺少关键信息，或对某条记忆的准确性有疑问时：\n"
+        "- 用 memory(read, scope='zhu', query='...') 检索完整记忆\n"
+        "- 用 memory(action='replace', ...) 修正不准确的记忆\n"
     )
 
     # 优先级标记说明

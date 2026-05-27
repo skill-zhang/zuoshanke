@@ -110,7 +110,7 @@ class TestBasicStructure:
         from agent_core.context_builder import build_agent_context
         msgs = build_agent_context(user_content="hi")
         content = msgs[0]["content"]
-        assert "## 📝 记忆能力" in content
+        assert "## 📝 记忆体系" in content
 
     def test_system_has_converge_section(self):
         """system prompt 包含发散与收敛说明"""

@@ -31,7 +31,8 @@ def _make_session():
 
 
 def _insert_memory(db, key, content, scope="zhu", context_id=None,
-                   priority_level="P1", is_core=False, is_immortal=False):
+                   priority_level="P1", is_core=False, is_immortal=False,
+                   base_weight=2):
     from models import AgentMemory
     from utils import make_id
     mem = AgentMemory(
@@ -42,7 +43,7 @@ def _insert_memory(db, key, content, scope="zhu", context_id=None,
         scope=scope,
         context_id=context_id,
         priority_level=priority_level,
-        base_weight=5 if not is_core else 10,
+        base_weight=base_weight,
         is_core=is_core,
         is_immortal=is_immortal,
         tags=["test"],
@@ -115,11 +116,12 @@ def _create_thinking_map(db, scene_id):
     return tmap.id
 
 
-def _create_user_profile(db, content, priority="P2", tags=None, source_scenes=None):
+def _create_user_profile(db, key, content, priority="P2", tags=None, source_scenes=None):
     from models import UserProfile
     from utils import make_id
     p = UserProfile(
         id=make_id("up"),
+        key=key,
         content=content,
         priority=priority,
         is_active=True,
@@ -202,7 +204,7 @@ class TestBasicStructure:
         from agent_core.context_builder import build_agent_context_v1
         msgs = build_agent_context_v1(user_content="hi")
         content = msgs[0]["content"]
-        assert "## 📝 记忆能力" in content
+        assert "## 📝 记忆体系" in content
 
     def test_system_has_converge_section(self):
         """system prompt 包含发散与收敛说明"""
@@ -491,7 +493,7 @@ class TestProfileLayer:
         db = _make_session()
         try:
             _create_user_profile(
-                db, "用户是开发者，熟悉 Python 和 Web 开发",
+                db, "up-dev", "用户是开发者，熟悉 Python 和 Web 开发",
                 priority="P0", tags=["开发", "Python"],
             )
             msgs = build_agent_context_v1(
@@ -511,7 +513,7 @@ class TestProfileLayer:
         db = _make_session()
         try:
             _create_user_profile(
-                db, "用户偏好简洁的回复风格",
+                db, "up-concise", "用户偏好简洁的回复风格",
                 priority="P1",
             )
             msgs = build_agent_context_v1(
@@ -530,7 +532,7 @@ class TestProfileLayer:
         db = _make_session()
         try:
             _create_user_profile(
-                db, "用户用过 Django 框架开发过大型项目",
+                db, "up-django", "用户用过 Django 框架开发过大型项目",
                 priority="P2", tags=["Django"],
             )
             # 消息不匹配 → P2 不应出现
@@ -575,11 +577,11 @@ class TestProfileLayer:
         db = _make_session()
         try:
             _create_user_profile(
-                db, "P0原则：用户是开发者",
+                db, "up-p0", "P0原则：用户是开发者",
                 priority="P0",
             )
             _create_user_profile(
-                db, "P2参考：用户用过Flask",
+                db, "up-p2", "P2参考：用户用过Flask",
                 priority="P2", tags=["Flask"],
             )
             msgs = build_agent_context_v1(
