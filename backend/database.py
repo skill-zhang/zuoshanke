@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "zuoshanke.db")
+DB_PATH = os.path.join(BASE_DIR, "zuoshanke_test.db")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -39,6 +39,10 @@ def init_db():
             conn.execute(text("DROP TABLE IF EXISTS scenes"))
             conn.execute(text("DROP TABLE IF EXISTS projects"))
             conn.execute(text("DROP TABLE IF EXISTS channels"))
+            conn.execute(text("DROP TABLE IF EXISTS ai_providers"))
+            conn.execute(text("DROP TABLE IF EXISTS ai_models"))
+            conn.execute(text("DROP TABLE IF EXISTS settings"))
+            conn.execute(text("DROP TABLE IF EXISTS category_metas"))
             conn.commit()
         print("🗑  旧表已删除，准备重建 schema")
 
