@@ -215,16 +215,20 @@ class MemoryManager:
         # 🆕 作用域过滤
         if scope == "zhu":
             q = q.filter(AgentMemory.scope == "zhu")
-        elif scope in ("scene", "channel") and context_id:
-            if scope_only:
+        elif scope in ("scene", "channel"):
+            if scope_only and context_id:
                 q = q.filter(
                     (AgentMemory.scope == scope) & (AgentMemory.context_id == context_id)
                 )
-            else:
+            elif scope_only:
+                # scope_only=True 但无 context_id → 按 scope 过滤
+                q = q.filter(AgentMemory.scope == scope)
+            elif context_id:
                 q = q.filter(
                     (AgentMemory.scope == "zhu") |
                     ((AgentMemory.scope == scope) & (AgentMemory.context_id == context_id))
                 )
+            # else: scope 非 None 但无 context_id 且非 scope_only → 不限制（返回全部）
         mems = q.order_by(AgentMemory.created_at.desc()).all()
         # 计算实时权重并排序
         scored = [(self.calc_weight(m), m) for m in mems]

@@ -307,7 +307,7 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
               <span className="output-ref-title">{msg.outputRef.title}</span>
             </div>
             <button className="output-ref-open-btn" onClick={() => {
-              window.open(`http://localhost:8000/outputs/${msg.outputRef!.filePath}`, '_blank');
+              window.open(`http://localhost:9001/outputs/${msg.outputRef!.filePath}`, '_blank');
             }}>
               ↗ 打开
             </button>
@@ -331,7 +331,7 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
           <div className="msg-attachment-list">
             {msg.attachments.map((att, i) => {
               const fileUrl = att.url.startsWith('/uploads/')
-                ? `http://localhost:8000${att.url}`
+                ? `http://localhost:9001${att.url}`
                 : att.url;
               if (att.file_type === 'image') {
                 return (
@@ -804,7 +804,7 @@ export function ChatView() {
   // 生成附件预览 URL（用于缩略图渲染）
   const getPreviewUrl = (att: Attachment): string => {
     if (att.url.startsWith('/uploads/')) {
-      return `http://localhost:8000${att.url}`;
+      return `http://localhost:9001${att.url}`;
     }
     return att.url;
   };

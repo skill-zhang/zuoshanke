@@ -335,10 +335,13 @@ class TestGatewaySessionModel(unittest.TestCase):
         self.assertIsNotNone(gs.ended_at)
 
 
+import pytest
+
+@pytest.mark.server
 class TestSessionIntegration(unittest.TestCase):
     """通过 API 进行场景测试"""
 
-    BASE = "http://localhost:8000"
+    BASE = "http://localhost:9001"
 
     @classmethod
     def setUpClass(cls):

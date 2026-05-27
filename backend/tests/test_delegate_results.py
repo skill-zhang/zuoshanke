@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import pytest
 import unittest
 
 sys.path.insert(0, os.path.expanduser("~/zuoshanke/backend"))
@@ -113,10 +114,11 @@ class TestDelegateResultModel(unittest.TestCase):
             db.close()
 
 
+@pytest.mark.server
 class TestDelegateResultAPI(unittest.TestCase):
     """DelegateResult API 集成测试（需后端运行）"""
 
-    BASE = "http://localhost:8000/api"
+    BASE = "http://localhost:9001/api"
 
     def _fetch(self, url: str) -> dict:
         import urllib.request

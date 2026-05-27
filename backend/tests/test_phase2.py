@@ -9,6 +9,7 @@
 import json
 import os
 import sys
+import pytest
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -20,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools"))
 # Browser Dial Test 测试
 # ═══════════════════════════════════════════
 
+@pytest.mark.server
 class TestBrowserDialTestMocked(unittest.TestCase):
     """Browser Dial Test — mock Playwright 测试"""
 

@@ -173,4 +173,4 @@ if __name__ == "__main__":
     _st.Thread(target=_session_timeout_scanner, daemon=True).start()
     log.info("✅ Session 超时扫描线程已启动（每5分钟）")
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=9001)

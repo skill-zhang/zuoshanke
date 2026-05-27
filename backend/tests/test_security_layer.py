@@ -465,7 +465,7 @@ class TestToolIntegration(unittest.TestCase):
     def setUpClass(cls):
         """检查后端是否运行"""
         import urllib.request
-        cls.BASE = "http://localhost:8000"
+        cls.BASE = "http://localhost:9001"
         cls._backend_running = False
         try:
             resp = urllib.request.urlopen(f"{cls.BASE}/api/health", timeout=3)
@@ -513,7 +513,7 @@ class TestToolIntegration(unittest.TestCase):
     def test_http_client_block_localhost(self):
         """http_client 应阻断 localhost"""
         from tools.http_client import http_request
-        result = http_request("http://localhost:8000/api/health")
+        result = http_request("http://localhost:9001/api/health")
         self.assertIn("SSRF", result.get("error", ""))
 
     # ── write_file 路径安全集成 ──

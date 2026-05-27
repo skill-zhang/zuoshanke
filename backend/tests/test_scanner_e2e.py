@@ -5,6 +5,9 @@
 import sys, os
 sys.path.insert(0, os.path.expanduser("~/zuoshanke/backend"))
 
+import pytest
+pytestmark = pytest.mark.server
+
 from agent_core.command_scanner import scan_command
 from agent_core.tool_executor import execute_tool
 

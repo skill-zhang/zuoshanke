@@ -15,7 +15,7 @@ import time
 import unittest
 import requests
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "http://localhost:9001"
 
 # 检查后端是否在运行
 def _backend_running() -> bool:

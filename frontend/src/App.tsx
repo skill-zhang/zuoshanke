@@ -335,7 +335,7 @@ export default function App() {
 
       <div className="statusbar">
         <span className="dot green" /> 坐山客 v0.2
-        <span>|</span> API: http://localhost:8000
+        <span>|</span> API: http://localhost:9001
       </div>
 
       <Dialog />

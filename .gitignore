@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.venv-test/
 venv/
 *.egg-info/
 
@@ -14,6 +15,7 @@ frontend/.vite/
 # Generated
 shared/
 zuoshanke.db
+zuoshanke_test.db
 zuoshanke.db-journal
 *.db-wal
 *.db-shm
