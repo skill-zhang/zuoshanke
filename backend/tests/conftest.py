@@ -51,7 +51,8 @@ def _db_cleanup():
                    "agent_memory", "cross_refs", "memory_contexts",
                    "user_profiles", "pending_traits",
                    "output_refs", "cmd_templates",
-                   "scene_self_map", "document_summaries"]
+                   "scene_self_map", "document_summaries",
+                   "dialog_states"]
         for t in tables:
             try:
                 db.execute(text(f"DELETE FROM {t}"))
