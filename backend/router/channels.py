@@ -115,8 +115,8 @@ def send_channel_message(channel_id: str, data: MessageCreate, db: Session = Dep
             {"role": "user", "content": data.content},
             {"role": "ai", "content": ai_response},
         ]
-        extractor = MemoryExtractor(db)
-        mem_results = extractor.extract(extract_msgs, data.content)
+        extractor = MemoryExtractor
+        mem_results = extractor.extract(db, channel_id, extract_msgs)
         if mem_results:
             _log.debug(f"[memory] channel extract: {json.dumps(mem_results, ensure_ascii=False)}")
     except Exception as e:
@@ -268,8 +268,8 @@ def stream_channel_message(channel_id: str, data: MessageCreate, db: Session = D
                     {"role": "user", "content": data.content},
                     {"role": "ai", "content": full_content},
                 ]
-                extractor = MemoryExtractor(db)
-                mem_results = extractor.extract(extract_msgs, data.content)
+                extractor = MemoryExtractor
+                mem_results = extractor.extract(db, channel_id, extract_msgs)
                 if mem_results:
                     print(f"[memory] channel extract: {json.dumps(mem_results, ensure_ascii=False)}")
             except Exception as e:
