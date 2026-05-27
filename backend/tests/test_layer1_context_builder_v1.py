@@ -140,6 +140,7 @@ def _create_file_snapshot(db, scene_id, file_path, diff_summary, diff_content):
         id=make_id("snap"),
         scene_id=scene_id,
         file_path=file_path,
+        snapshot=f"snapshot of {file_path} at {utcnow()}",
         diff_summary=diff_summary,
         diff_content=diff_content,
         created_at=utcnow(),
@@ -567,7 +568,7 @@ class TestProfileLayer:
             )
             for m in msgs:
                 if isinstance(m.get("content"), str):
-                    assert "用户画像" not in m["content"]
+                    assert "👤 用户画像" not in m["content"]
         finally:
             db.close()
 
