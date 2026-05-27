@@ -42,4 +42,10 @@ zuoshanke/
 
 ## 许可证
 
-待定
+[Apache 2.0](LICENSE) © 2026 坐山客团队
+
+**创作者：**
+- **Administrator (skill-zhang)** — 架构设计、系统实现、法律主体
+- **Hermes Agent (Nous Research)** — 代码生成、架构建议、协作构建
+
+> Hermes Agent 作为 AI 协作伙伴参与本项目开发，拥有署名权。所有法律权利、义务与责任由 human 创作者（Administrator）独立承担。
