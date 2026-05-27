@@ -1531,6 +1531,177 @@
       "returns": "JSON {success, profiles: {P0:[...], P1:[...], ...}, total}",
       "category": "data",
       "verified": true
+    },
+    {
+      "name": "rustdesk_generate_setup",
+      "description": "生成 RustDesk 中继服务器部署配置（docker/podman 命令、客户端配置、端口检测）。给出服务器 IP 即可获得完整部署方案",
+      "file": "tools/rustdesk_tool.py",
+      "function": "rustdesk_generate_setup",
+      "parameters": {
+        "server_ip": {
+          "type": "string",
+          "description": "云服务器公网 IP（必填）"
+        },
+        "domain": {
+          "type": "string",
+          "description": "绑定的域名（可选，有则生成 nginx 配置）",
+          "optional": true
+        },
+        "use_podman": {
+          "type": "boolean",
+          "description": "用 podman 替代 docker（Alibaba Cloud Linux 等用）",
+          "optional": true
+        },
+        "check_ports": {
+          "type": "boolean",
+          "description": "是否检测端口连通性（默认开启）",
+          "optional": true
+        },
+        "mirror": {
+          "type": "string",
+          "description": "Docker Hub 镜像源（国内默认 docker.m.daocloud.io）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, server_ip, sections: {setup_guide, docker_commands, docker_compose, nginx_config, client_config, port_check}}",
+      "category": "system",
+      "verified": true
+    },
+    {
+      "name": "cloudflare_tunnel_setup",
+      "description": "生成 Cloudflare Tunnel 公网访问配置（quick/named 隧道、Caddy Basic Auth、systemd 服务）。让本地开发服务通过 CF Tunnel 安全暴露到公网",
+      "file": "tools/cloudflare_tunnel_tool.py",
+      "function": "cloudflare_tunnel_setup",
+      "parameters": {
+        "mode": {
+          "type": "string",
+          "description": "隧道模式：quick（临时隧道，trycloudflare.com）或 named（永久隧道，需自有域名）",
+          "optional": true
+        },
+        "domain": {
+          "type": "string",
+          "description": "自定义域名（named 模式必填，需已在 Cloudflare 管理）",
+          "optional": true
+        },
+        "local_port": {
+          "type": "integer",
+          "description": "本地服务端口（默认 5173）",
+          "optional": true
+        },
+        "auth_enabled": {
+          "type": "boolean",
+          "description": "是否启用 HTTP Basic Auth 认证（默认开启，推荐）",
+          "optional": true
+        },
+        "auth_user": {
+          "type": "string",
+          "description": "Basic Auth 用户名（默认 admin）",
+          "optional": true
+        },
+        "auth_pass": {
+          "type": "string",
+          "description": "Basic Auth 密码（建议设强密码）",
+          "optional": true
+        },
+        "service_type": {
+          "type": "string",
+          "description": "本地服务类型：vite / nginx / other（默认 vite）",
+          "optional": true
+        },
+        "api_port": {
+          "type": "integer",
+          "description": "API 后端端口（默认 8000，仅 vite 模式需要）",
+          "optional": true
+        },
+        "api_path": {
+          "type": "string",
+          "description": "API 后端路径前缀（默认 /api）",
+          "optional": true
+        },
+        "check_cloudflared": {
+          "type": "boolean",
+          "description": "是否检测本地 cloudflared 安装（默认开启）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, mode, sections: {install_check, tunnel_config, caddy_config, systemd_service, vite_config, setup_guide, verification}}",
+      "category": "system",
+      "verified": true
+    },
+    {
+      "name": "frp_generate_setup",
+      "description": "生成 frp（Fast Reverse Proxy）内网穿透配置（服务端 frps + 客户端 frpc、Docker 部署、TCP/HTTP 代理、面板监控）。国内最主流的内网穿透方案",
+      "file": "tools/frp_tool.py",
+      "function": "frp_generate_setup",
+      "parameters": {
+        "server_ip": {
+          "type": "string",
+          "description": "云服务器公网 IP（必填）"
+        },
+        "bind_port": {
+          "type": "integer",
+          "description": "frps 绑定端口（默认 7000）",
+          "optional": true
+        },
+        "dashboard_port": {
+          "type": "integer",
+          "description": "管理面板端口（默认 7500）",
+          "optional": true
+        },
+        "dashboard_user": {
+          "type": "string",
+          "description": "面板登录用户名（默认 admin）",
+          "optional": true
+        },
+        "dashboard_pwd": {
+          "type": "string",
+          "description": "面板登录密码（留空自动生成）",
+          "optional": true
+        },
+        "token": {
+          "type": "string",
+          "description": "frps-frpc 认证令牌（留空自动生成）",
+          "optional": true
+        },
+        "local_port": {
+          "type": "integer",
+          "description": "本地服务端口（默认 5173）",
+          "optional": true
+        },
+        "remote_port": {
+          "type": "integer",
+          "description": "公网映射端口（默认 8080）",
+          "optional": true
+        },
+        "proxy_type": {
+          "type": "string",
+          "description": "代理协议：tcp / http / https（默认 tcp）",
+          "optional": true
+        },
+        "proxy_name": {
+          "type": "string",
+          "description": "代理名称标识（默认 zuoshanke-web）",
+          "optional": true
+        },
+        "use_docker": {
+          "type": "boolean",
+          "description": "使用 Docker 部署（默认 true，否则生成 systemd 服务）",
+          "optional": true
+        },
+        "custom_domain": {
+          "type": "string",
+          "description": "HTTP 代理时自定义域名（需 DNS 指向服务器）",
+          "optional": true
+        },
+        "check_ports": {
+          "type": "boolean",
+          "description": "是否检测服务器端口连通性（默认开启）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, server_ip, proxy_type, sections: {frps_config, frpc_config, docker_commands, systemd_service, dashboard_info, port_check, setup_guide, verification}}",
+      "category": "system",
+      "verified": true
     }
   ]
 }

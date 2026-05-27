@@ -22,7 +22,7 @@ const ICON_MAP: Record<string, string> = {
   get_weather: '🌤', recommend_attractions: '🏛', get_equipment_checklist: '🎒',
   web_search: '🔍', todo_list: '📋', todo_add: '➕', todo_update: '📝',
   todo_delete: '🗑', todo_stats: '📊', session_search: '🕰', session_list: '💬',
-  run_code: '⚙️', geo_geocode: '📍', geo_reverse_geocode: '🗺',
+  run_code: '⚙️', rustdesk_generate_setup: '🖥️', cloudflare_tunnel_setup: '☁️', frp_generate_setup: '🚀', geo_geocode: '📍', geo_reverse_geocode: '🗺',
   geo_search_poi: '🏪', geo_route: '🚗', extract_text: '📄',
   extract_text_from_pdf: '📎', analyze_image: '🖼',
 };
