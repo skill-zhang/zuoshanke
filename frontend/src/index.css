@@ -1996,8 +1996,10 @@ body {
   font-size:13px;
   color:#c9d1d9;
   width:auto;
+  min-width:max-content;
   max-width:320px;
   white-space:normal;
+  overflow-wrap:break-word;
   line-height:1.4;
   pointer-events:none;
   z-index:101;
