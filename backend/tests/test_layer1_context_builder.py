@@ -1,19 +1,14 @@
-"""Layer 1-E: build_agent_context() 旧版上下文构建测试
+"""Layer 1-E: build_agent_context() 旧版上下文构建测试 — ⚠️ 已废弃
 
-测试目标：
-  P0: 基础调用 — 消息结构正确（system + history + user）
-  P0: user_context 自定义 — 覆盖 DB/默认
-  P0: scene_name — 分身意识注入
-  P0: scene_id — 场景信息 + 思维导图状态
-  P0: history_messages — 历史消息保留
-  P0: db/None — 降级处理
-  P1: 记忆块注入 — 插入记忆后验证出现在上下文中
-  P1: DB settings — system_prompt 从 DB 读取
-  P1: 工具列表 — match_tools 按输入匹配
-  P1: 技能块 — SkillManager 匹配
+此文件测试 build_agent_context() 旧版（已注释掉，见 context_builder.py）。
+该函数无生产代码引用，功能已被 build_agent_context_v1() 替代。
+新测试请见 test_layer1_context_builder_v1.py。
 
-不 mock — 使用真实 DB 会话：zuoshanke_test.db
+保留此文件仅作为旧版行为参考，不再执行。
 """
+# 标记为废弃：pytest 跳过整个文件
+__test__ = False
+
 import pytest
 import json
 
