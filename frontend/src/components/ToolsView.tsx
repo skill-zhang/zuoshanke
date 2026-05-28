@@ -24,7 +24,7 @@ const ICON_MAP: Record<string, string> = {
   todo_delete: '🗑', todo_stats: '📊', session_search: '🕰', session_list: '💬',
   run_code: '⚙️', rustdesk_generate_setup: '🖥️', cloudflare_tunnel_setup: '☁️', frp_generate_setup: '🚀', geo_geocode: '📍', geo_reverse_geocode: '🗺',
   geo_search_poi: '🏪', geo_route: '🚗', extract_text: '📄', prophet_forecast: '📈',
-  extract_text_from_pdf: '📎', analyze_image: '🖼', text_to_speech: '🎤',
+  extract_text_from_pdf: '📎', analyze_image: '🖼', text_to_speech: '🎤', translate: '🌐',
 };
 function getIcon(name: string) { return ICON_MAP[name] || '🛠'; }
 

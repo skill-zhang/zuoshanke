@@ -1784,6 +1784,36 @@
       "verified": true
     },
     {
+      "name": "translate",
+      "description": "多语言翻译 — 基于本地 Qwen LLM，支持中英日韩法德西俄等 13 种语言，自动检测源语言、双语对照、例句模式",
+      "file": "tools/translate.py",
+      "function": "translate",
+      "parameters": {
+        "text": {
+          "type": "string",
+          "description": "要翻译的文本（必填）"
+        },
+        "source": {
+          "type": "string",
+          "description": "源语言代码，默认 auto 自动检测。可选：zh-CN(中文) en(英语) ja(日语) ko(韩语) fr(法语) de(德语) es(西语) ru(俄语)",
+          "optional": true
+        },
+        "target": {
+          "type": "string",
+          "description": "目标语言代码，默认 en(英语)。支持同 source 的语种",
+          "optional": true
+        },
+        "format_mode": {
+          "type": "string",
+          "description": "输出模式：normal(仅译文) / dual(双语对照) / examples(译文+例句)，默认 normal",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, translation, source_lang, target_lang, format, detected, text_length}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",

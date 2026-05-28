@@ -42,6 +42,9 @@ interface TraceState {
   isPanelOpen: boolean;
   floatingBtnTop: number;  // 悬浮按钮 top 位置（px）
 
+  /** 内部版本号，每次 mutation 递增 — 用于 useEffect 监听任何内容变化 */
+  _updateVersion: number;
+
   /** 当前场景的步骤列表（派生自 traces） */
   getSteps: (sceneId: string) => TraceStep[];
 
@@ -69,6 +72,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
   tracesByScene: {},
   isPanelOpen: false,
   floatingBtnTop: window.innerHeight / 2,
+  _updateVersion: 0,
 
   getSteps: (sceneId: string): TraceStep[] => {
     const traces = get().tracesByScene[sceneId] || [];
@@ -112,6 +116,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
           ...state.tracesByScene,
           [sceneId]: [...existing, event],
         },
+        _updateVersion: state._updateVersion + 1,
       };
     });
   },
@@ -119,7 +124,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
   clearTraces: (sceneId) => {
     set(state => {
       const { [sceneId]: _, ...rest } = state.tracesByScene;
-      return { tracesByScene: rest };
+      return { tracesByScene: rest, _updateVersion: state._updateVersion + 1 };
     });
   },
 
@@ -140,6 +145,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
               : t
           ),
         },
+        _updateVersion: state._updateVersion + 1,
       };
     });
   },
@@ -156,6 +162,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
               : t
           ),
         },
+        _updateVersion: state._updateVersion + 1,
       };
     });
   },

@@ -34,6 +34,25 @@ function getMsgLimit(): number {
   } catch { return 4; }
 }
 
+/** per-entity 消息存储单元 */
+export interface EntityMessages {
+  messages: Message[];
+  hasOlder: boolean;
+  totalCount: number;
+  loading: boolean;
+}
+
+/** 生成 per-entity key：场景/频道/默认闲聊 */
+export function entityKey(entityType: 'scene' | 'channel' | 'default', id?: string): string {
+  if (entityType === 'default') return 'default';
+  return `${entityType}:${id}`;
+}
+
+/** 空的 EntityMessages 默认值 */
+function emptyEntity(): EntityMessages {
+  return { messages: [], hasOlder: false, totalCount: 0, loading: false };
+}
+
 interface AppState {
   view: ViewPage;
   setView: (v: ViewPage) => void;
@@ -81,11 +100,8 @@ interface AppState {
   deleteActionMapAndReload: (id: string) => Promise<void>;
   generateActionMapAndReload: (thinkNodeId: string) => Promise<void>;
 
-  // ═══ 场景消息（分页） ═══
-  messages: Message[];
-  messageTotalCount: number;
-  hasOlderMessages: boolean;
-  messagesLoading: boolean;
+  // ═══ per-entity 消息（取代场景+频道分开的两套） ═══
+  messagesByEntity: Record<string, EntityMessages>;
   currentSessionId: string | null;   // 场景当前会话 ID
   sessions: SceneSession[];          // 历史会话列表
   loadSceneMessages: (sceneId: string) => Promise<void>;
@@ -107,11 +123,7 @@ interface AppState {
   clearChannelHistory: (id: string) => Promise<void>;
   setCurrentChannel: (c: Channel) => void;
 
-  // ═══ 频道消息（分页） ═══
-  channelMessages: Message[];
-  channelMessageTotalCount: number;
-  channelHasOlder: boolean;
-  channelMessagesLoading: boolean;
+  // ═══ 频道消息（分页 — 已统一为 messagesByEntity） ═══
   loadChannelMessages: (channelId: string) => Promise<void>;
   loadOlderChannelMessages: (channelId: string) => Promise<void>;
   sendChannelMsg: (channelId: string, content: string, attachments?: Attachment[]) => Promise<void>;
@@ -222,8 +234,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   currentScene: null,
   setCurrentScene: async (s) => {
-    // 切场景时重置消息 + session，避免旧 session 污染上下文
-    set({ currentScene: s, messages: [], messageTotalCount: 0, hasOlderMessages: false, contextUsage: null, capacityWarning: null, currentSessionId: null });
+    // 切换场景时只换指针，不重置消息（per-entity 隔离）
+    set({ currentScene: s, contextUsage: null, capacityWarning: null, currentSessionId: null });
     if (s) {
       get().loadUserContext(s.id);
       try {
@@ -434,46 +446,64 @@ export const useStore = create<AppState>((set, get) => ({
     set({ actionMapDrawerOpen: true });
   },
 
-  // ═══ 场景消息（分页） ═══
-  messages: [],
-  messageTotalCount: 0,
-  hasOlderMessages: false,
-  messagesLoading: false,
+  // ═══ per-entity 消息 ═══
+  messagesByEntity: {},
   currentSessionId: null,
   sessions: [],
   loadSceneMessages: async (sceneId) => {
     try {
-      set({ messagesLoading: true });
+      const key = entityKey('scene', sceneId);
+      set(state => ({ messagesByEntity: { ...state.messagesByEntity, [key]: { ...state.messagesByEntity[key] || emptyEntity(), loading: true } } }));
       const sessionId = get().currentSessionId;
       const result = await listSceneMessages(sceneId, sessionId || undefined, getMsgLimit());
-      set({
-        messages: result.messages,
-        hasOlderMessages: result.has_more,
-        messageTotalCount: result.total,
-        messagesLoading: false,
-      });
+      set(state => ({
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [key]: { messages: result.messages, hasOlder: result.has_more, totalCount: result.total, loading: false },
+        },
+      }));
     } catch (e) {
       console.error('[store] loadSceneMessages failed:', e);
-      set({ messagesLoading: false });
+      set(state => {
+        const key = entityKey('scene', sceneId);
+        const cur = state.messagesByEntity[key];
+        return cur ? { messagesByEntity: { ...state.messagesByEntity, [key]: { ...cur, loading: false } } } : {};
+      });
     }
   },
   loadOlderMessages: async (sceneId) => {
     const state = get();
-    if (!state.messages.length || !state.hasOlderMessages || state.messagesLoading) return;
+    const key = entityKey('scene', sceneId);
+    const em = state.messagesByEntity[key];
+    if (!em || !em.messages.length || !em.hasOlder || em.loading) return;
     try {
-      set({ messagesLoading: true });
-      const oldestId = state.messages[0].id;
+      set(state => {
+        const cur = state.messagesByEntity[key];
+        return cur ? { messagesByEntity: { ...state.messagesByEntity, [key]: { ...cur, loading: true } } } : {};
+      });
+      const oldestId = em.messages[0].id;
       const sessionId = state.currentSessionId;
       const result = await listSceneMessages(sceneId, sessionId || undefined, getMsgLimit(), oldestId);
-      set({
-        messages: [...result.messages, ...state.messages],
-        hasOlderMessages: result.has_more,
-        messageTotalCount: result.total,
-        messagesLoading: false,
+      set(state => {
+        const cur = state.messagesByEntity[key];
+        return {
+          messagesByEntity: {
+            ...state.messagesByEntity,
+            [key]: {
+              messages: [...result.messages, ...(cur?.messages || em.messages)],
+              hasOlder: result.has_more,
+              totalCount: result.total,
+              loading: false,
+            },
+          },
+        };
       });
     } catch (e) {
       console.error('[store] loadOlderMessages failed:', e);
-      set({ messagesLoading: false });
+      set(state => {
+        const cur = state.messagesByEntity[key];
+        return cur ? { messagesByEntity: { ...state.messagesByEntity, [key]: { ...cur, loading: false } } } : {};
+      });
     }
   },
   sendSceneMsg: async (sceneId, content, attachments) => {
@@ -505,13 +535,21 @@ export const useStore = create<AppState>((set, get) => ({
       created_at: new Date().toISOString(),
     };
 
-    set({
+    const sceneKey = entityKey('scene', sceneId);
+
+    set(state => ({
       isGenerating: true,
       generatingEntityId: sceneId,
       currentToolCards: [],
       currentToolLogs: [],
-      messages: [...get().messages, tempUserMsg, tempAiMsg],
-    });
+      messagesByEntity: {
+        ...state.messagesByEntity,
+        [sceneKey]: {
+          ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+          messages: [...(state.messagesByEntity[sceneKey]?.messages || []), tempUserMsg, tempAiMsg],
+        },
+      },
+    }));
 
     try {
       const sessionId = get().currentSessionId;
@@ -533,17 +571,23 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'thought') {
           const thoughtId = 'thought-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
           set(state => ({
-            messages: [...state.messages, {
-              id: thoughtId,
-              scene_id: sceneId,
-              channel_id: null,
-              session_id: null,
-              role: 'thought' as any,
-              content: event.content,
-              map_ref: null,
-              model: null,
-              created_at: new Date().toISOString(),
-            }],
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [sceneKey]: {
+                ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+                messages: [...(state.messagesByEntity[sceneKey]?.messages || []), {
+                  id: thoughtId,
+                  scene_id: sceneId,
+                  channel_id: null,
+                  session_id: null,
+                  role: 'thought' as any,
+                  content: event.content,
+                  map_ref: null,
+                  model: null,
+                  created_at: new Date().toISOString(),
+                }],
+              },
+            },
           }));
         } else if (event.type === 'model_info') {
           set({ currentModelName: event.model, contextUsage: null, capacityWarning: null });
@@ -564,19 +608,31 @@ export const useStore = create<AppState>((set, get) => ({
           });
         } else if (event.type === 'user_msg') {
           set(state => ({
-            messages: state.messages.map(m =>
-              m.id === tempUserId
-                ? { ...m, id: event.id, created_at: event.created_at }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [sceneKey]: {
+                ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+                messages: (state.messagesByEntity[sceneKey]?.messages || []).map(m =>
+                  m.id === tempUserId
+                    ? { ...m, id: event.id, created_at: event.created_at }
+                    : m
+                ),
+              },
+            },
           }));
         } else if (event.type === 'token') {
           set(state => ({
-            messages: state.messages.map(m =>
-              m.id === tempAiId
-                ? { ...m, content: m.content === '🤔 正在分析...' ? event.token : m.content + event.token }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [sceneKey]: {
+                ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+                messages: (state.messagesByEntity[sceneKey]?.messages || []).map(m =>
+                  m.id === tempAiId
+                    ? { ...m, content: m.content === '🤔 正在分析...' ? event.token : m.content + event.token }
+                    : m
+                ),
+              },
+            },
           }));
           // 打断 React 18 批量化，让每个 token 独立渲染
           await new Promise(r => setTimeout(r, 0));
@@ -584,11 +640,17 @@ export const useStore = create<AppState>((set, get) => ({
           set(state => ({
             isGenerating: false,
             generatingEntityId: null,
-            messages: state.messages.map(m =>
-              m.id === tempAiId
-                ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null, toolCards: state.currentToolCards }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [sceneKey]: {
+                ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+                messages: (state.messagesByEntity[sceneKey]?.messages || []).map(m =>
+                  m.id === tempAiId
+                    ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null, toolCards: state.currentToolCards }
+                    : m
+                ),
+              },
+            },
           }));
           // 🆕 Schema v1.1: Token 用量核算
           if (event.usage && currentSessionId) {
@@ -609,30 +671,42 @@ export const useStore = create<AppState>((set, get) => ({
           setDelegateResults(event.children || []);
         } else if (event.type === 'asset') {
           set(state => ({
-            messages: [...state.messages, {
-              id: event.asset_id || 'asset-' + Date.now(),
-              scene_id: sceneId,
-              channel_id: null,
-              session_id: null,
-              role: 'ai',
-              content: '',
-              asset: { type: event.type, title: event.title, content: event.content },
-              map_ref: null,
-              model: null,
-              created_at: new Date().toISOString(),
-            }],
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [sceneKey]: {
+                ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+                messages: [...(state.messagesByEntity[sceneKey]?.messages || []), {
+                  id: event.asset_id || 'asset-' + Date.now(),
+                  scene_id: sceneId,
+                  channel_id: null,
+                  session_id: null,
+                  role: 'ai',
+                  content: '',
+                  asset: { type: event.type, title: event.title, content: event.content },
+                  map_ref: null,
+                  model: null,
+                  created_at: new Date().toISOString(),
+                }],
+              },
+            },
           }));
         } else if (event.type === 'output:created') {
           // 🆕 自动提取的 HTML 产出 — 附加到最后一条 AI 消息
           set(state => {
-            const msgs = [...state.messages];
+            const em = state.messagesByEntity[sceneKey];
+            const msgs = em ? [...em.messages] : [];
             for (let i = msgs.length - 1; i >= 0; i--) {
               if (msgs[i].role === 'ai' && !msgs[i].id.startsWith('temp-')) {
                 msgs[i] = { ...msgs[i], outputRef: { outputId: event.output_id, title: event.title, filePath: event.file_path } };
                 break;
               }
             }
-            return { messages: msgs };
+            return {
+              messagesByEntity: {
+                ...state.messagesByEntity,
+                [sceneKey]: { ...(state.messagesByEntity[sceneKey] || emptyEntity()), messages: msgs },
+              },
+            };
           });
         } else if (event.type === 'thinking_map:diverged') {
           // 自动发散完成，刷新 Thinking Map
@@ -670,11 +744,17 @@ export const useStore = create<AppState>((set, get) => ({
             generatingEntityId: null,
             currentToolCards: [],
             currentToolLogs: [],
-            messages: state.messages.map(m =>
-              m.id === tempAiId
-                ? { ...m, content: `❌ ${event.message}` }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [sceneKey]: {
+                ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+                messages: (state.messagesByEntity[sceneKey]?.messages || []).map(m =>
+                  m.id === tempAiId
+                    ? { ...m, content: `❌ ${event.message}` }
+                    : m
+                ),
+              },
+            },
           }));
         // 🆕 高危命令审批
         } else if (event.type === 'command_approval') {
@@ -717,11 +797,17 @@ export const useStore = create<AppState>((set, get) => ({
       set(state => ({
         isGenerating: false,
         generatingEntityId: null,
-        messages: state.messages.map(m =>
-          m.id === tempAiId
-            ? { ...m, content: '❌ 网络请求失败，请重试' }
-            : m
-        ),
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [sceneKey]: {
+            ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+            messages: (state.messagesByEntity[sceneKey]?.messages || []).map(m =>
+              m.id === tempAiId
+                ? { ...m, content: '❌ 网络请求失败，请重试' }
+                : m
+            ),
+          },
+        },
       }));
     }
   },
@@ -756,59 +842,82 @@ export const useStore = create<AppState>((set, get) => ({
     // 如果删的是当前频道，切回第一个
     if (get().currentChannel?.id === id) {
       const chs = get().channels.filter(c => c.id !== id);
-      set({ currentChannel: chs[0] || null, channelMessages: [] });
+      const key = entityKey('channel', id);
+      set(state => {
+        const { [key]: _, ...rest } = state.messagesByEntity;
+        return { currentChannel: chs[0] || null, messagesByEntity: rest };
+      });
     }
   },
   clearChannelHistory: async (id) => {
     await clearChannelMessages(id);
     if (get().currentChannel?.id === id) {
-      set({ channelMessages: [] });
+      set(state => {
+        const key = entityKey('channel', id);
+        return { messagesByEntity: { ...state.messagesByEntity, [key]: emptyEntity() } };
+      });
     }
   },
   setCurrentChannel: (c) => {
-    set({ currentChannel: c, channelMessages: [], channelMessageTotalCount: 0, channelHasOlder: false, contextUsage: null, capacityWarning: null });
+    // 切换频道时只换指针，不重置消息（per-entity 隔离）
+    set({ currentChannel: c, contextUsage: null, capacityWarning: null });
     // 🆕 Schema v1.1: 激活 session（异步，不阻塞 UI）
     activateSession('channel', c.id, c.name).catch(e =>
       console.error('[store] activateSession failed:', e)
     );
   },
 
-  // ═══ 频道消息（分页） ═══
-  channelMessages: [],
-  channelMessageTotalCount: 0,
-  channelHasOlder: false,
+  // ═══ 频道消息（分页 — 已统一） ═══
   channelMessagesLoading: false,
   loadChannelMessages: async (channelId) => {
     try {
-      set({ channelMessagesLoading: true });
+      const key = entityKey('channel', channelId);
+      set(state => ({ messagesByEntity: { ...state.messagesByEntity, [key]: { ...state.messagesByEntity[key] || emptyEntity(), loading: true } } }));
       const result = await listChannelMessages(channelId, getMsgLimit());
-      set({
-        channelMessages: result.messages,
-        channelHasOlder: result.has_more,
-        channelMessageTotalCount: result.total,
-        channelMessagesLoading: false,
-      });
+      set(state => ({
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [key]: { messages: result.messages, hasOlder: result.has_more, totalCount: result.total, loading: false },
+        },
+      }));
     } catch (e) {
       console.error('[store] loadChannelMessages failed:', e);
-      set({ channelMessagesLoading: false });
+      set(state => {
+        const key = entityKey('channel', channelId);
+        const cur = state.messagesByEntity[key];
+        return cur ? { messagesByEntity: { ...state.messagesByEntity, [key]: { ...cur, loading: false } } } : {};
+      });
     }
   },
   loadOlderChannelMessages: async (channelId) => {
     const state = get();
-    if (!state.channelMessages.length || !state.channelHasOlder || state.channelMessagesLoading) return;
+    const key = entityKey('channel', channelId);
+    const em = state.messagesByEntity[key];
+    if (!em || !em.messages.length || !em.hasOlder || em.loading) return;
     try {
-      set({ channelMessagesLoading: true });
-      const oldestId = state.channelMessages[0].id;
-      const result = await listChannelMessages(channelId, getMsgLimit(), oldestId);
-      set({
-        channelMessages: [...result.messages, ...state.channelMessages],
-        channelHasOlder: result.has_more,
-        channelMessageTotalCount: result.total,
-        channelMessagesLoading: false,
+      set(state => {
+        const cur = state.messagesByEntity[key];
+        return cur ? { messagesByEntity: { ...state.messagesByEntity, [key]: { ...cur, loading: true } } } : {};
       });
+      const oldestId = em.messages[0].id;
+      const result = await listChannelMessages(channelId, getMsgLimit(), oldestId);
+      set(state => ({
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [key]: {
+            messages: [...result.messages, ...(state.messagesByEntity[key]?.messages || em.messages)],
+            hasOlder: result.has_more,
+            totalCount: result.total,
+            loading: false,
+          },
+        },
+      }));
     } catch (e) {
       console.error('[store] loadOlderChannelMessages failed:', e);
-      set({ channelMessagesLoading: false });
+      set(state => {
+        const cur = state.messagesByEntity[key];
+        return cur ? { messagesByEntity: { ...state.messagesByEntity, [key]: { ...cur, loading: false } } } : {};
+      });
     }
   },
   sendChannelMsg: async (channelId, content, attachments) => {
@@ -841,11 +950,19 @@ export const useStore = create<AppState>((set, get) => ({
       created_at: new Date().toISOString(),
     };
 
-    set({
+    const channelKey = entityKey('channel', channelId);
+
+    set(state => ({
       isGenerating: true,
       generatingEntityId: channelId,
-      channelMessages: [...get().channelMessages, tempUserMsg, tempAiMsg],
-    });
+      messagesByEntity: {
+        ...state.messagesByEntity,
+        [channelKey]: {
+          ...(state.messagesByEntity[channelKey] || emptyEntity()),
+          messages: [...(state.messagesByEntity[channelKey]?.messages || []), tempUserMsg, tempAiMsg],
+        },
+      },
+    }));
 
     try {
       const stream = sendChannelMessageStream(channelId, content, attachments);
@@ -871,20 +988,32 @@ export const useStore = create<AppState>((set, get) => ({
         } else if (event.type === 'user_msg') {
           // 收到服务器确认的用户消息 → 替换临时 ID
           set(state => ({
-            channelMessages: state.channelMessages.map(m =>
-              m.id === tempUserId
-                ? { ...m, id: event.id, created_at: event.created_at, attachments: event.attachments || m.attachments }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [channelKey]: {
+                ...(state.messagesByEntity[channelKey] || emptyEntity()),
+                messages: (state.messagesByEntity[channelKey]?.messages || []).map(m =>
+                  m.id === tempUserId
+                    ? { ...m, id: event.id, created_at: event.created_at, attachments: event.attachments || m.attachments }
+                    : m
+                ),
+              },
+            },
           }));
         } else if (event.type === 'token') {
           // 逐 token 追加到 AI 消息
           set(state => ({
-            channelMessages: state.channelMessages.map(m =>
-              m.id === tempAiId
-                ? { ...m, content: m.content + event.token }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [channelKey]: {
+                ...(state.messagesByEntity[channelKey] || emptyEntity()),
+                messages: (state.messagesByEntity[channelKey]?.messages || []).map(m =>
+                  m.id === tempAiId
+                    ? { ...m, content: m.content + event.token }
+                    : m
+                ),
+              },
+            },
           }));
           // 打断 React 18 批量化，让每个 token 独立渲染
           await new Promise(r => setTimeout(r, 0));
@@ -893,21 +1022,33 @@ export const useStore = create<AppState>((set, get) => ({
           set(state => ({
             isGenerating: false,
             generatingEntityId: null,
-            channelMessages: state.channelMessages.map(m =>
-              m.id === tempAiId
-                ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [channelKey]: {
+                ...(state.messagesByEntity[channelKey] || emptyEntity()),
+                messages: (state.messagesByEntity[channelKey]?.messages || []).map(m =>
+                  m.id === tempAiId
+                    ? { ...m, id: event.id, content: event.content, created_at: event.created_at, model: event.model || null }
+                    : m
+                ),
+              },
+            },
           }));
         } else if (event.type === 'error') {
           set(state => ({
             isGenerating: false,
             generatingEntityId: null,
-            channelMessages: state.channelMessages.map(m =>
-              m.id === tempAiId
-                ? { ...m, content: `❌ ${event.message}` }
-                : m
-            ),
+            messagesByEntity: {
+              ...state.messagesByEntity,
+              [channelKey]: {
+                ...(state.messagesByEntity[channelKey] || emptyEntity()),
+                messages: (state.messagesByEntity[channelKey]?.messages || []).map(m =>
+                  m.id === tempAiId
+                    ? { ...m, content: `❌ ${event.message}` }
+                    : m
+                ),
+              },
+            },
           }));
         }
       }
@@ -916,11 +1057,17 @@ export const useStore = create<AppState>((set, get) => ({
       set(state => ({
         isGenerating: false,
         generatingEntityId: null,
-        channelMessages: state.channelMessages.map(m =>
-          m.id === tempAiId
-            ? { ...m, content: '❌ 网络请求失败，请重试' }
-            : m
-        ),
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [channelKey]: {
+            ...(state.messagesByEntity[channelKey] || emptyEntity()),
+            messages: (state.messagesByEntity[channelKey]?.messages || []).map(m =>
+              m.id === tempAiId
+                ? { ...m, content: '❌ 网络请求失败，请重试' }
+                : m
+            ),
+          },
+        },
       }));
 
     }
@@ -964,7 +1111,8 @@ export const useStore = create<AppState>((set, get) => ({
   newSceneSession: async (sceneId) => {
     try {
       const { session_id } = await apiNewSceneSession(sceneId);
-      set({ currentSessionId: session_id, messages: [], messageTotalCount: 0, hasOlderMessages: false });
+      const key = entityKey('scene', sceneId);
+      set(state => ({ currentSessionId: session_id, messagesByEntity: { ...state.messagesByEntity, [key]: emptyEntity() } }));
       // 新会话后刷新会话列表
       get().loadSceneSessions(sceneId);
       return session_id;
@@ -980,7 +1128,8 @@ export const useStore = create<AppState>((set, get) => ({
   },
   clearSceneMsgs: async (sceneId) => {
     await clearSceneMessages(sceneId);
-    set({ messages: [], messageTotalCount: 0, hasOlderMessages: false, currentSessionId: null });
+    const key = entityKey('scene', sceneId);
+    set(state => ({ messagesByEntity: { ...state.messagesByEntity, [key]: emptyEntity() }, currentSessionId: null }));
     // 清空后刷新会话列表
     get().loadSceneSessions(sceneId);
   },
@@ -993,9 +1142,10 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   switchSceneSession: (sessionId) => {
-    set({ currentSessionId: sessionId, messages: [], messageTotalCount: 0, hasOlderMessages: false, currentToolCards: [] });
     const state = get();
     if (state.currentScene) {
+      const key = entityKey('scene', state.currentScene.id);
+      set({ currentSessionId: sessionId, messagesByEntity: { ...state.messagesByEntity, [key]: emptyEntity() }, currentToolCards: [] });
       state.loadSceneMessages(state.currentScene.id);
     }
   },

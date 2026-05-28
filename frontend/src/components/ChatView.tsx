@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useStore } from '../stores/appStore';
+import { useStore, entityKey } from '../stores/appStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -435,7 +435,7 @@ function EmptyState({ isChannel }: { isChannel: boolean }) {
 
 export function ChatView() {
   const {
-    messages, channelMessages,
+    messagesByEntity,
     currentScene, currentChannel,
     sendSceneMsg, sendChannelMsg,
     deleteMsg, regenerateMsg, newSceneSession,
@@ -443,9 +443,6 @@ export function ChatView() {
     sessions, loadSceneSessions, loadSceneMessages, switchSceneSession,
     currentSessionId,
     loadOlderMessages, loadOlderChannelMessages,
-    hasOlderMessages, channelHasOlder,
-    messagesLoading, channelMessagesLoading,
-    messageTotalCount, channelMessageTotalCount,
     isGenerating,
     generatingEntityId,
     currentModelName,
@@ -544,7 +541,15 @@ export function ChatView() {
 
   // 判断当前模式
   const isChannel = !currentScene && !!currentChannel;
-  const displayMessages: Message[] = isChannel ? channelMessages : messages;
+  const entityId = currentScene?.id || currentChannel?.id;
+  const currentEntityKey = entityId
+    ? entityKey(isChannel ? 'channel' : 'scene', entityId)
+    : 'default';
+  const entityMessages = messagesByEntity[currentEntityKey];
+  const displayMessages: Message[] = entityMessages?.messages || [];
+  const hasOlder = entityMessages?.hasOlder || false;
+  const messageTotalCount = entityMessages?.totalCount || 0;
+  const isLoading = entityMessages?.loading || false;
   const contextLabel = isChannel
     ? `💬 ${currentChannel?.name || '闲聊'} · 自由聊天`
     : currentScene
@@ -649,8 +654,6 @@ export function ChatView() {
 
     // 向上滚到顶部 → 加载更早消息
     if (container.scrollTop < 80) {
-      const isLoading = isChannel ? channelMessagesLoading : messagesLoading;
-      const hasOlder = isChannel ? channelHasOlder : hasOlderMessages;
       const entityId = currentScene?.id || currentChannel?.id;
       if (!isLoading && hasOlder && entityId) {
         // 记录当前高度，用于 prepend 后保持滚动位置
@@ -669,8 +672,7 @@ export function ChatView() {
       setShowBackToBottom(false);
       setUnreadCount(0);
     }
-  }, [isChannel, channelMessagesLoading, messagesLoading, channelHasOlder, hasOlderMessages,
-      currentScene, currentChannel, loadOlderChannelMessages, loadOlderMessages, isAtBottom]);
+  }, [isLoading, hasOlder, currentScene, currentChannel, loadOlderChannelMessages, loadOlderMessages, isAtBottom]);
 
   // 自动调整 textarea 高度（仅当内容超出现有高度时，不覆盖手动拖拽）
   useEffect(() => {
@@ -1056,7 +1058,7 @@ export function ChatView() {
         <div className="chat-messages-wrapper">
           <div className="chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
           {/* 加载更早消息指示器 */}
-          {(messagesLoading || channelMessagesLoading) && (
+          {isLoading && (
             <div style={{ textAlign: 'center', padding: '12px 0', color: '#8b949e', fontSize: 13 }}>
               ⏳ 加载更早消息...
             </div>
