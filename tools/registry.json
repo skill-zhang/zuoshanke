@@ -1814,6 +1814,27 @@
       "verified": true
     },
     {
+      "name": "news_summary",
+      "description": "新闻摘要 — 抓取主流中文新闻源（IT之家/36氪/Solidot/少数派），用本地 LLM 生成结构化每日简报。支持 headline/tech/life/all 分类",
+      "file": "tools/news_summary.py",
+      "function": "news_summary",
+      "parameters": {
+        "category": {
+          "type": "string",
+          "description": "新闻分类：headline(要闻)/tech(科技)/life(生活)/all(综合)，默认 headline",
+          "optional": true
+        },
+        "max_items": {
+          "type": "integer",
+          "description": "每条源最多抓取条目数，默认 10",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, category, category_label, sources, summary, items, fetched_at, total_items}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
