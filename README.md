@@ -40,6 +40,34 @@ zuoshanke/
 └── .git/
 ```
 
+## 快速开始
+
+### 后端
+
+```bash
+# 克隆后，进入 backend 目录创建虚拟环境
+cd zuoshanke/backend
+python3 -m venv venv
+
+# 安装依赖
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 启动后端
+venv/bin/python main.py
+```
+
+> **重要**：必须使用 venv，系统 Python 的 SQLAlchemy 版本过旧（1.4.x），代码需要 >= 2.0.36。
+> 详见 [docs/design/python-venv-setup.md](docs/design/python-venv-setup.md)
+
+### 前端
+
+```bash
+cd zuoshanke/frontend
+npm install
+npm run dev
+```
+
 ## 许可证
 
 [Apache 2.0](LICENSE) © 2026 坐山客团队
