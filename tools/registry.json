@@ -2086,6 +2086,26 @@
       "verified": true
     },
     {
+      "name": "express_tracking",
+      "description": "快递物流查询 — 基于快递100 API，支持顺丰/圆通/申通/中通/韵达/京东/EMS/极兔等50+快递公司，自动识别运单号前缀",
+      "file": "tools/express_tracking.py",
+      "function": "express_tracking",
+      "parameters": {
+        "tracking_no": {
+          "type": "string",
+          "description": "快递单号（必填）"
+        },
+        "company": {
+          "type": "string",
+          "description": "快递公司，可传中文名（'顺丰'）或编码（'shunfeng'）。为空时自动识别（SF→顺丰、YT→圆通、JD→京东等）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, tracking_no, company_name, state, is_signed, records}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
