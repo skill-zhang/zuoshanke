@@ -1835,6 +1835,31 @@
       "verified": true
     },
     {
+      "name": "generate_qrcode",
+      "description": "二维码生成 — 文本/URL/WiFi/电子名片转二维码 PNG 图片。支持 text/wifi/vcard 三种模式",
+      "file": "tools/qrcode_tool.py",
+      "function": "generate_qrcode",
+      "parameters": {
+        "content": {
+          "type": "string",
+          "description": "二维码内容（必填）。text模式=任意文本或URL；wifi模式='SSID:密码:加密'；vcard模式='姓名:电话:邮箱:公司'"
+        },
+        "mode": {
+          "type": "string",
+          "description": "内容模式：text(默认) / wifi / vcard",
+          "optional": true
+        },
+        "size": {
+          "type": "integer",
+          "description": "二维码尺寸（模块大小），默认 10",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, image_path, content, display_content, mode, file_size_bytes}",
+      "category": "system",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
