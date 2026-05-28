@@ -1881,6 +1881,35 @@
       "verified": true
     },
     {
+      "name": "recipe",
+      "description": "菜谱推荐 — 根据食材/菜名/菜系生成完整家常菜谱。支持按食材推荐、按菜名搜索、按川菜/粤菜等菜系筛选",
+      "file": "tools/recipe.py",
+      "function": "recipe",
+      "parameters": {
+        "ingredients": {
+          "type": "string",
+          "description": "已有的食材，逗号分隔。如 '鸡蛋,番茄,葱'"
+        },
+        "dish": {
+          "type": "string",
+          "description": "想做的菜名。如 '麻婆豆腐'（设定了则优先按菜名）"
+        },
+        "cuisine": {
+          "type": "string",
+          "description": "菜系偏好：sichuan(川菜)/cantonese(粤菜)/jiangzhe(江浙)/northern(北方)/japanese(日式)/western(西餐)，默认家常",
+          "optional": true
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "难度：easy(简单)/medium(中等)/hard(困难)，默认 easy",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, dish_name, cuisine, difficulty, prep_time, cook_time, ingredients, steps, tips, nutrition}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
