@@ -80,6 +80,35 @@ def _is_dangerous(code: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _scan_python_subprocess(code: str) -> tuple[bool, str]:
+    """检查 Python 代码中是否通过 subprocess/os.system 执行危险系统命令。
+
+    即使 language="python"，代码也可能通过 subprocess.run("kill", shell=True)
+    执行危险系统命令。此函数检查 Python 特定的危险子进程调用模式。
+    """
+    import re
+    patterns = [
+        # subprocess.run("kill ...", shell=True) 或 subprocess.Popen("kill ...", ...)
+        (r'subprocess\.(?:run|Popen|call|check_call)\s*\(\s*["\']\s*kill\s', 'Python subprocess kill'),
+        # os.system("kill ...")
+        (r'os\.system\s*\(\s*["\']\s*kill\s', 'Python os.system kill'),
+        # os.popen("kill ...")
+        (r'os\.popen\s*\(\s*["\']\s*kill\s', 'Python os.popen kill'),
+        # subprocess.run("fuser -k ...")
+        (r'subprocess\.(?:run|Popen)\s*\(\s*["\']\s*fuser\s+-k\s', 'Python subprocess fuser kill'),
+        # subprocess.run(["kill", ...]) — list args
+        (r'subprocess\.(?:run|Popen|call)\s*\(\s*\[[^\]]*["\']kill["\']', 'Python subprocess kill (list args)'),
+        # subprocess.run("systemctl stop ...")
+        (r'subprocess\.(?:run|Popen)\s*\(\s*["\']\s*systemctl\s+(?:stop|kill|restart)', 'Python subprocess systemctl'),
+        # subprocess.run("rm -rf /..." or "shutdown"/"reboot")
+        (r'subprocess\.(?:run|Popen)\s*\(\s*["\']\s*(?:rm\s+-[rf]|shutdown|reboot|poweroff|halt)', 'Python subprocess destructive'),
+    ]
+    for pat, desc in patterns:
+        if re.search(pat, code, re.IGNORECASE):
+            return True, desc
+    return False, ""
+
+
 def _detect_language_from_path(path: str) -> str:
     """根据文件扩展名自动检测语言。"""
     ext = os.path.splitext(path)[1].lower()
@@ -218,6 +247,19 @@ def run_code(
             "error": f"危险命令被禁止: 匹配到黑名单模式 '{pattern}'",
             "timed_out": False,
         }
+
+    # 🆕 Python 子进程安全检查（language="python" 时也能拦 kill/systemctl 等）
+    if language == "python":
+        py_dangerous, py_pattern = _scan_python_subprocess(code)
+        if py_dangerous:
+            return {
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "success": False,
+                "error": f"Python 子进程危险命令被禁止: {py_pattern}",
+                "timed_out": False,
+            }
 
     if not isinstance(code, str) or not code.strip():
         return {

@@ -79,19 +79,54 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None) -> d
         return {"success": False, "result": None, "error": f"工具 '{name}' 未注册"}
 
     # 🆕 高危命令扫描器：run_code 的 bash shell 命令执行前扫描
-    if name == "run_code" and params.get("language") == "bash":
-        command = params.get("code", "")
-        if command:
+    if name == "run_code":
+        language = params.get("language", "python")
+        code = params.get("code", "")
+        if code:
             from .command_scanner import scan_command
-            workdir = params.get("workdir", extra_kwargs.get("workdir") if extra_kwargs else None)
-            scan_result = scan_command(command, workdir)
-            if scan_result and scan_result["block"]:
-                return {
-                    "success": False,
-                    "result": None,
-                    "error": scan_result["reason"],
-                    "high_risk": scan_result,
-                }
+
+            if language == "bash":
+                workdir = params.get("workdir", extra_kwargs.get("workdir") if extra_kwargs else None)
+                scan_result = scan_command(code, workdir)
+                if scan_result and scan_result["block"]:
+                    return {
+                        "success": False,
+                        "result": None,
+                        "error": scan_result["reason"],
+                        "high_risk": scan_result,
+                    }
+
+            elif language == "python":
+                # Python 代码中也可能通过 subprocess/os.system 执行系统命令
+                # 提取所有字符串参数，逐条扫描
+                workdir = params.get("workdir", extra_kwargs.get("workdir") if extra_kwargs else None)
+                # 匹配 subprocess.run/Popen("...", ...) 和 os.system("...") / os.popen("...")
+                _py_cmd_patterns = [
+                    r'subprocess\.(?:run|Popen|call|check_call|check_output)\s*\(\s*["\']([^"\']+)["\']',
+                    r'os\.system\s*\(\s*["\']([^"\']+)["\']',
+                    r'os\.popen\s*\(\s*["\']([^"\']+)["\']',
+                    r'subprocess\.(?:run|Popen|call)\s*\(\s*\[[^\]]*["\'](kill|fuser|systemctl|rm|shutdown|reboot|poweroff|halt)["\']',
+                ]
+                for pattern in _py_cmd_patterns:
+                    for m in re.finditer(pattern, code, re.IGNORECASE):
+                        cmd_str = m.group(1)
+                        scan_result = scan_command(cmd_str, workdir)
+                        if scan_result and scan_result["block"]:
+                            return {
+                                "success": False,
+                                "result": None,
+                                "error": f"[Python subprocess 检测] {scan_result['reason']}",
+                                "high_risk": scan_result,
+                            }
+                # 额外检测 kill -9 + 数字PID（直接数字参数）
+                if re.search(r'["\']kill\s+-?9?\s*\d+["\']', code):
+                    return {
+                        "success": False,
+                        "result": None,
+                        "error": "⚠️ 危险操作【Python 代码通过 subprocess 杀死进程】\n\nPython 代码尝试执行 `kill` 命令杀死进程，请确认是否放行。",
+                        "high_risk": {"block": True, "category": "config",
+                                      "description": "Python 代码通过 subprocess 执行 kill"},
+                    }
 
     file_path = tool_def.get("file", "")
     func_name = tool_def.get("function", name)
