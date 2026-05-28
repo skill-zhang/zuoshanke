@@ -2021,6 +2021,71 @@
       "verified": true
     },
     {
+      "name": "send_email",
+      "description": "发送邮件 — 通过 SMTP 发送纯文本/HTML 邮件，支持附件、多收件人、抄送。内置 QQ/163/Gmail/Outlook 等主流邮箱预设",
+      "file": "tools/send_email.py",
+      "function": "send_email",
+      "parameters": {
+        "to": {
+          "type": "string",
+          "description": "收件人邮箱，多个用逗号分隔（必填）"
+        },
+        "subject": {
+          "type": "string",
+          "description": "邮件主题",
+          "optional": true
+        },
+        "body": {
+          "type": "string",
+          "description": "邮件正文，纯文本或 HTML",
+          "optional": true
+        },
+        "body_type": {
+          "type": "string",
+          "description": "正文类型：plain(纯文本)/html(HTML)，默认 plain",
+          "optional": true
+        },
+        "cc": {
+          "type": "string",
+          "description": "抄送，多个用逗号分隔",
+          "optional": true
+        },
+        "attachments": {
+          "type": "string",
+          "description": "附件文件路径，多个用逗号分隔",
+          "optional": true
+        },
+        "smtp_provider": {
+          "type": "string",
+          "description": "邮箱提供商预设：qq/163/126/gmail/outlook/aliyun/sina",
+          "optional": true
+        },
+        "smtp_host": {
+          "type": "string",
+          "description": "手动 SMTP 服务器地址（provider 为空时生效）",
+          "optional": true
+        },
+        "smtp_port": {
+          "type": "integer",
+          "description": "SMTP 端口，默认 465",
+          "optional": true
+        },
+        "smtp_user": {
+          "type": "string",
+          "description": "SMTP 用户名（通常为邮箱地址）",
+          "optional": true
+        },
+        "smtp_password": {
+          "type": "string",
+          "description": "SMTP 密码/授权码（QQ邮箱用授权码）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, to, subject, from_addr, smtp_host, sent_at}",
+      "category": "system",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
