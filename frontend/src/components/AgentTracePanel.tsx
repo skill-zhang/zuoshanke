@@ -150,7 +150,7 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
                     wrapLines
                   >
                     {typeof event.result.diff === 'string'
-                      ? event.result.diff
+                      ? event.result.diff.replace(/\\n/g, '\n')
                       : JSON.stringify(event.result.diff, null, 2)}
                   </SyntaxHighlighter>
                 </>
