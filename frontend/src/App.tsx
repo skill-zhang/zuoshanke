@@ -18,6 +18,7 @@ import { AgentCharacter } from './components/AgentCharacter';
 import AgentLoopDashboard from './components/AgentLoopDashboard';
 import { Dialog } from './components/Dialog';
 import { WorkbenchView } from './components/WorkbenchView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ClarifyDialog } from './components/ClarifyDialog';
 import { CommandApprovalDialog } from './components/CommandApprovalDialog';
 import { Scene, createScene } from './api/client';
@@ -51,13 +52,6 @@ export default function App() {
   const initialRouteRef = useRef(false);
   useEffect(() => {
     if (initialRouteRef.current) return; // 只执行一次
-    if (scenes.length === 0) return;
-    if (view !== 'chat') return;
-    const hasWorkbench = scenes.some(s => s.show_on_workbench);
-    if (hasWorkbench) {
-      console.log('[App] 检测到工作台场景，首次跳转工作台');
-      setView('workbench');
-    }
     initialRouteRef.current = true;
   }, [scenes]);
 
@@ -294,7 +288,9 @@ export default function App() {
       // ═══ 工作台：独立页面，无 Topbar / Sidebar ═══
       <>
         <AgentCharacter hidden={agentHidden} />
-        <WorkbenchView />
+        <ErrorBoundary>
+          <WorkbenchView />
+        </ErrorBoundary>
       </>
     ) : (
       <>
