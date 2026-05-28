@@ -4,7 +4,7 @@
 > 覆盖市面上所有主流 AI 模型提供商。
 > 每日自动检查更新。
 >
-> 最后更新: 2026-05-27
+> 最后更新: 2026-05-28
 
 ## DeepSeek
 - display_name: DeepSeek
@@ -19,6 +19,15 @@
 - repeat_penalty: 1.05
 - vision: true
 - function_calling: true
+
+### deepseek-reasoner
+- display_name: DeepSeek Reasoner (R1)
+- temperature: 0.5
+- max_tokens: 65536
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: false
+- function_calling: false
 
 ### deepseek-v4-pro
 - display_name: DeepSeek v4 Pro
@@ -70,6 +79,87 @@
 - vision: false
 - function_calling: true
 
+### gpt-4.1
+- display_name: GPT-4.1
+- temperature: 0.7
+- max_tokens: 32768
+- context_length: 1047576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-4.1-mini
+- display_name: GPT-4.1 Mini
+- temperature: 0.7
+- max_tokens: 32768
+- context_length: 1047576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-4.1-nano
+- display_name: GPT-4.1 Nano
+- temperature: 0.7
+- max_tokens: 32768
+- context_length: 1047576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5
+- display_name: GPT-5
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5-mini
+- display_name: GPT-5 Mini
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5-pro
+- display_name: GPT-5 Pro
+- temperature: 0.7
+- max_tokens: 272000
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### o1
+- display_name: o1
+- temperature: 1.0
+- max_tokens: 100000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### o3
+- display_name: o3
+- temperature: 1.0
+- max_tokens: 100000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### o3-pro
+- display_name: o3 Pro
+- temperature: 1.0
+- max_tokens: 100000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Anthropic
 - display_name: Anthropic
 - base_url: https://api.anthropic.com
@@ -88,6 +178,33 @@
 - display_name: Claude Haiku 3.5
 - temperature: 0.7
 - max_tokens: 8192
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-opus-4
+- display_name: Claude Opus 4
+- temperature: 0.7
+- max_tokens: 32000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-sonnet-4-5
+- display_name: Claude Sonnet 4.5
+- temperature: 0.7
+- max_tokens: 64000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-haiku-4-5
+- display_name: Claude Haiku 4.5
+- temperature: 0.7
+- max_tokens: 64000
 - context_length: 200000
 - repeat_penalty: 1.05
 - vision: true
@@ -116,6 +233,33 @@
 - vision: true
 - function_calling: true
 
+### gemini-2.5-flash-lite
+- display_name: Gemini 2.5 Flash Lite
+- temperature: 0.7
+- max_tokens: 65535
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gemini-3-flash-preview
+- display_name: Gemini 3 Flash (Preview)
+- temperature: 0.7
+- max_tokens: 65535
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gemini-3.5-flash
+- display_name: Gemini 3.5 Flash
+- temperature: 0.7
+- max_tokens: 65535
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## xAI
 - display_name: xAI Grok
 - base_url: https://api.x.ai
@@ -139,6 +283,15 @@
 - vision: false
 - function_calling: true
 
+### grok-4
+- display_name: Grok 4
+- temperature: 0.7
+- max_tokens: 256000
+- context_length: 256000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Mistral
 - display_name: Mistral AI
 - base_url: https://api.mistral.ai
@@ -160,6 +313,24 @@
 - context_length: 32768
 - repeat_penalty: 1.05
 - vision: false
+- function_calling: true
+
+### mistral-large-2411
+- display_name: Mistral Large 2411
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 128000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### mistral-small-3.2
+- display_name: Mistral Small 3.2
+- temperature: 0.7
+- max_tokens: 131072
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
 - function_calling: true
 
 ## Alibaba
@@ -194,6 +365,42 @@
 - vision: false
 - function_calling: true
 
+### qwen3-max
+- display_name: Qwen3 Max
+- temperature: 0.7
+- max_tokens: 65536
+- context_length: 258048
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### qwen3.5-plus
+- display_name: Qwen3.5 Plus
+- temperature: 0.7
+- max_tokens: 65536
+- context_length: 991808
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### qwen3-coder-plus
+- display_name: Qwen3 Coder Plus
+- temperature: 0.7
+- max_tokens: 65536
+- context_length: 997952
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### qwen3-vl-plus
+- display_name: Qwen3 VL Plus (视觉)
+- temperature: 0.7
+- max_tokens: 32768
+- context_length: 260096
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## ByteDance
 - display_name: 豆包 (ByteDance)
 - base_url: https://ark.cn-beijing.volces.com/api/v3
@@ -226,6 +433,24 @@
 - vision: false
 - function_calling: true
 
+### doubao-seed-2-0-pro
+- display_name: 豆包 Seed 2.0 Pro
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 256000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### doubao-seed-2-0-lite
+- display_name: 豆包 Seed 2.0 Lite
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 256000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Zhipu
 - display_name: 智谱 AI (Zhipu)
 - base_url: https://open.bigmodel.cn/api/paas/v4
@@ -247,6 +472,51 @@
 - context_length: 131072
 - repeat_penalty: 1.05
 - vision: false
+- function_calling: true
+
+### glm-4.5
+- display_name: GLM-4.5
+- temperature: 0.7
+- max_tokens: 32000
+- context_length: 128000
+- repeat_penalty: 1.05
+- vision: false
+- function_calling: true
+
+### glm-4.5v
+- display_name: GLM-4.5V (视觉)
+- temperature: 0.7
+- max_tokens: 32000
+- context_length: 128000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### glm-4.6
+- display_name: GLM-4.6
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### glm-4.7
+- display_name: GLM-4.7
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### glm-5
+- display_name: GLM-5
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
 - function_calling: true
 
 ## Yi
@@ -302,6 +572,33 @@
 - context_length: 131072
 - repeat_penalty: 1.05
 - vision: false
+- function_calling: true
+
+### kimi-k2-instruct
+- display_name: Kimi K2 Instruct
+- temperature: 0.7
+- max_tokens: 131072
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### kimi-k2-thinking
+- display_name: Kimi K2 Thinking
+- temperature: 0.7
+- max_tokens: 131072
+- context_length: 262144
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### kimi-k2.5
+- display_name: Kimi K2.5
+- temperature: 0.7
+- max_tokens: 262144
+- context_length: 262144
+- repeat_penalty: 1.05
+- vision: true
 - function_calling: true
 
 ## Stepfun
@@ -394,4 +691,22 @@
 - context_length: 16384
 - repeat_penalty: 1.05
 - vision: false
+- function_calling: true
+
+### mimo-v2.5
+- display_name: MiMo v2.5
+- temperature: 0.7
+- max_tokens: 131072
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### mimo-v2.5-pro
+- display_name: MiMo v2.5 Pro
+- temperature: 0.7
+- max_tokens: 16384
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
 - function_calling: true

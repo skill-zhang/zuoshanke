@@ -191,16 +191,36 @@ export const AgentTracePanel: React.FC = () => {
   const steps = sceneId ? traceStore.getSteps(sceneId) : [];
   const hasTraces = steps.length > 0;
 
-  // 自动滚动：在底部附近时自动跟随，用户往上翻就不打扰
+  // 自动滚动：面板打开时滚到底，已打开时底部附近跟随
+  const prevOpenRef = useRef(false);
   useEffect(() => {
+    // 面板关闭 → 重置标记，下次打开时再滚底
+    if (!traceStore.isPanelOpen) {
+      prevOpenRef.current = false;
+      return;
+    }
+
     const el = panelBodyRef.current;
     if (!el) return;
+
+    // 面板刚打开 → 直接滚到底
+    if (!prevOpenRef.current) {
+      prevOpenRef.current = true;
+      requestAnimationFrame(() => {
+        if (panelBodyRef.current) {
+          panelBodyRef.current.scrollTop = panelBodyRef.current.scrollHeight;
+        }
+      });
+      return;
+    }
+
+    // 已打开：只在底部附近时自动跟随
     const threshold = 120;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
     if (atBottom) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [steps.length, steps[steps.length - 1]?.events.length]);
+  }, [steps.length, steps[steps.length - 1]?.events.length, traceStore.isPanelOpen]);
 
   // 拖拽调宽
   const onResizeStart = useCallback((e: React.MouseEvent) => {

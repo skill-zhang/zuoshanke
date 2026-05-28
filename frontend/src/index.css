@@ -298,7 +298,8 @@ body {
   background: radial-gradient(ellipse at center, #1a1f2e 0%, #0d1117 70%);
 }
 .chat-panel {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: calc(100vh - 46px - 26px - 4px);  /* topbar + statusbar + overlay padding */
   min-height: 0;  /* allow flex children to shrink & scroll */
   background: rgba(22, 27, 34, 0.85);

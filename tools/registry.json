@@ -1782,6 +1782,31 @@
       "returns": "JSON {success, summary, config_parameters, recommended_code, seasonality_guide, tuning_guide, installation, common_patterns, caveats}",
       "category": "system",
       "verified": true
+    },
+    {
+      "name": "text_to_speech",
+      "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
+      "file": "tools/text_to_speech.py",
+      "function": "text_to_speech",
+      "parameters": {
+        "text": {
+          "type": "string",
+          "description": "要合成的文本（最多 5000 字符）"
+        },
+        "voice": {
+          "type": "string",
+          "description": "语音名称，默认 zh-CN-XiaoxiaoNeural（中文女声），可选 zh-CN-YunxiNeural（中文男声）、en-US-AriaNeural（英语女声）等",
+          "optional": true
+        },
+        "speed": {
+          "type": "string",
+          "description": "语速调整，-100~100，默认 0（正常），正数加快，负数减慢",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, audio_path, duration_sec, voice, voice_label, text_length, file_size_bytes}",
+      "category": "system",
+      "verified": true
     }
   ]
 }
