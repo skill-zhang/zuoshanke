@@ -1860,6 +1860,27 @@
       "verified": true
     },
     {
+      "name": "daily_quote",
+      "description": "每日一言 — 励志/哲思/治愈/人生/幽默/爱情/智慧 语录，LLM 生成或名人名言库回退，适合早安晚安推送",
+      "file": "tools/daily_quote.py",
+      "function": "daily_quote",
+      "parameters": {
+        "category": {
+          "type": "string",
+          "description": "分类：motivation(励志)/philosophy(哲思)/healing(治愈)/life(人生)/humor(幽默)/love(爱情)/wisdom(智慧)，默认 motivation",
+          "optional": true
+        },
+        "source": {
+          "type": "string",
+          "description": "来源：auto(LLM优先，失败回退)/curated(名言库)/llm(仅LLM)，默认 auto",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, quote, author, category, category_label, source_type}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
