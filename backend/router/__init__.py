@@ -25,6 +25,7 @@ from router.providers import router as providers_router                 # 🆕 A
 from router.user_profile import router as user_profile_router              # 🆕 Schema v1.4 用户画像
 from router.workbench_chat import router as workbench_chat_router          # 🆕 工作台 Avatar 对话
 from router.upload import router as upload_router                          # 🆕 文件上传
+from router.ml_experiment import router as ml_experiment_router            # 🆕 ML 算法引擎
 
 
 def register_all_routers(app: FastAPI):
@@ -53,3 +54,4 @@ def register_all_routers(app: FastAPI):
     app.include_router(user_profile_router)         # 🆕 Schema v1.4 用户画像
     app.include_router(workbench_chat_router)          # 🆕 工作台 Avatar 对话
     app.include_router(upload_router)                  # 🆕 文件上传
+    app.include_router(ml_experiment_router)           # 🆕 ML 算法引擎
