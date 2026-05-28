@@ -736,12 +736,14 @@ def run_agent_loop(
                 _duration = int((time.time() - _tool_start_ts) * 1000)
 
                 if result.get("success"):
+                    # 工具结果可能有嵌套 result，也可能直接在顶层（如 patch 返回 {success, diff, count}）
+                    tool_result = result.get("result") if "result" in result else result
                     write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="tool_done",
-                                 tool=tool_name, result=result.get("result", ""), duration_ms=_duration)
+                                 tool=tool_name, result=tool_result, duration_ms=_duration)
                     yield {
                         "type": "tool_done",
                         "tool": tool_name,
-                        "result": result.get("result", ""),
+                        "result": tool_result,
                         "tool_call_id": tc.get("id", ""),
                     }
 

@@ -147,10 +147,9 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
                     style={oneDark}
                     customStyle={{ margin: 0, borderRadius: 4, fontSize: 10.5, lineHeight: 1.4 }}
                     showLineNumbers={false}
-                    wrapLines
                   >
                     {typeof event.result.diff === 'string'
-                      ? event.result.diff.replace(/\\n/g, '\n')
+                      ? (event.result.diff + '\n').replace(/\r\n/g, '\n').replace(/\r/g, '')
                       : JSON.stringify(event.result.diff, null, 2)}
                   </SyntaxHighlighter>
                 </>
