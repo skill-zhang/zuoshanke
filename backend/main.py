@@ -3,6 +3,10 @@ import logging
 import os
 from pathlib import Path
 
+# 自动同步版本号（必须在任何版本读取之前）
+from utils import sync_version_from_schema
+sync_version_from_schema()
+
 # 加载环境变量（优先加载 hermes 的 .env，它含有 DEEPSEEK_API_KEY 等）
 try:
     from dotenv import load_dotenv
@@ -245,4 +249,5 @@ if __name__ == "__main__":
     _st.Thread(target=_session_timeout_scanner, daemon=True).start()
     log.info("✅ Session 超时扫描线程已启动（每5分钟）")
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True,
+                reload_delay=3, reload_includes=["*.py"])

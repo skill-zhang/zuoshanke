@@ -339,6 +339,87 @@ def delete_scene(scene_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# ═══ 刷新股价 ═══
+
+@router.post("/api/scenes/{scene_id}/refresh-stock", response_model=SceneOut)
+def refresh_stock(scene_id: str, db: Session = Depends(get_db)):
+    """刷新小米股价实时数据（腾讯行情接口）"""
+    import urllib.request
+    scene = _get_scene_or_404(db, scene_id)
+    try:
+        url = "https://qt.gtimg.cn/q=hk01810"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=10)
+        raw = resp.read().decode("gbk")
+        # 解析腾讯行情格式: v_hk01810="100~name~code~price~yclose~open~..."
+        import re
+        m = re.search(r'"([^"]+)"', raw)
+        if not m:
+            raise ValueError("无法解析行情数据")
+        fields = m.group(1).split("~")
+        # 索引: 1=名称, 3=当前价, 4=昨收, 5=开盘, 30=时间, 31=涨跌额, 32=涨跌幅, 33=最高, 34=最低, 36=成交量, 37=成交额
+        name = fields[1] if len(fields) > 1 else "小米集团-W"
+        price = fields[3] if len(fields) > 3 else "0"
+        yclose = fields[4] if len(fields) > 4 else "0"
+        change = fields[31] if len(fields) > 31 else "0"
+        change_pct = fields[32] if len(fields) > 32 else "0%"
+        high = fields[33] if len(fields) > 33 else "0"
+        low = fields[34] if len(fields) > 34 else "0"
+        volume_raw = fields[36] if len(fields) > 36 else "0"
+        amount_raw = fields[37] if len(fields) > 37 else "0"
+        time_str = fields[30] if len(fields) > 30 else ""
+
+        # 格式化成交量/成交额
+        try:
+            vol = int(float(volume_raw))
+            if vol > 100000000:
+                volume = f"{vol/100000000:.2f}亿"
+            elif vol > 10000:
+                volume = f"{vol/10000:.2f}万"
+            else:
+                volume = str(vol)
+        except:
+            volume = volume_raw
+
+        try:
+            amt = float(amount_raw)
+            if amt > 100000000:
+                market_cap = f"{amt/100000000:.0f}亿HKD"
+            else:
+                market_cap = f"{amt/10000:.0f}万HKD"
+        except:
+            market_cap = amount_raw
+
+        # 涨跌额带符号
+        change_str = f"{float(change):+.2f}" if change else "0.00"
+        change_pct_str = f"{float(change_pct):+.2f}%" if change_pct else "0.00%"
+
+        stock_data = {
+            "name": name,
+            "code": "01810.HK",
+            "price": price,
+            "change": change_str,
+            "change_pct": change_pct_str,
+            "high": high,
+            "low": low,
+            "volume": volume,
+            "market_cap": market_cap,
+            "currency": "HKD",
+            "time": time_str,
+        }
+        existing = dict(scene.scene_config or {})
+        existing["stock"] = stock_data
+        scene.scene_config = existing
+        scene.updated_at = utcnow()
+        db.commit()
+        db.refresh(scene)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"[refresh-stock] 刷新失败: {e}")
+        raise HTTPException(502, f"获取股价数据失败: {e}")
+    return scene
+
+
 # ═══ 发布 / 版本更新 ═══
 
 @router.post("/api/scenes/{scene_id}/publish", response_model=SceneOut)

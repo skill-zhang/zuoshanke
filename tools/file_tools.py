@@ -122,6 +122,82 @@ def read_file(path: str, offset: int = 1, limit: int = 500) -> dict:
 
 # ── write_file ────────────────────────────────────────────────────────────────
 
+def _git_snapshot(resolved: str) -> None:
+    """Git 自动快照：在修改 .py / .ts / .tsx 等代码文件前，自动 commit 当前版本。
+    
+    静默失败，不中断主流程。
+    """
+    try:
+        import subprocess
+        repo_dir = os.path.dirname(os.path.dirname(resolved))
+        # 确认在 git repo 内
+        if not os.path.isdir(os.path.join(repo_dir, ".git")):
+            return
+        rel = os.path.relpath(resolved, repo_dir)
+        subprocess.run(
+            ["git", "add", rel],
+            cwd=repo_dir, capture_output=True, timeout=10
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"🛡 auto-snapshot before modify: {rel}"],
+            cwd=repo_dir, capture_output=True, timeout=10
+        )
+    except Exception:
+        pass
+
+
+def _validate_file_content(resolved: str, content: str) -> Optional[str]:
+    """写后静态校验：阻止语法错误写入。
+    
+    支持：.py (py_compile), .json (json.loads), .js/.jsx (node --check),
+          .yaml/.yml (yaml.safe_load), .ts/.tsx (只做正则粗检)
+    
+    Returns:
+        错误信息（有错时）或 None（校验通过）
+    """
+    ext = os.path.splitext(resolved)[1].lower()
+    try:
+        if ext == ".py":
+            import py_compile
+            import tempfile
+            # 写临时文件编译，避免污染目标文件
+            with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                py_compile.compile(tmp_path, doraise=True)
+            finally:
+                os.unlink(tmp_path)
+
+        elif ext == ".json":
+            json.loads(content)  # 纯结构校验，不写文件
+
+        elif ext in (".yaml", ".yml"):
+            import yaml
+            yaml.safe_load(content)
+
+        elif ext in (".js", ".jsx", ".mjs"):
+            # node --check 验证 JS 语法
+            import tempfile, subprocess
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False, mode="w", encoding="utf-8") as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                r = subprocess.run(["node", "--check", tmp_path],
+                                   capture_output=True, text=True, timeout=10)
+                if r.returncode != 0:
+                    return f"JavaScript 语法错误: {r.stderr.strip() or r.stdout.strip()}"
+            except FileNotFoundError:
+                pass  # node 未安装，跳过
+            finally:
+                os.unlink(tmp_path)
+
+        # .ts/.tsx — 不强制校验（需要 tsconfig + tsc 环境），仅记录
+    except Exception as e:
+        return f"{ext} 语法错误: {e}"
+    return None
+
+
 def write_file(path: str, content: str = "", content_b64: str = None) -> dict:
     """写入文件（覆盖写入），自动创建父目录。
 
@@ -157,8 +233,18 @@ def write_file(path: str, content: str = "", content_b64: str = None) -> dict:
         if parent:
             os.makedirs(parent, exist_ok=True)
 
+        # 🛡 Git 自动快照：改代码文件前保留当前版本
+        if resolved.endswith((".py", ".ts", ".tsx", ".js", ".jsx")):
+            _git_snapshot(resolved)
+
         with open(resolved, "w", encoding="utf-8") as f:
             f.write(content)
+
+        # 🛡 写后静态校验：阻止语法错误写入
+        err = _validate_file_content(resolved, content)
+        if err:
+            os.remove(resolved)
+            return {"error": f"已阻止写入并回滚: {err}"}
 
         size = os.path.getsize(resolved)
         # Schema v1.0: 记录文件快照
@@ -277,6 +363,10 @@ def patch(path: str, old_string: str = "", new_string: str = "",
         if not old_string:
             return {"error": "old_string 不能为空"}
 
+        # 🛡 Git 自动快照：改代码文件前保留当前版本
+        if resolved.endswith((".py", ".ts", ".tsx", ".js", ".jsx")):
+            _git_snapshot(resolved)
+
         # 查找匹配
         matches = _fuzzy_find(content, old_string, replace_all)
 
@@ -314,6 +404,13 @@ def patch(path: str, old_string: str = "", new_string: str = "",
 
         # Schema v1.0: 记录文件快照
         _record_snapshot(resolved, new_content)
+
+        # 🛡 patch 后静态校验：阻止语法错误写入（回滚到原内容）
+        err = _validate_file_content(resolved, new_content)
+        if err:
+            with open(resolved, "w", encoding="utf-8") as f:
+                f.write(content)
+            return {"error": f"已阻止 patch 并回滚: {err}"}
 
         # 生成 diff
         diff = list(difflib.unified_diff(

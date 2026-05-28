@@ -5,7 +5,7 @@
 将输出转为 SSE thought 事件，而非普通 tool_call 事件。
 """
 
-def think(content: str) -> dict:
+def think(content: str, **kwargs) -> dict:
     """输出思考过程——像自言自语一样展示正在想什么。
 
     Args:
@@ -14,4 +14,10 @@ def think(content: str) -> dict:
     Returns:
         {"ok": True, "content": "..."}
     """
+    if kwargs:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[think] 收到多余参数: {list(kwargs.keys())}，已忽略。"
+            f" think(content: str) 只接受 content 参数"
+        )
     return {"ok": True, "content": content}

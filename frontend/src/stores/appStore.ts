@@ -106,7 +106,9 @@ interface AppState {
   sessions: SceneSession[];          // 历史会话列表
   loadSceneMessages: (sceneId: string) => Promise<void>;
   loadOlderMessages: (sceneId: string) => Promise<void>;
-  sendSceneMsg: (sceneId: string, content: string, attachments?: Attachment[]) => Promise<void>;
+  sendSceneMsg: (sceneId: string, content: string, attachments?: Attachment[], skipOptimistic?: boolean) => Promise<void>;
+  _retryCount: Record<string, number>;
+  _retryStream: (sceneKey: string, entityId: string, content: string, tempAiId: string, attachments?: Attachment[]) => Promise<void>;
   newSceneSession: (sceneId: string) => Promise<string | null>;  // 开始新会话
   batchDeleteMsgs: (ids: string[]) => Promise<void>;             // 批量删除
   clearSceneMsgs: (sceneId: string) => Promise<void>;            // 一键清空
@@ -211,6 +213,7 @@ export const useStore = create<AppState>((set, get) => ({
   capacityWarning: null,
   currentToolCards: [],
   currentToolLogs: [],
+  _retryCount: {} as Record<string, number>,
 
   // 🆕 Schema v0.7: 仪表盘初始值
   priorityQueue: [],
@@ -506,7 +509,7 @@ export const useStore = create<AppState>((set, get) => ({
       });
     }
   },
-  sendSceneMsg: async (sceneId, content, attachments) => {
+  sendSceneMsg: async (sceneId, content, attachments, skipOptimistic) => {
     // 0. 乐观更新：立即插入临时用户消息 + 空壳 AI 消息
     const tempUserId = 'temp-user-' + Date.now();
     const tempUserMsg: Message = {
@@ -537,19 +540,35 @@ export const useStore = create<AppState>((set, get) => ({
 
     const sceneKey = entityKey('scene', sceneId);
 
-    set(state => ({
-      isGenerating: true,
-      generatingEntityId: sceneId,
-      currentToolCards: [],
-      currentToolLogs: [],
-      messagesByEntity: {
-        ...state.messagesByEntity,
-        [sceneKey]: {
-          ...(state.messagesByEntity[sceneKey] || emptyEntity()),
-          messages: [...(state.messagesByEntity[sceneKey]?.messages || []), tempUserMsg, tempAiMsg],
+    if (!skipOptimistic) {
+      set(state => ({
+        isGenerating: true,
+        generatingEntityId: sceneId,
+        currentToolCards: [],
+        currentToolLogs: [],
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [sceneKey]: {
+            ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+            messages: [...(state.messagesByEntity[sceneKey]?.messages || []), tempUserMsg, tempAiMsg],
+          },
         },
-      },
-    }));
+      }));
+    } else {
+      set(state => ({
+        isGenerating: true,
+        generatingEntityId: sceneId,
+        currentToolCards: [],
+        currentToolLogs: [],
+        messagesByEntity: {
+          ...state.messagesByEntity,
+          [sceneKey]: {
+            ...(state.messagesByEntity[sceneKey] || emptyEntity()),
+            messages: [...(state.messagesByEntity[sceneKey]?.messages || []), tempAiMsg],
+          },
+        },
+      }));
+    }
 
     try {
       const sessionId = get().currentSessionId;
@@ -794,6 +813,14 @@ export const useStore = create<AppState>((set, get) => ({
       }
     } catch (e) {
       console.error('[store] sendSceneMsg stream failed:', e);
+      const errMsg = (e as any)?.message || String(e);
+
+      // 🛡 自动重试：如果后端正在热更新，等几秒后自动重发
+      if (errMsg.includes('超时') || errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+        await get()._retryStream(sceneKey, sceneId, content, tempAiId, attachments);
+        return;
+      }
+
       set(state => ({
         isGenerating: false,
         generatingEntityId: null,
@@ -803,12 +830,88 @@ export const useStore = create<AppState>((set, get) => ({
             ...(state.messagesByEntity[sceneKey] || emptyEntity()),
             messages: (state.messagesByEntity[sceneKey]?.messages || []).map(m =>
               m.id === tempAiId
-                ? { ...m, content: '❌ 网络请求失败，请重试' }
+                ? { ...m, content: `❌ ${errMsg}` }
                 : m
             ),
           },
         },
       }));
+    }
+  },
+
+  // ═══ 自动重试：后端热更新后恢复发送 ═══
+  _retryStream: async (sceneKey, entityId, content, tempAiId, attachments) => {
+    const maxRetries = 3;
+    const state = get();
+    state._retryCount[entityId] = (state._retryCount[entityId] || 0) + 1;
+    const attempt = state._retryCount[entityId];
+
+    if (attempt > maxRetries) {
+      get()._retryCount[entityId] = 0;
+      set(s => ({
+        isGenerating: false,
+        generatingEntityId: null,
+        messagesByEntity: {
+          ...s.messagesByEntity,
+          [sceneKey]: {
+            ...(s.messagesByEntity[sceneKey] || emptyEntity()),
+            messages: (s.messagesByEntity[sceneKey]?.messages || []).map(m =>
+              m.id === tempAiId
+                ? { ...m, content: '❌ 后端服务不稳定，请稍后重试' }
+                : m
+            ),
+          },
+        },
+      }));
+      return;
+    }
+
+    // 显示重试中
+    set(s => ({
+      messagesByEntity: {
+        ...s.messagesByEntity,
+        [sceneKey]: {
+          ...(s.messagesByEntity[sceneKey] || emptyEntity()),
+          messages: (s.messagesByEntity[sceneKey]?.messages || []).map(m =>
+            m.id === tempAiId
+              ? { ...m, content: `🔄 后端热更新中，${attempt <= 1 ? '自动重试' : '第' + attempt + '次重试'}...` }
+              : m
+          ),
+        },
+      },
+    }));
+
+    // 等待 3 秒后检查后端健康状态
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const resp = await fetch('/api/health', { signal: AbortSignal.timeout(5000) });
+      if (!resp.ok) throw new Error('not ready');
+      await resp.json();
+    } catch {
+      // 后端还没起来，递归重试
+      await get()._retryStream(sceneKey, entityId, content, tempAiId, attachments);
+      return;
+    }
+
+    // 后端已恢复，清除旧的 AI 消息，重新发送
+    get()._retryCount[entityId] = 0;
+    set(s => ({
+      isGenerating: false,
+      generatingEntityId: null,
+      messagesByEntity: {
+        ...s.messagesByEntity,
+        [sceneKey]: {
+          ...(s.messagesByEntity[sceneKey] || emptyEntity()),
+          messages: (s.messagesByEntity[sceneKey]?.messages || []).filter(m => m.id !== tempAiId),
+        },
+      },
+    }));
+    // 重新发送（skipOptimistic=true 避免重复插用户消息）
+    // 判断是场景还是频道，用对应的方法
+    if (entityId.startsWith('ch-')) {
+      await get().sendChannelMsg(entityId, content, attachments);
+    } else {
+      await get().sendSceneMsg(entityId, content, attachments, true);
     }
   },
 

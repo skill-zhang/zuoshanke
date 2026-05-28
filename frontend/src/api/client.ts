@@ -211,35 +211,53 @@ export async function* sendSceneMessageStream(
   sessionId?: string,
   attachments?: Attachment[],
 ): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${BASE}/scenes/${sceneId}/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, scene_id: sceneId, session_id: sessionId || null, attachments }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error('SSE 读取超时（180s 无数据）')), 180_000);
 
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
+  try {
+    const res = await fetch(`${BASE}/scenes/${sceneId}/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, scene_id: sceneId, session_id: sessionId || null, attachments }),
+      signal: controller.signal,
+    });
 
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+    if (!res.ok) {
+      clearTimeout(timeout);
+      throw new Error(await res.text());
+    }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+    while (true) {
+      const readPromise = reader.read();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const t = setTimeout(() => {
+          reject(new Error('SSE 读取超时（180s 无数据）'));
+        }, 180_000);
+        // 每次 read 返回时，取消这个超时，下一个 read 会再起一个新的
+        readPromise.then(() => clearTimeout(t), () => clearTimeout(t));
+      });
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('data: ')) {
-        const data = JSON.parse(trimmed.slice(6));
-        yield data as StreamEvent;
+      const { done, value } = await Promise.race([readPromise, timeoutPromise]);
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = JSON.parse(trimmed.slice(6));
+          yield data as StreamEvent;
+        }
       }
     }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -268,28 +286,44 @@ export async function* sendChannelMessageStream(
   content: string,
   attachments?: Attachment[],
 ): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${BASE}/channels/${channelId}/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, attachments }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('data: ')) {
-        const data = JSON.parse(trimmed.slice(6));
-        yield data as StreamEvent;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error('SSE 读取超时（180s 无数据）')), 180_000);
+
+  try {
+    const res = await fetch(`${BASE}/channels/${channelId}/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, attachments }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      clearTimeout(timeout);
+      throw new Error(await res.text());
+    }
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const readPromise = reader.read();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const t = setTimeout(() => reject(new Error('SSE 读取超时（180s 无数据）')), 180_000);
+        readPromise.then(() => clearTimeout(t), () => clearTimeout(t));
+      });
+      const { done, value } = await Promise.race([readPromise, timeoutPromise]);
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = JSON.parse(trimmed.slice(6));
+          yield data as StreamEvent;
+        }
       }
     }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 export const listChannelMessages = (channelId: string, limit?: number, beforeId?: string) => {
