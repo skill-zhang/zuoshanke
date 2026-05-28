@@ -4249,7 +4249,7 @@ body {
   background: #202028; color: #e0e0e6;
 }
 .trace-filter-btn {
-  font-size: 11px; padding: 0 10px; min-width: auto; white-space: nowrap;
+  font-size: 11px; padding: 0 17px; min-width: auto; white-space: nowrap;
   background: none; border: 1px solid #21262d; color: #8b949e;
   height: 26px; border-radius: 6px; cursor: pointer;
   display: flex; align-items: center; gap: 3px;
@@ -4259,7 +4259,7 @@ body {
 .trace-filter-btn:hover { background: #202028; color: #e0e0e6; }
 .trace-filter-btn.active {
   background: rgba(167,139,250,0.1); border-color: #a78bfa; color: #a78bfa;
-  padding: 0 10px;
+  padding: 0 17px;
 }
 
 /* 统计栏 */
@@ -4386,6 +4386,12 @@ body {
   background: #1c1c22; border-radius: 3px; padding: 1px 5px;
   font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 10.5px;
   color: #e0e0e6;
+}
+
+/* Diff 手动渲染视图 */
+.trace-diff-view {
+  background: #0d1117; border-radius: 4px; padding: 6px 8px; margin: 0;
+  overflow-x: auto;
 }
 
 .trace-detail-output {
