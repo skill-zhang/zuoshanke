@@ -1910,6 +1910,67 @@
       "verified": true
     },
     {
+      "name": "calculator",
+      "description": "计算器 & 单位换算 — 长度/重量/温度/体积/面积/速度/数据/时间/压力/能量换算 + 数学计算 + 日期计算（差/加减/年龄/倒计时）。纯Python精确计算",
+      "file": "tools/calculator.py",
+      "function": "calculator",
+      "parameters": {
+        "mode": {
+          "type": "string",
+          "description": "模式：convert(单位换算)/calc(数学计算)/date(日期计算)/list(列出所有单位)",
+          "optional": true
+        },
+        "value": {
+          "type": "number",
+          "description": "（convert模式）要换算的数值",
+          "optional": true
+        },
+        "from_unit": {
+          "type": "string",
+          "description": "（convert模式）源单位，如 cm / kg / 斤 / c / f",
+          "optional": true
+        },
+        "to_unit": {
+          "type": "string",
+          "description": "（convert模式）目标单位",
+          "optional": true
+        },
+        "expression": {
+          "type": "string",
+          "description": "（calc模式）数学表达式，如 '12 * 3 + 5' 'sqrt(144)' '2**10'",
+          "optional": true
+        },
+        "operation": {
+          "type": "string",
+          "description": "（date模式）操作：today(今天)/diff(日期差)/add(加减)/age(年龄)/countdown(倒计时)",
+          "optional": true
+        },
+        "date1": {
+          "type": "string",
+          "description": "（date/diff模式）起始日期 YYYY-MM-DD",
+          "optional": true
+        },
+        "date2": {
+          "type": "string",
+          "description": "（date/diff模式）结束日期 YYYY-MM-DD",
+          "optional": true
+        },
+        "date": {
+          "type": "string",
+          "description": "（date/add模式）基准日期 YYYY-MM-DD",
+          "optional": true
+        },
+        "amount": {
+          "type": "integer",
+          "description": "（date/add模式）增减数量",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, mode, ...} 根据模式返回不同字段",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
