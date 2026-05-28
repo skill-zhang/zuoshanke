@@ -1971,6 +1971,31 @@
       "verified": true
     },
     {
+      "name": "baike",
+      "description": "百科知识查询 — 基于本地 Qwen LLM（无需网络）+ 维基百科回退。查概念、人物、事件、技术术语等，返回结构化摘要+分类+相关条目",
+      "file": "tools/baike.py",
+      "function": "baike",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "搜索关键词，如 '人工智能' 'Python'"
+        },
+        "lang": {
+          "type": "string",
+          "description": "语言：zh(中文)/en(英文)/ja(日文)，默认 zh",
+          "optional": true
+        },
+        "summary_only": {
+          "type": "boolean",
+          "description": "是否仅返回摘要（更快），默认 false",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, title, summary, categories, sections, related, source}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
