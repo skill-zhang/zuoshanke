@@ -322,6 +322,11 @@ def patch(path: str, old_string: str = "", new_string: str = "",
             fromfile=path, tofile=path,
         ))
         diff_text = "".join(diff) if diff else f"(替换 {replacements} 处，纯文本替换)"
+        # 确保 diff 每行末尾都有换行符（处理文件末行无 \n 时 -ccc+ddd 连在一起）
+        diff_text = "".join(
+            line if line.endswith('\n') else line + '\n'
+            for line in diff
+        ) if diff else diff_text
 
         return {
             "success": True,

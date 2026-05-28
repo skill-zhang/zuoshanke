@@ -53,7 +53,36 @@ function fmtTime(iso: string): string {
 }
 
 // ── SyntaxHighlighter 共享组件 ──
-/** 从 className 中提取语言（如 "language-typescript" → "typescript"） */
+/**
+ * 手动渲染 unified diff（红删绿增）
+ *
+ * 处理边界情况：当文件末尾无换行时，splitlines(keepends=True) 最后一行不带 \n，
+ * unified_diff 输出中 -del 和 +add 之间就没有换行符，变成 -ccc+ddd 一个串。
+ * 用 lookbehind/lookahead 在 +/- 前强行插入 \n。
+ */
+const renderDiffText = (diffText: string): React.ReactNode[] => {
+  const text = (typeof diffText === 'string' ? diffText : JSON.stringify(diffText, null, 2))
+    .replace(/\r\n/g, '\n').replace(/\r/g, '')
+    // 在 -/+ 前面如果没跟换行符，强行插入
+    .replace(/(?<![-\n])(?=[-+])/g, '\n');
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
+    if (!line) return <div key={i} style={{ height: 2 }} />;  // 空行保高度
+    const isDel = line.startsWith('-') && !line.startsWith('---');
+    const isIns = line.startsWith('+') && !line.startsWith('+++');
+    const isHunk = line.startsWith('@@');
+    const isHeader = line.startsWith('---') || line.startsWith('+++');
+    const bg = isDel ? 'rgba(248,113,113,0.06)' : isIns ? 'rgba(74,222,128,0.06)' : 'transparent';
+    return (
+      <div key={i} style={{
+        fontFamily: "'SF Mono','JetBrains Mono',monospace",
+        fontSize: 10.5, lineHeight: 1.4,
+        color: isDel ? '#f87171' : isIns ? '#4ade80' : isHunk ? '#a78bfa' : isHeader ? '#484f58' : '#c9d1d9',
+        background: bg,
+      }}>{line}</div>
+    );
+  });
+};
 function extractLang(className?: string): string {
   if (!className) return 'text';
   const m = className.match(/language-(\w+)/);
@@ -142,16 +171,9 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
                   <div className="trace-detail-label">
                     📄 {event.result.files_modified?.[0] || event.result.path || 'patch'}
                   </div>
-                  <SyntaxHighlighter
-                    language="diff"
-                    style={oneDark}
-                    customStyle={{ margin: 0, borderRadius: 4, fontSize: 10.5, lineHeight: 1.4 }}
-                    showLineNumbers={false}
-                  >
-                    {typeof event.result.diff === 'string'
-                      ? (event.result.diff + '\n').replace(/\r\n/g, '\n').replace(/\r/g, '')
-                      : JSON.stringify(event.result.diff, null, 2)}
-                  </SyntaxHighlighter>
+                  <div className="trace-diff-view">
+                    {renderDiffText(event.result.diff)}
+                  </div>
                 </>
               ) : (
                 <>
