@@ -13,9 +13,12 @@
 """
 
 import json
-import os
 import logging
+import os
+import time
 from typing import Generator, Optional
+
+from agent_core.trace_logger import write_trace, bulk_insert_traces
 from config.paths import TOOLS_DIR
 
 logger = logging.getLogger(__name__)
@@ -493,6 +496,7 @@ def run_agent_loop(
     scene_config: dict | None = None,  # 🆕 Schema v1.0: 场景扩展配置（如温度覆盖）
     tool_callbacks: dict | None = None,  # 🆕 工具回调映射（如 clarify callback）
     db=None,  # 🆕 Schema v1.0: DB会话，用于快照写入
+    session_id: str = "",  # 🆕 Schema v1.6: 会话 ID，用于 trace 记录
 ) -> Generator[dict, None, None]:
     """运行 Agent Loop：LLM 自主调工具直到完成任务。
 
@@ -568,6 +572,10 @@ def run_agent_loop(
     }
 
     for step in range(max_steps):
+        step_traces: list[dict] = []  # 🆕 Schema v1.6: 每步收集 trace，步结束时批量写入 DB
+
+        write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="status",
+                     message=f"第 {step + 1} 步：思考中...（可用工具: {len(tools)} 个）")
         yield {"type": "status", "message": f"第 {step + 1} 步：思考中...（可用工具: {len(tools)} 个）"}
 
         # 🆕 死循环检测：连续工具超过阈值 → 提醒 LLM 收手出结论
@@ -594,9 +602,13 @@ def run_agent_loop(
                     })
 
         # 3a. 调 LLM
+        write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="llm_call",
+                     model=model, msgs=len(messages), tools=len(tools))
         response = call_llm_with_tools(messages, tools, model=model, scene_config=scene_config)
 
         if response is None:
+            write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="error",
+                         message="LLM 调用失败")
             yield {"type": "error", "message": "LLM 调用失败，请检查 API 配置"}
             return
 
@@ -616,6 +628,16 @@ def run_agent_loop(
         try:
             choice = response["choices"][0]
             msg = choice["message"]
+
+            # 🆕 Schema v1.6: LLM 响应 trace（写在前，yield 在后）
+            write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="llm_response",
+                         finish_reason=choice.get("finish_reason", "stop"), usage=usage)
+            # 🆕 v1.6: 收集 DB trace
+            step_traces.append({
+                "scene_id": scene_id, "session_id": session_id, "step": step,
+                "event_type": "llm_response",
+                "metadata": {"finish_reason": choice.get("finish_reason", "stop"), "usage": usage},
+            })
         except (KeyError, IndexError) as e:
             yield {"type": "error", "message": f"LLM 返回格式异常: {e}"}
             return
@@ -641,9 +663,17 @@ def run_agent_loop(
 
             if content:
                 # 流式输出最终回复
+                write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="thinking",
+                             text=content)
+                step_traces.append({
+                    "scene_id": scene_id, "session_id": session_id, "step": step,
+                    "event_type": "thinking", "thinking_text": content,
+                })
                 yield {"type": "thinking", "text": content}
 
             finish_reason = choice.get("finish_reason", "stop")
+            write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="done",
+                         summary=content or "(无回复)", steps=step + 1, metadata={"usage": total_usage})
             yield {
                 "type": "done",
                 "summary": content or "(无回复)",
@@ -681,6 +711,10 @@ def run_agent_loop(
                 else:
                     args = raw_args
 
+                # 🆕 Schema v1.6: 写穿透 trace — 在 execute_tool 之前写入，即使进程崩溃也保留最后一步
+                _tool_start_ts = time.time()
+                write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="tool_start",
+                             tool=tool_name, args=args)
                 yield {
                     "type": "tool_start",
                     "tool": tool_name,
@@ -699,13 +733,25 @@ def run_agent_loop(
                 finally:
                     clear_tool_context()
 
+                _duration = int((time.time() - _tool_start_ts) * 1000)
+
                 if result.get("success"):
+                    write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="tool_done",
+                                 tool=tool_name, result=result.get("result", ""), duration_ms=_duration)
                     yield {
                         "type": "tool_done",
                         "tool": tool_name,
                         "result": result.get("result", ""),
                         "tool_call_id": tc.get("id", ""),
                     }
+
+                    # 收集 DB trace
+                    step_traces.append({
+                        "scene_id": scene_id, "session_id": session_id, "step": step,
+                        "event_type": "tool_done", "tool_name": tool_name,
+                        "args_text": args, "result_text": result.get("result", ""),
+                        "duration_ms": _duration,
+                    })
 
                     # 🆕 Schema v1.0: 文件操作后写快照 → Work Output Layer 可用
                     if tool_name in ("write_file", "patch") and scene_id:
@@ -733,16 +779,28 @@ def run_agent_loop(
                             pass  # 快照写入失败不影响主流程
                 else:
                     high_risk = result.get("high_risk")
+                    error_msg = result.get("error", "执行失败")
+                    write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="tool_error",
+                                 tool=tool_name, error=error_msg, duration_ms=_duration,
+                                 metadata={"high_risk": high_risk} if high_risk else None)
                     event = {
                         "type": "tool_error",
                         "tool": tool_name,
-                        "error": result.get("error", "执行失败"),
+                        "error": error_msg,
                         "tool_call_id": tc.get("id", ""),
                     }
                     if high_risk:
                         event["high_risk"] = high_risk
                         event["blocked_command"] = params.get("command", "") if isinstance(params, dict) else ""
                     yield event
+
+                    # 收集 DB trace
+                    step_traces.append({
+                        "scene_id": scene_id, "session_id": session_id, "step": step,
+                        "event_type": "tool_error", "tool_name": tool_name,
+                        "args_text": args, "error_text": error_msg,
+                        "duration_ms": _duration,
+                    })
 
                 # 将结果加入对话
                 tool_result_content = json.dumps(
@@ -772,18 +830,28 @@ def run_agent_loop(
                 err_msg = f"参数解析失败: {e}"
                 if tool_name == "run_code":
                     err_msg += "。请用 code_b64 传参（base64编码），不要直接在 code 参数里放含引号/换行的代码"
+                write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="tool_error",
+                             tool=tool_name if 'tool_name' in locals() else "?", error=err_msg)
                 yield {
                     "type": "tool_error",
                     "tool": tool_name if 'tool_name' in locals() else "?",
                     "error": err_msg,
                 }
             except Exception as e:
+                write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="tool_error",
+                             tool=tool_name if 'tool_name' in locals() else "?", error=f"工具执行异常: {e}")
                 yield {
                     "type": "tool_error",
                     "tool": tool_name if 'tool_name' in locals() else "?",
                     "error": f"工具执行异常: {e}",
                 }
 
+        # 🆕 Schema v1.6: 步结束时批量写入 DB trace
+        if step_traces:
+            bulk_insert_traces(db, step_traces)
+
+        write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="status",
+                     message=f"第 {step + 1} 步完成，继续...")
         yield {"type": "status", "message": f"第 {step + 1} 步完成，继续..."}
 
     # 超步数限制
@@ -794,6 +862,8 @@ def run_agent_loop(
             last_content = m["content"]
             break
 
+    write_trace(scene_id=scene_id, session_id=session_id, step=max_steps, event_type="done",
+                 summary=f"达到最大步数 ({max_steps})", steps=max_steps, metadata={"usage": total_usage})
     yield {
         "type": "done",
         "summary": f"达到最大步数 ({max_steps})。最后回复: {last_content[:200]}",

@@ -8,6 +8,7 @@ import { getActionMap, updateScene, uploadFile } from '../api/client';
 import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
 import { showConfirm, showAlert } from '../stores/dialogStore';
 import { DelegationMonitor } from './DelegationMonitor';
+import { FloatingTraceButton, AgentTracePanel } from './AgentTracePanel';  // 🆕 Schema v1.6
 
 // ══════════════════════════════════════════════════
 //  工具卡片组件
@@ -1348,6 +1349,9 @@ export function ChatView() {
           )}
         </div>
       </div>
+      {/* 🆕 Schema v1.6: Agent Loop 追踪 */}
+      <FloatingTraceButton />
+      <AgentTracePanel />
     </div>
   );
 }

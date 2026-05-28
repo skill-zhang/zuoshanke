@@ -77,6 +77,9 @@ HIGH_RISK_PATTERNS: list[tuple[str, str, str]] = [
     (r'\busermod\s+-s\s+/sbin/nologin\s+root\b', 'config', '禁止 root 登录'),
     (r'\bkill\s+-9\s+-1\b', 'config', '广播 SIGKILL 杀死所有进程'),
     (r'\bpkill\s+-9\s+-u\b', 'config', '杀死指定用户所有进程'),
+    (r'\bkill\s+\$\(lsof\s+-ti', 'config', '通过端口杀死进程（lsof+kill 模式）'),
+    (r'\bfuser\s+-k\s+\d+/tcp\b', 'config', '通过端口杀死进程（fuser 模式）'),
+    (r'\bkill\s+\$\(.*(?:lsof|ss|netstat).*\bpid\b', 'config', '通过查找 PID 后 kill 进程'),
 
     # ── 凭据外泄（exfiltration）──
     (r'curl\s+[^\n]*\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)[^}]*\}?', 'exfil', 'curl 外泄 API Key/Token 到外部服务器'),

@@ -676,10 +676,40 @@ export const useStore = create<AppState>((set, get) => ({
                 : m
             ),
           }));
+        // 🆕 高危命令审批
         } else if (event.type === 'command_approval') {
-          // 🆕 高危命令审批弹窗 - 由独立 store 管理
           const { showApproval } = await import('../stores/approvalStore');
           showApproval(event);
+        // 🆕 Schema v1.6: Agent Loop 追踪事件
+        } else if (event.type === 'agent_trace') {
+          const { useTraceStore } = await import('../stores/traceStore');
+          const ts = useTraceStore.getState();
+
+          if (event.trace_type === 'tool_start') {
+            // 新建 trace 事件
+            ts.appendTrace(sceneId, {
+              id: `${event.trace_type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              step: event.trace_step ?? 0,
+              eventType: 'tool_start',
+              tool: event.tool,
+              args: event.args,
+              toolCallId: event.tool_call_id,
+              receivedAt: new Date().toISOString(),
+            });
+          } else if (event.trace_type === 'tool_done') {
+            // 更新对应 tool_start 到完成态
+            ts.updateToolDone(sceneId, event.tool_call_id || '', event.result, 0);
+          } else if (event.trace_type === 'tool_error') {
+            ts.updateToolError(sceneId, event.tool_call_id || '', event.error || '执行失败');
+          } else if (event.trace_type === 'thinking') {
+            ts.appendTrace(sceneId, {
+              id: `thinking-${Date.now()}`,
+              step: event.trace_step ?? 0,
+              eventType: 'thinking',
+              text: event.text,
+              receivedAt: new Date().toISOString(),
+            });
+          }
         }
       }
     } catch (e) {

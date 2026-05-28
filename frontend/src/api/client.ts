@@ -325,7 +325,9 @@ export type StreamEvent =
   | { type: 'dashboard:reflect'; tool: string; tool_success: boolean; result_preview: string }
   | { type: 'thinking_map:diverged'; node_count: number }
   // 🆕 高危命令审批
-  | { type: 'command_approval'; command: string; reason: string; category: string; description: string };
+  | { type: 'command_approval'; command: string; reason: string; category: string; description: string }
+  // 🆕 Schema v1.6: Agent Loop 执行追踪事件
+  | { type: 'agent_trace'; trace_type: 'tool_start' | 'tool_done' | 'tool_error' | 'thinking'; trace_step?: number; tool?: string; args?: any; result?: any; error?: string; text?: string; tool_call_id?: string };
 
 /** Schema v0.7: 仪表盘队列项 */
 export interface DashboardQueueItem {

@@ -46,6 +46,7 @@ def init_db():
             conn.execute(text("DROP TABLE IF EXISTS web_sessions"))
             conn.execute(text("DROP TABLE IF EXISTS dialog_states"))
             conn.execute(text("DROP TABLE IF EXISTS category_metas"))
+            conn.execute(text("DROP TABLE IF EXISTS agent_loop_traces"))
             conn.commit()
         print("🗑  旧表已删除，准备重建 schema")
 
@@ -87,6 +88,36 @@ def init_db():
                 print("✅ gateway_sessions 表已创建")
     except Exception as e:
         print(f"⚠️  gateway_sessions 表创建跳过: {e}")
+
+    # 迁移：agent_loop_traces 表（零破坏，仅新增表）
+    try:
+        with engine.connect() as conn:
+            tables = [row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()]
+            if "agent_loop_traces" not in tables:
+                conn.execute(text("""
+                    CREATE TABLE agent_loop_traces (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        scene_id    TEXT NOT NULL,
+                        session_id  TEXT,
+                        step        INTEGER,
+                        event_type  TEXT NOT NULL,
+                        tool_name   TEXT,
+                        args_text   TEXT,
+                        result_text TEXT,
+                        error_text  TEXT,
+                        thinking_text TEXT,
+                        summary     TEXT,
+                        duration_ms INTEGER,
+                        metadata    TEXT,
+                        created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                    )
+                """))
+                conn.execute(text("CREATE INDEX idx_traces_scene_time ON agent_loop_traces(scene_id, created_at DESC)"))
+                conn.execute(text("CREATE INDEX idx_traces_scene_session ON agent_loop_traces(scene_id, session_id)"))
+                conn.commit()
+                print("✅ agent_loop_traces 表已创建")
+    except Exception as e:
+        print(f"⚠️  agent_loop_traces 表创建跳过: {e}")
 
     # 迁移：Scenes 表新增广场/工坊字段（零破坏）
     NEW_SCENE_COLS = [
@@ -320,5 +351,12 @@ def init_db():
                 print("✅ messages 表新增 file_attachments 字段")
     except Exception as e:
         print(f"⚠️  file_attachments 迁移跳过: {e}")
+
+    # 清理过期 trace 记录
+    try:
+        from agent_core.trace_logger import clean_expired_traces
+        clean_expired_traces(db)
+    except Exception as e:
+        print(f"⚠️  trace 过期清理跳过: {e}")
     finally:
         db.close()

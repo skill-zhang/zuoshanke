@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 执行追踪面板 原型 v2</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0e0e10;
+  --panel-bg: #16161a;
+  --border: #2a2a30;
+  --text: #e0e0e6;
+  --text-dim: #888;
+  --accent: #a78bfa;
+  --green: #4ade80;
+  --red: #f87171;
+  --orange: #fb923c;
+  --code-bg: #1c1c22;
+  --hover: #202028;
+  --divider: #222;
+}
+
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── 模式切换（演示） ── */
+.mode-switch {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
+  display: flex;
+  gap: 8px;
+}
+.mode-switch button {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mode-switch button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── 聊天区 ── */
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.chat-context-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 13px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.chat-label-actions {
+  display: flex;
+  gap: 6px;
+}
+.chat-label-actions button {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chat-label-actions button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.chat-messages {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.chat-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.chat-input-area input {
+  flex: 1;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+}
+.chat-input-area input:focus {
+  border-color: var(--accent);
+}
+.chat-input-area button {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ── 追踪面板 ── */
+.trace-panel {
+  width: 640px;
+  min-width: 640px;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border);
+  display: none;
+  flex-direction: column;
+  position: relative;
+}
+.trace-panel.open {
+  display: flex;
+}
+
+/* 拖拽把手 */
+.resize-handle {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+}
+.resize-handle:hover,
+.resize-handle.active {
+  background: var(--accent);
+  width: 3px;
+  left: -1px;
+}
+
+/* 面板头部 */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.panel-title .badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.panel-actions {
+  display: flex;
+  gap: 6px;
+}
+.panel-actions button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.panel-actions button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* 面板统计 */
+.panel-stats {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.panel-stats .stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.panel-stats .stat .num {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* 滚动内容 */
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* 步骤分组 */
+.step-group { border-bottom: 1px solid var(--divider); }
+.step-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; cursor: pointer; font-size: 12px; color: var(--text-dim);
+}
+.step-header:hover { background: var(--hover); }
+.step-header .step-num {
+  background: var(--code-bg); color: var(--text); font-size: 11px;
+  padding: 0 7px; border-radius: 4px; font-weight: 500;
+  min-width: 20px; text-align: center;
+}
+.step-header .step-label { flex: 1; }
+.step-header .step-time {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  margin-right: 8px;
+}
+.step-header .step-status {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.step-status.running { background: var(--orange); animation: pulse 1.5s infinite; }
+.step-status.done { background: var(--green); }
+.step-status.error { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.step-arrow { font-size: 10px; transition: transform 0.2s; color: var(--text-dim); }
+.step-group.expanded .step-arrow { transform: rotate(90deg); }
+.step-content { display: none; padding: 0 16px 12px; }
+.step-group.expanded .step-content { display: block; }
+
+/* 思考卡片 */
+.thinking-card {
+  background: linear-gradient(135deg, rgba(167,139,250,0.06), rgba(99,102,241,0.04));
+  border: 1px solid rgba(167,139,250,0.15);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+}
+.thinking-card .thinking-label {
+  font-size: 11px; color: var(--accent); font-weight: 500; margin-bottom: 4px;
+}
+.thinking-card .thinking-text {
+  font-size: 13px; line-height: 1.6; color: var(--text-dim);
+}
+
+/* 工具卡片 */
+.tool-card {
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 8px; overflow: hidden;
+}
+.tool-card.success { border-color: rgba(74,222,128,0.2); }
+.tool-card.error { border-color: rgba(248,113,113,0.2); }
+.tool-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer; font-size: 12px;
+}
+.tool-header:hover { background: var(--hover); }
+.tool-icon {
+  width: 20px; height: 20px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; flex-shrink: 0;
+}
+.tool-icon.run_code { background: #1e3a5f; color: #60a5fa; }
+.tool-name {
+  font-weight: 500; font-family: "JetBrains Mono","SF Mono",monospace; font-size: 12px;
+}
+.tool-timing { color: var(--text-dim); font-size: 11px; margin-left: auto; }
+.tool-indicator {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.tool-indicator.ok { background: var(--green); }
+.tool-indicator.fail { background: var(--red); }
+.tool-arrow { font-size: 10px; color: var(--text-dim); transition: transform 0.2s; }
+.tool-card.expanded .tool-arrow { transform: rotate(90deg); }
+.tool-detail { display: none; border-top: 1px solid var(--divider); }
+.tool-card.expanded .tool-detail { display: block; }
+.detail-section { padding: 8px 12px; }
+.detail-section + .detail-section { border-top: 1px solid var(--divider); }
+.detail-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
+.detail-code {
+  background: var(--code-bg); border-radius: 6px; padding: 8px 10px;
+  font-family: "JetBrains Mono","SF Mono",monospace; font-size: 12px;
+  line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  color: #c8d6e5;
+}
+.detail-code .keyword { color: #7c3aed; }
+.detail-code .string { color: #10b981; }
+.detail-code .comment { color: #6b7280; }
+.detail-output {
+  background: #0d1117; border-radius: 6px; padding: 8px 10px;
+  font-family: "JetBrains Mono","SF Mono",monospace; font-size: 12px;
+  line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  color: #e0e0e6;
+}
+.detail-output.success { border-left: 3px solid var(--green); }
+.detail-output.error { border-left: 3px solid var(--red); color: var(--red); }
+
+/* 底部 */
+.panel-footer {
+  padding: 8px 16px; border-top: 1px solid var(--divider);
+  font-size: 11px; color: var(--text-dim);
+  display: flex; justify-content: space-between; flex-shrink: 0;
+}
+.panel-footer button {
+  background: none; border: none; color: var(--accent); cursor: pointer; font-size: 11px;
+}
+
+/* ── ===== 悬浮按钮 ===== ── */
+.floating-trace-btn {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-right: none;
+  color: var(--text-dim);
+  padding: 8px 6px 8px 6px;
+  border-radius: 8px 0 0 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  writing-mode: vertical-lr;
+  letter-spacing: 2px;
+}
+.floating-trace-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: #1a1a24;
+}
+.floating-trace-btn .btn-icon {
+  font-size: 14px;
+  writing-mode: horizontal-tb;
+  letter-spacing: 0;
+}
+.floating-trace-btn .btn-label {
+  writing-mode: vertical-lr;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.floating-trace-btn .btn-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--orange);
+  writing-mode: horizontal-tb;
+  animation: pulse 1.5s infinite;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.floating-trace-btn.open {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--panel-bg);
+}
+
+/* 按钮在滚动容器中不可见 */
+.floating-trace-btn.hidden {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .trace-panel { min-width: 85vw; width: 85vw; }
+}
+</style>
+</head>
+<body>
+
+<!-- 模式切换（演示用） -->
+<div class="mode-switch">
+  <button id="sceneModeBtn" class="active" onclick="setMode('scene')">📋 场景：AIOps</button>
+  <button id="channelModeBtn" onclick="setMode('channel')">💬 频道：闲聊</button>
+</div>
+
+<!-- 聊天区 -->
+<div class="chat-area">
+  <div class="chat-context-label">
+    <span id="contextLabel">📋 AIOps · 运维场景</span>
+    <div class="chat-label-actions">
+      <button>📋 记录</button>
+      <button>🆕 新会话</button>
+      <button>☑️ 管理</button>
+      <button>🗑 清空</button>
+    </div>
+  </div>
+  <div class="chat-messages">聊天区 · SSE 流实时输出</div>
+  <div class="chat-input-area">
+    <input type="text" placeholder="发送消息..." disabled>
+    <button disabled>发送</button>
+  </div>
+</div>
+
+<!-- 悬浮按钮 -->
+<div class="floating-trace-btn" id="floatingBtn" onclick="togglePanel()">
+  <span class="btn-icon">⚡</span>
+  <span class="btn-label">追踪</span>
+  <span class="btn-dot" id="btnDot"></span>
+</div>
+
+<!-- 追踪面板 -->
+<div class="trace-panel" id="tracePanel">
+  <div class="resize-handle" id="resizeHandle"></div>
+
+  <div class="panel-header">
+    <div class="panel-title">
+      ⚡ 执行追踪 <span class="badge">实时</span>
+    </div>
+    <div class="panel-actions">
+      <button onclick="expandAll()">⊞</button>
+      <button onclick="collapseAll()">⊟</button>
+      <button onclick="togglePanel()">✕</button>
+    </div>
+  </div>
+
+  <div class="panel-stats">
+    <span class="stat">步骤 <span class="num">3</span></span>
+    <span class="stat">工具调用 <span class="num">12</span></span>
+    <span class="stat">LLM 请求 <span class="num">4</span></span>
+    <span class="stat" style="color:var(--green)">✅ 运行中</span>
+  </div>
+
+  <div class="panel-body" id="panelBody">
+
+    <!-- 第 1 步 -->
+    <div class="step-group expanded">
+      <div class="step-header" onclick="toggleStep(this)">
+        <span class="step-arrow">▶</span>
+        <span class="step-num">1</span>
+        <span class="step-label">分析需求</span>
+        <span class="step-time">09:12:30</span>
+        <span class="step-status done"></span>
+      </div>
+      <div class="step-content">
+        <div class="thinking-card">
+          <div class="thinking-label">💭 LLM 思考</div>
+          <div class="thinking-text">用户需要监控坐山客各服务状态。先检查当前各端口服务是否正常运行，确认基线后再推荐方案。</div>
+        </div>
+        <div class="tool-card success expanded">
+          <div class="tool-header" onclick="toggleTool(this)">
+            <span class="tool-arrow">▶</span>
+            <span class="tool-indicator ok"></span>
+            <span class="tool-icon run_code">⚡</span>
+            <span class="tool-name">run_code</span>
+            <span class="tool-timing">1.2s</span>
+          </div>
+          <div class="tool-detail">
+            <div class="detail-section">
+              <div class="detail-label">bash</div>
+              <div class="detail-code"><span class="keyword">for</span> port <span class="keyword">in</span> 8000 5173 8083 8081; <span class="keyword">do</span>
+  curl -so /dev/null -w <span class="string">'%{http_code}'</span> http:<span class="comment">//localhost:$port</span> && <span class="keyword">echo</span> <span class="string">" $port OK"</span> || <span class="keyword">echo</span> <span class="string">" $port FAIL"</span>
+<span class="keyword">done</span></div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">输出</div>
+              <div class="detail-output success">200 8000 OK<br>200 5173 OK<br>200 8083 OK<br>000 8081 FAIL</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第 2 步 -->
+    <div class="step-group expanded">
+      <div class="step-header" onclick="toggleStep(this)">
+        <span class="step-arrow">▶</span>
+        <span class="step-num">2</span>
+        <span class="step-label">部署 Uptime Kuma</span>
+        <span class="step-time">09:13:05</span>
+        <span class="step-status done"></span>
+      </div>
+      <div class="step-content">
+        <div class="thinking-card">
+          <div class="thinking-label">💭 LLM 思考</div>
+          <div class="thinking-text">Uptime Kuma 是开源的轻量监控面板，用 Docker 部署最方便。先拉取镜像再启动容器。</div>
+        </div>
+        <div class="tool-card success">
+          <div class="tool-header" onclick="toggleTool(this)">
+            <span class="tool-arrow">▶</span>
+            <span class="tool-indicator ok"></span>
+            <span class="tool-icon run_code">⚡</span>
+            <span class="tool-name">run_code</span>
+            <span class="tool-timing">3.4s</span>
+          </div>
+          <div class="tool-detail">
+            <div class="detail-section">
+              <div class="detail-label">bash</div>
+              <div class="detail-code">docker pull louislam/uptime-kuma:latest</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">输出</div>
+              <div class="detail-output success">latest: Pulling from louislam/uptime-kuma<br>Digest: sha256:a1b2c3d4...<br>Status: Image is up to date</div>
+            </div>
+          </div>
+        </div>
+        <div class="tool-card success expanded">
+          <div class="tool-header" onclick="toggleTool(this)">
+            <span class="tool-arrow">▶</span>
+            <span class="tool-indicator ok"></span>
+            <span class="tool-icon run_code">⚡</span>
+            <span class="tool-name">run_code</span>
+            <span class="tool-timing">0.8s</span>
+          </div>
+          <div class="tool-detail">
+            <div class="detail-section">
+              <div class="detail-label">bash</div>
+              <div class="detail-code">docker run -d --restart=always -p 3001:3001 --name uptime-kuma louislam/uptime-kuma</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">输出</div>
+              <div class="detail-output success">a1b2c3d4e5f6g7h8i9j0k...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第 3 步（执行中） -->
+    <div class="step-group expanded">
+      <div class="step-header" onclick="toggleStep(this)">
+        <span class="step-arrow">▶</span>
+        <span class="step-num">3</span>
+        <span class="step-label">配置监控项</span>
+        <span class="step-time">09:13:40</span>
+        <span class="step-status running"></span>
+      </div>
+      <div class="step-content">
+        <div class="thinking-card">
+          <div class="thinking-label">💭 LLM 思考</div>
+          <div class="thinking-text">用 Uptime Kuma 的 API 添加三个监控项：后端 :8000、前端 :5173、Qwen :8083。</div>
+        </div>
+        <div class="tool-card error expanded">
+          <div class="tool-header" onclick="toggleTool(this)">
+            <span class="tool-arrow">▶</span>
+            <span class="tool-indicator fail"></span>
+            <span class="tool-icon run_code">⚡</span>
+            <span class="tool-name">run_code</span>
+            <span class="tool-timing">5.1s</span>
+          </div>
+          <div class="tool-detail">
+            <div class="detail-section">
+              <div class="detail-label">bash</div>
+              <div class="detail-code">curl -s -X POST http://localhost:3001/api/monitor \<br>  -H <span class="string">"Content-Type: application/json"</span> \<br>  -d <span class="string">'{"type":"http","name":"后端","url":"http://localhost:8000/api/health"}'</span></div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">输出</div>
+              <div class="detail-output error">curl: (7) Failed to connect to localhost port 3001: Connection refused</div>
+            </div>
+          </div>
+        </div>
+        <div class="tool-card" style="border-color:var(--orange)">
+          <div class="tool-header">
+            <span class="tool-indicator" style="background:var(--orange);animation:pulse 1.5s infinite"></span>
+            <span class="tool-icon run_code">⚡</span>
+            <span class="tool-name">run_code</span>
+            <span class="tool-timing" style="color:var(--orange)">运行中...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-footer">
+    <span>更新: 09:13:42</span>
+    <button onclick="expandAll()">展开全部</button>
+  </div>
+</div>
+
+<script>
+let isSceneMode = true;
+let panelOpen = false;
+
+// ── 模式切换 ──
+function setMode(mode) {
+  isSceneMode = mode === 'scene';
+  document.getElementById('sceneModeBtn').className = isSceneMode ? 'active' : '';
+  document.getElementById('channelModeBtn').className = !isSceneMode ? 'active' : '';
+  document.getElementById('contextLabel').textContent = isSceneMode
+    ? '📋 AIOps · 运维场景'
+    : '💬 闲聊频道';
+
+  const btn = document.getElementById('floatingBtn');
+  btn.classList.toggle('hidden', !isSceneMode);
+
+  // 切到频道时自动关闭面板
+  if (!isSceneMode && panelOpen) {
+    togglePanel();
+  }
+}
+
+// ── 面板显隐 ──
+function togglePanel() {
+  panelOpen = !panelOpen;
+  const panel = document.getElementById('tracePanel');
+  const btn = document.getElementById('floatingBtn');
+  panel.classList.toggle('open', panelOpen);
+  btn.classList.toggle('open', panelOpen);
+}
+
+// ── 步骤/工具折叠 ──
+function toggleStep(el) { el.closest('.step-group').classList.toggle('expanded'); }
+function toggleTool(el) { el.closest('.tool-card').classList.toggle('expanded'); }
+function expandAll() { document.querySelectorAll('.step-group').forEach(g => g.classList.add('expanded')); }
+function collapseAll() { document.querySelectorAll('.step-group').forEach(g => g.classList.remove('expanded')); }
+
+// ── 面板拖拽调宽 ──
+const handle = document.getElementById('resizeHandle');
+const panel = document.getElementById('tracePanel');
+let isResizing = false;
+
+handle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  handle.classList.add('active');
+  document.body.style.cursor = 'col-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const rect = panel.getBoundingClientRect();
+  const w = rect.right - e.clientX;
+  if (w >= 640) panel.style.width = w + 'px';
+});
+
+document.addEventListener('mouseup', () => {
+  isResizing = false;
+  handle.classList.remove('active');
+  document.body.style.cursor = '';
+});
+
+// ── 悬浮按钮拖拽移动 ──
+const floatBtn = document.getElementById('floatingBtn');
+let isDragging = false;
+let dragStartY = 0;
+let dragStartTop = 0;
+
+floatBtn.addEventListener('mousedown', (e) => {
+  // 只在按钮本身上拖拽（不是点击展开/关闭）
+  isDragging = true;
+  dragStartY = e.clientY;
+  dragStartTop = parseFloat(floatBtn.style.top) || floatBtn.getBoundingClientRect().top;
+  document.body.style.cursor = 'grab';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  e.preventDefault();
+  const dy = e.clientY - dragStartY;
+  const newTop = Math.max(80, Math.min(window.innerHeight - 120, dragStartTop + dy));
+  floatBtn.style.top = newTop + 'px';
+  floatBtn.style.transform = 'none';
+});
+
+document.addEventListener('mouseup', () => {
+  isDragging = false;
+  document.body.style.cursor = '';
+});
+
+// ── 点击 vs 拖拽区分 ──
+let clickStartY = 0;
+floatBtn.addEventListener('mousedown', (e) => {
+  clickStartY = e.clientY;
+});
+floatBtn.addEventListener('click', (e) => {
+  // 如果拖拽距离 > 5px 就视为拖拽，不触发点击
+  if (Math.abs(e.clientY - clickStartY) > 5) {
+    e.stopImmediatePropagation();
+  }
+});
+</script>
+</body>
+</html>

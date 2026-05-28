@@ -575,6 +575,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             scene_config=scene.scene_config or {},
             tool_callbacks=tool_callbacks or None,  # 🆕 工具回调
             db=db,  # 🆕 Schema v1.0: 快照写入
+            session_id=data.session_id or "",  # 🆕 Schema v1.6: trace 记录
         )
 
         # ── Thought Stream: 即时确认 ──
@@ -616,10 +617,15 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
         agent_usage = {}  # 🆕 Schema v1.1: 默认空（兜底 agent loop 未返回 usage）
         thought_throttle = ThoughtThrottle()
         loop_round = 0
+        trace_step = 0  # 🆕 v1.6: 追踪步数
         try:
             for event in agent_stream:
                 etype = event["type"]
                 if etype == "tool_start":
+                    # 🆕 发射 agent_trace (v1.6)
+                    yield sse_event("agent_trace", trace_type="tool_start", trace_step=trace_step,
+                                    tool=event["tool"],
+                                    args=event.get("args", {}), tool_call_id=event.get("tool_call_id", ""))
                     # 🆕 Think 工具：转为 thought 事件（带限流）
                     if event["tool"] == "think":
                         args = event.get("args", {})
@@ -653,6 +659,7 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     except Exception:
                         pass
                     loop_round += 1  # 🆕 Thought Stream 限流计数
+                    trace_step += 1  # 🆕 v1.6: 追踪步数递增
                 elif etype == "tool_done":
                     # 🆕 Think 工具：跳过 tool_done 事件（已在 tool_start 转为 thought）
                     if event["tool"] == "think":
@@ -680,6 +687,10 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                             pass  # 持久化失败不影响主流程
                     yield sse_event("tool_status", tool=event["tool"], status="done",
                                     success=True, message="已完成")
+                    # 🆕 发射 agent_trace (v1.6)
+                    yield sse_event("agent_trace", trace_type="tool_done", trace_step=trace_step,
+                                    tool=event["tool"],
+                                    result=event.get("result", ""), tool_call_id=event.get("tool_call_id", ""))
                     agent_tool_results.append({
                         "tool": event["tool"], "params": {},
                         "result": event.get("result"), "success": True,
@@ -696,6 +707,10 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                         )
                     yield sse_event("tool_status", tool=event["tool"], status="error",
                                     success=False, message=event.get("error", "执行失败"))
+                    # 🆕 发射 agent_trace (v1.6)
+                    yield sse_event("agent_trace", trace_type="tool_error", trace_step=trace_step,
+                                    tool=event["tool"],
+                                    error=event.get("error", "执行失败"), tool_call_id=event.get("tool_call_id", ""))
                     agent_tool_results.append({
                         "tool": event["tool"], "params": {},
                         "result": event.get("error", "执行失败"), "success": False,
@@ -704,6 +719,8 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     text = event["text"]
                     full_reply += text
                     yield sse_event("token", token=text)
+                    # 🆕 发射 agent_trace (v1.6)
+                    yield sse_event("agent_trace", trace_type="thinking", trace_step=trace_step, text=text)
                 elif etype == "done":
                     full_reply = event.get("summary", full_reply)
                     agent_usage = event.get("usage", {})  # 🆕 Schema v1.1: Token 用量

@@ -67,30 +67,34 @@ def check_services() -> list[dict]:
         future_to_service = {
             executor.submit(_check_one, svc): svc for svc in SERVICES
         }
-        for future in concurrent.futures.as_completed(
-            future_to_service, timeout=TOTAL_TIMEOUT
-        ):
-            try:
-                result = future.result()
-                results.append(result)
-            except concurrent.futures.TimeoutError:
-                svc = future_to_service[future]
-                results.append({
-                    "name": svc["name"],
-                    "port": svc["port"],
-                    "status": "timeout",
-                    "response_time_ms": None,
-                    "error": "超时",
-                })
-            except Exception as e:
-                svc = future_to_service[future]
-                results.append({
-                    "name": svc["name"],
-                    "port": svc["port"],
-                    "status": "error",
-                    "response_time_ms": None,
-                    "error": str(e),
-                })
+        try:
+            for future in concurrent.futures.as_completed(
+                future_to_service, timeout=TOTAL_TIMEOUT
+            ):
+                try:
+                    result = future.result()
+                    results.append(result)
+                except concurrent.futures.TimeoutError:
+                    svc = future_to_service[future]
+                    results.append({
+                        "name": svc["name"],
+                        "port": svc["port"],
+                        "status": "timeout",
+                        "response_time_ms": None,
+                        "error": "超时",
+                    })
+                except Exception as e:
+                    svc = future_to_service[future]
+                    results.append({
+                        "name": svc["name"],
+                        "port": svc["port"],
+                        "status": "error",
+                        "response_time_ms": None,
+                        "error": str(e),
+                    })
+        except concurrent.futures.TimeoutError:
+            # as_completed 总超时 → 返回已收集的部分结果
+            pass
 
     # 按端口排序返回
     results.sort(key=lambda x: x["port"])

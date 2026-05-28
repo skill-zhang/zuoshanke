@@ -550,6 +550,16 @@ class AgentLoopRequest(BaseModel):
     model: str = PydanticField("flash", description="模型: flash / pro")
     scene_id: Optional[str] = PydanticField(None, description="关联的场景 ID（可选）")
     memory_context: str = PydanticField("", description="额外上下文/记忆信息")
+    session_id: str = PydanticField("", description="会话 ID（可选，用于 trace）")
+
+
+@router.get("/api/scenes/{scene_id}/traces")
+def get_scene_traces(scene_id: str, limit: int = 200, offset: int = 0, db: Session = Depends(get_db)):
+    """查询场景的 Agent Loop 执行 trace 记录"""
+    _get_scene_or_404(db, scene_id)
+    from agent_core.trace_logger import query_traces
+    traces = query_traces(db, scene_id, limit=limit, offset=offset)
+    return {"traces": traces, "count": len(traces)}
 
 
 @router.post("/api/agent-loop/stream")
@@ -583,6 +593,8 @@ def stream_agent_loop(data: AgentLoopRequest, db: Session = Depends(get_db)):
             task=data.task,
             memory_context=memory_ctx,
             model=data.model,
+            scene_id=data.scene_id or "",
+            session_id=data.session_id or "",
         ):
             event_type = event.pop("type", "unknown")
 
