@@ -1,7 +1,7 @@
 /** 🏪 场景广场 — 浏览已发布的场景 */
 import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '../stores/appStore';
-import { Scene, updateScene } from '../api/client';
+import { Scene, updateScene, listCategories } from '../api/client';
 
 const CATEGORIES = [
   { key: 'all', icon: '🔍', label: '全部' },
@@ -30,9 +30,11 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
   const { plazaScenes, loadPlazaScenes, loadingPlaza } = useStore();
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [categories, setCategories] = useState<{ name: string; label: string; icon: string; count: number }[]>([]);
 
   useEffect(() => {
     loadPlazaScenes();
+    listCategories().then(setCategories).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -64,10 +66,27 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
     loadPlazaScenes();
   }, [loadPlazaScenes]);
 
+  // ── 分类 tab 生成（动态 count） ──
+  const categoryTabs = (() => {
+    const allCount = plazaScenes.length;
+    const tabs: { key: string; icon: string; label: string }[] = [
+      { key: 'all', icon: '🔍', label: `全部 (${allCount})` },
+    ];
+    // 统计各分类数量
+    const counts: Record<string, number> = {};
+    plazaScenes.forEach(s => { if (s.category) counts[s.category] = (counts[s.category] || 0) + 1; });
+    CATEGORIES.filter(c => c.key !== 'all').forEach(c => {
+      const count = counts[c.key] || 0;
+      tabs.push({ key: c.key, icon: c.icon, label: `${c.label} (${count})` });
+    });
+    return tabs;
+  })();
+
   return (
     <div className="plaza">
+      {/* ═══ 分类 Tabs ═══ */}
       <div className="category-bar">
-        {CATEGORIES.map(c => (
+        {categoryTabs.map(c => (
           <div
             key={c.key}
             className={`category-tab${category === c.key ? ' active' : ''}`}
@@ -78,6 +97,7 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
         ))}
       </div>
 
+      {/* ═══ 工具栏 ═══ */}
       <div className="plaza-toolbar">
         <div className="search-box">
           <span className="search-icon">🔍</span>
@@ -94,9 +114,11 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
         </div>
       </div>
 
+      {/* ═══ 场景卡片网格 ═══ */}
       <div className="plaza-grid">
         {loadingPlaza ? (
           <div className="empty-state">
+            <div className="empty-state-icon">🔄</div>
             <div className="empty-state-text">加载中...</div>
           </div>
         ) : filtered.length === 0 ? (
@@ -105,29 +127,61 @@ export function PlazaView({ onEnterScene, onCreateScene, onImportScene }: PlazaV
             <div className="empty-state-text">暂无已发布的场景</div>
             <div className="empty-state-desc">去工坊发布一个场景，或换个分类看看</div>
           </div>
-        ) : filtered.map(s => (
-          <div key={s.id} className="scene-card" onClick={() => onEnterScene(s)}>
-            <div className="scene-card-icon">{s.icon || '📦'}</div>
-            <div className="scene-card-name">
-              {s.name}
-              <span className="scene-card-version">v{s.version}</span>
-            </div>
-            <div className="scene-card-desc">{s.description || '暂无简介'}</div>
-            <div className="scene-card-footer">
-              <span className="scene-card-source">
-                {SOURCE_LABELS[s.source] || s.source}
-              </span>
-              <span className="scene-card-updated">{formatDate(s.published_at || s.updated_at)}</span>
-            </div>
-            <button
-              className={`plaza-pin-btn${s.show_on_workbench ? ' pinned' : ''}`}
-              onClick={(e) => toggleWorkbenchPin(s, e)}
-              title={s.show_on_workbench ? '从工作台移除' : '钉到工作台'}
+        ) : filtered.map(s => {
+          const isPublished = s.version !== '0.0';
+          const catMeta = categories.find(c => c.name === s.category);
+          return (
+            <div
+              key={s.id}
+              className="plaza-card"
+              onClick={() => onEnterScene(s)}
             >
-              {s.show_on_workbench ? '⭐ 已加入' : '☆ 加入工作台'}
-            </button>
-          </div>
-        ))}
+              {/* 图标 */}
+              <div className="plaza-card-icon">{s.icon || '📦'}</div>
+
+              {/* 名称 + 版本 */}
+              <div className="plaza-card-name">
+                {s.name}
+                <span className="plaza-card-version">v{s.version}</span>
+              </div>
+
+              {/* 状态标签行 */}
+              <div className="plaza-card-tags">
+                <span className={`plaza-tag${isPublished ? ' tag-published' : ' tag-draft'}`}>
+                  {isPublished ? '✅ 已发布' : '📝 草稿'}
+                </span>
+                {catMeta && (
+                  <span className="plaza-tag tag-category">
+                    {catMeta.icon} {catMeta.label}
+                  </span>
+                )}
+                <span className="plaza-tag tag-source">
+                  {SOURCE_LABELS[s.source] || s.source}
+                </span>
+              </div>
+
+              {/* 描述 */}
+              <div className="plaza-card-desc">
+                {s.description || '暂无简介'}
+              </div>
+
+              {/* 底部信息 + pin 按钮 */}
+              <div className="plaza-card-footer">
+                <span>{formatDate(s.published_at || s.updated_at)}</span>
+                <button
+                  className={`plaza-pin-btn${s.show_on_workbench ? ' pinned' : ''}`}
+                  onClick={(e) => toggleWorkbenchPin(s, e)}
+                  title={s.show_on_workbench ? '从工作台移除' : '钉到工作台'}
+                >
+                  {s.show_on_workbench ? '⭐ 已加入' : '☆ 加入工作台'}
+                </button>
+              </div>
+
+              {/* pin 状态指示条 */}
+              {s.show_on_workbench && <div className="plaza-card-pinned-bar" />}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

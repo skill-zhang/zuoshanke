@@ -119,7 +119,11 @@ body {
 
 /* 场景广场 */
 .plaza { flex:1; display:flex; flex-direction:column; overflow:hidden; }
-.plaza-grid { flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,360px)); gap:16px; align-content:start; padding:0 24px 24px; }
+.plaza-grid {
+  flex:1; overflow-y:auto; display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; align-content:start;
+  padding:0 24px 24px;
+}
 .plaza-grid::-webkit-scrollbar { width:12px; }
 .plaza-grid::-webkit-scrollbar-track { background:transparent; }
 .plaza-grid::-webkit-scrollbar-thumb { background:#30363d; border-radius:6px; }
@@ -165,38 +169,65 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0,0,0,.3);
 }
-.scene-card {
+
+/* ── Plaza 卡片（参考工坊创作空间卡片风格） ── */
+.plaza-card {
   background:#161b22; border:1px solid #30363d; border-radius:10px;
-  padding:20px; cursor:pointer; transition:all .15s; display:flex; flex-direction:column; position:relative;
+  padding:20px; cursor:pointer; transition:all .15s;
+  display:flex; flex-direction:column; position:relative;
 }
-.scene-card:hover {
-  border-color:#8b949e; background:#1c2128;
+.plaza-card:hover {
+  border-color:#6e7681; background:#1c2128;
   transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.3);
 }
-.scene-card-icon { font-size:32px; line-height:1; margin-bottom:10px; }
-.scene-card-name { font-size:15px; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
-.scene-card-version {
-  font-size:11px; color:#6e7681; background:#21262d; border-radius:4px; padding:1px 6px; font-weight:400;
+.plaza-card-icon { font-size:32px; line-height:1; margin-bottom:10px; }
+.plaza-card-name {
+  font-size:15px; font-weight:600; margin-bottom:4px;
+  display:flex; align-items:center; gap:8px;
 }
-.scene-card-desc { font-size:13px; color:#8b949e; line-height:1.5; flex:1; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.scene-card-footer {
+.plaza-card-version {
+  font-size:11px; color:#6e7681; background:#21262d; border-radius:4px;
+  padding:1px 6px; font-weight:400; white-space:nowrap;
+}
+/* 标签行 */
+.plaza-card-tags {
+  display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-bottom:6px;
+}
+.plaza-tag {
+  font-size:11px; padding:2px 8px; border-radius:10px; white-space:nowrap;
+}
+.plaza-tag.tag-published { background:#23863633; color:#3fb950; }
+.plaza-tag.tag-draft { background:#d2992233; color:#d29922; }
+.plaza-tag.tag-category { background:#21262d; color:#8b949e; }
+.plaza-tag.tag-source { background:#1f6feb22; color:#58a6ff; }
+/* 描述 */
+.plaza-card-desc {
+  font-size:13px; color:#8b949e; line-height:1.5; flex:1;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+/* 底部 */
+.plaza-card-footer {
   display:flex; align-items:center; justify-content:space-between;
-  margin-top:10px; padding-top:8px; border-top:1px solid #21262d; font-size:12px; color:#6e7681;
+  margin-top:10px; padding-top:8px; border-top:1px solid #21262d;
+  font-size:11px; color:#6e7681;
 }
-.scene-card-updated { font-size:11px; }
-.scene-card-source { font-size:11px; display:flex; align-items:center; gap:4px; }
-
-/* Plaza 钉到工作台 按钮 */
+/* pin 按钮（在卡片底部） */
 .plaza-pin-btn {
-  display: block; width: 100%; margin-top: 8px;
-  padding: 6px 0; background: transparent;
-  border: 1px dashed #30363d; border-radius: 6px;
-  color: #8b949e; font-size: 12px; cursor: pointer;
-  transition: all 0.15s;
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 10px; font-size:11px; border-radius:6px;
+  border:1px solid #30363d; background:transparent; color:#8b949e;
+  cursor:pointer; transition:all .15s; white-space:nowrap;
 }
-.plaza-pin-btn:hover { border-color: #c8a84e; color: #c9d1d9; background: #1c2333; }
-.plaza-pin-btn.pinned { border-style: solid; color: #d29922; border-color: #d29922; background: rgba(210,153,34,0.06); }
-.plaza-pin-btn.pinned:hover { background: rgba(210,153,34,0.12); }
+.plaza-pin-btn:hover { border-color:#c8a84e; color:#c9d1d9; background:#1c2333; }
+.plaza-pin-btn.pinned { border-color:#d29922; color:#d29922; background:rgba(210,153,34,0.08); }
+.plaza-pin-btn.pinned:hover { background:rgba(210,153,34,0.15); }
+
+/* pin 状态指示条（卡片底部） */
+.plaza-card-pinned-bar {
+  position:absolute; bottom:0; left:12px; right:12px;
+  height:2px; background:linear-gradient(90deg, #d29922, #c8a84e);
+  border-radius:0 0 10px 10px;
+}
 
 .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; color:#6e7681; grid-column:1/-1; }
 .empty-state-icon { font-size:48px; margin-bottom:16px; }
