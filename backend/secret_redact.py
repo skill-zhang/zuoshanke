@@ -163,7 +163,7 @@ def _redact_value(value: str, max_keep: int = 4) -> str:
 
 
 def _mask_secret(value: str, head: int = 4, tail: int = 4, floor: int = 12) -> str:
-    """遮盖密钥，保留首尾字符（类似 Hermes mask_secret）
+    """遮盖密钥，保留首尾字符（类似 mask_secret）
 
     Args:
         value: 原始密钥字符串
