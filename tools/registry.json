@@ -1996,6 +1996,31 @@
       "verified": true
     },
     {
+      "name": "image_gen",
+      "description": "AI 图片生成 — 文字描述生成图片。基于 Pollinations.ai（免费，无需 API Key），支持多种尺寸和风格（写实/动漫/油画/赛博朋克等），AI不可用时自动生成占位图",
+      "file": "tools/image_gen.py",
+      "function": "image_gen",
+      "parameters": {
+        "prompt": {
+          "type": "string",
+          "description": "图片描述词（必填），支持中英文，如 '一只可爱的小猫' 'sunset beach'"
+        },
+        "size": {
+          "type": "string",
+          "description": "图片尺寸：256x256 / 512x512 / 1024x1024 / 1792x1024 / 1024x1792，默认 1024x1024",
+          "optional": true
+        },
+        "style": {
+          "type": "string",
+          "description": "风格：realistic(写实)/anime(动漫)/oil_painting(油画)/cyberpunk(赛博)/ink_wash(水墨)等",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, image_path, prompt, size, width, height, file_size_bytes, is_placeholder}",
+      "category": "data",
+      "verified": true
+    },
+    {
       "name": "text_to_speech",
       "description": "文本转语音（TTS），基于 Edge TTS（免费，无需 API Key），支持中英日韩多语种语音合成，输出 MP3 文件",
       "file": "tools/text_to_speech.py",
