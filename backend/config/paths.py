@@ -19,7 +19,7 @@ ZUOSHANKE_HOME = Path.home() / ".zuoshanke"
 LOG_DIR = Path.home() / ".zuoshanke"
 GATEWAY_BUF_DIR = Path.home() / ".zuoshanke" / "gateway"
 
-# ── Hermes 依赖路径 ──
-HERMES_ENV = Path.home() / ".hermes" / ".env"
-HERMES_BIN = os.path.expanduser("~/.local/bin/hermes")
-HERMES_LOGS = os.path.expanduser("~/.hermes/logs")
+# ── zuoshanke 专属路径 ──
+ZUOSHANKE_ENV = Path.home() / ".zuoshanke" / ".env"
+ZUOSHANKE_BIN = Path.home() / ".zuoshanke" / "bin" / "zuoshanke"
+ZUOSHANKE_LOGS = Path.home() / ".zuoshanke" / "logs"

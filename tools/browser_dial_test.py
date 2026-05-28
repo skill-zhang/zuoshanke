@@ -248,7 +248,7 @@ async def _dial_test_coro(url: str, viewport: str = "1440x900", screenshot: bool
         screenshot_path = None
         if screenshot:
             try:
-                shots_dir = os.path.expanduser("~/.hermes/dial_shots")
+                shots_dir = os.path.expanduser("~/.zuoshanke/dial_shots")
                 os.makedirs(shots_dir, exist_ok=True)
                 shot_name = f"dial_{uuid.uuid4().hex[:8]}.png"
                 screenshot_path = os.path.join(shots_dir, shot_name)
@@ -477,7 +477,7 @@ def _auto_screenshot(action_type: str) -> bool:
 
 async def _save_screenshot(page, flow_id: str, step_index: int, label: str) -> str:
     """保存截图，返回文件路径"""
-    shots_dir = os.path.expanduser("~/.hermes/dial_shots")
+    shots_dir = os.path.expanduser("~/.zuoshanke/dial_shots")
     os.makedirs(shots_dir, exist_ok=True)
     safe_label = label.replace(" ", "_")[:30] if label else f"step{step_index}"
     shot_name = f"{flow_id}_step{step_index}_{safe_label}.png"

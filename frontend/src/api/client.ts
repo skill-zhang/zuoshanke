@@ -447,9 +447,9 @@ export const generateActionMap = (thinkNodeId: string) =>
     body: JSON.stringify({ think_node_id: thinkNodeId }),
   });
 
-// ═══ Action Map 流式生成（Hermes 子进程 SSE）═══
+// ═══ Action Map 流式生成（子进程 SSE）═══
 export type ActionMapStreamEvent =
-  | { type: 'hermes_log'; line: string }
+  | { type: 'zuoshanke_log'; line: string }
   | { type: 'status'; line: string }
   | { type: 'result'; action_map: ActionMap }
   | { type: 'done' }
@@ -487,13 +487,13 @@ export async function* generateActionMapStream(
   }
 }
 
-// ═══ Action Map 执行流式（Hermes 子进程执行节点）═══
+// ═══ Action Map 执行流式（子进程执行节点）═══
 export type ExecuteStreamEvent =
   | { type: 'map_status'; status: string }
   | { type: 'node_start'; node_id: string; label: string }
   | { type: 'node_done'; node_id: string; status: string; label: string; result?: string }
   | { type: 'node_retry'; node_id: string; label: string; retry: number }
-  | { type: 'hermes_log'; node_id: string; line: string }
+  | { type: 'zuoshanke_log'; node_id: string; line: string }
   | { type: 'map_done'; status: string }
   | { type: 'tools_documented'; count: number; tools: Array<{ name: string; description: string }> }
   | { type: 'error'; message: string };

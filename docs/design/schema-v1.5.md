@@ -1,6 +1,6 @@
 # 坐山客 Schema v1.5 — 本体记忆选择注入
 
-> 2026-07-03
+> 2026-05-27
 > 核心命题：不朽 ≠ 全量注入。存储层保留永不过期，注入层增加智能选择。
 
 ---
@@ -599,7 +599,7 @@ Phase 5（收割 + 迭代——靠观察）：
 | v1.2 | 2026-05-24 | 工作台 + 场景元数据扩展 |
 | v1.3 | 2026-05-25 | 前端重构 + 场景发布流程 |
 | v1.4 | 2026-05-26 | 用户画像管线 + LLM 判重 + SettingView Tab |
-| **v1.5** | **2026-07-03** | **本体记忆三层选择注入** |
+| **v1.5** | **2026-05-27** | **本体记忆三层选择注入** |
 
 ---
 
@@ -614,7 +614,7 @@ Phase 5（收割 + 迭代——靠观察）：
 | 记忆缓存层 | ⚠️ 需适配 | MemoryCache 加新接口，get_top_for_context 不变 |
 | 记忆萃取 | ❌ 不受影响 | 萃取写入 AgentMemory，不改变注入决策 |
 | 外部 API（GET /api/memory） | ❌ 不受影响 | 全量返回不变 |
-| Hermes 批量导入脚本 | ⚠️ 追加 is_core | scripts/import_hermes_memory_to_zhu.py 加 is_core=True 标记 |
+| 批量导入脚本（旧 Hermes→坐山客迁移） | ⚠️ 追加 is_core | scripts/import_hermes_memory_to_zhu.py 加 is_core=True 标记 |
 
 ---
 

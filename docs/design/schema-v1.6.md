@@ -1,6 +1,6 @@
 # 坐山客 Schema v1.6 — 可运维设计
 
-> 2026-07-03
+> 2026-05-27
 > 核心命题：Agent Loop 执行过程可观测、可追溯、可复盘。日志和 DB trace 记录留存 3 天自动轮转，前端实时可视化执行步骤。
 
 ---
@@ -29,7 +29,7 @@ yield {"type": "tool_done", "tool": "run_code", "result": {...}}
 
 ### 1.2 故障场景：分身杀死后端
 
-真实案例（2026-05-28）：分身通过 Agent Loop 部署监控方案时，执行了类似 `fuser -k 8000/tcp` 的命令**杀死了运行中的后端进程**。进程一死：
+真实案例（2026-05-27）：分身通过 Agent Loop 部署监控方案时，执行了类似 `fuser -k 8000/tcp` 的命令**杀死了运行中的后端进程**。进程一死：
 
 1. SSE 流断开 → yield 的事件全部丢失
 2. 日志文件中只有两行统计，看不到最后执行的命令
@@ -88,12 +88,12 @@ yield {"type": "tool_done", "tool": "run_code", "result": {...}}
 每行一个 JSON 对象，key 全小写蛇形：
 
 ```jsonl
-{"ts":"2026-05-28T08:30:42.123","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"llm_call","model":"deepseek-v4-flash","msgs":36,"tools":52}
-{"ts":"2026-05-28T08:30:44.456","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"llm_response","finish_reason":"tool_calls","usage":{"prompt_tokens":12345,"completion_tokens":678}}
-{"ts":"2026-05-28T08:30:44.789","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"tool_start","tool":"run_code","args":{"language":"bash","code":"curl -s http://localhost:8000/api/health"}}
-{"ts":"2026-05-28T08:30:45.012","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"tool_done","tool":"run_code","success":true,"result":{"stdout":"{\"status\":\"ok\"}","exit_code":0}}
-{"ts":"2026-05-28T08:30:46.789","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"thinking","text":"看起来后端返回了200，说明服务正常..."}
-{"ts":"2026-05-28T08:30:47.000","scene":"scene-xxx","session":"ws-xxx","step":9,"type":"tool_start","tool":"run_code","args":{"language":"bash","code":"fuser -k 8000/tcp"}}
+{"ts":"2026-05-27T08:30:42.123","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"llm_call","model":"deepseek-v4-flash","msgs":36,"tools":52}
+{"ts":"2026-05-27T08:30:44.456","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"llm_response","finish_reason":"tool_calls","usage":{"prompt_tokens":12345,"completion_tokens":678}}
+{"ts":"2026-05-27T08:30:44.789","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"tool_start","tool":"run_code","args":{"language":"bash","code":"curl -s http://localhost:8000/api/health"}}
+{"ts":"2026-05-27T08:30:45.012","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"tool_done","tool":"run_code","success":true,"result":{"stdout":"{\"status\":\"ok\"}","exit_code":0}}
+{"ts":"2026-05-27T08:30:46.789","scene":"scene-xxx","session":"ws-xxx","step":8,"type":"thinking","text":"看起来后端返回了200，说明服务正常..."}
+{"ts":"2026-05-27T08:30:47.000","scene":"scene-xxx","session":"ws-xxx","step":9,"type":"tool_start","tool":"run_code","args":{"language":"bash","code":"fuser -k 8000/tcp"}}
 ```
 
 ### 3.2 事件类型

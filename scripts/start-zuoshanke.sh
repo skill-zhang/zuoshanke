@@ -4,7 +4,6 @@
 #   start-zuoshanke.sh              # 启动全部（后端 + 前端）
 #   start-zuoshanke.sh backend      # 仅启动后端
 #   start-zuoshanke.sh frontend     # 仅启动前端
-#   start-zuoshanke.sh gateway      # 仅启动 Hermes 消息网关
 #   start-zuoshanke.sh all          # 同上，全部启动
 #   start-zuoshanke.sh stop         # 停掉全部
 #   start-zuoshanke.sh status       # 查看运行状态
@@ -16,9 +15,6 @@ BACKEND_DIR="$ZUOSHANKE_DIR/backend"
 FRONTEND_DIR="$ZUOSHANKE_DIR/frontend"
 BACKEND_PORT=8000
 FRONTEND_PORT=5173
-
-# ── pnpm 不在默认 PATH ──
-PNPM="$HOME/.hermes/node/bin/pnpm"
 
 # ── 颜色 ──
 GREEN='\033[0;32m'
@@ -34,7 +30,6 @@ log_warn()  { echo -e " ${YELLOW}⚠${NC}  $1"; }
 # ── 日志文件 ──
 BACKEND_LOG="/tmp/zuoshanke-backend.log"
 FRONTEND_LOG="/tmp/zuoshanke-frontend.log"
-GATEWAY_LOG="/tmp/zuoshanke-gateway.log"
 
 # ═══════════════════════════════════════════════
 #  检查 & 停止
@@ -60,20 +55,9 @@ stop_service() {
     fi
 }
 
-stop_gateway() {
-    if ps -p "$GATEWAY_PID" >/dev/null 2>&1; then
-        log_warn "停掉 Gateway..."
-        python3 -m hermes_cli.main gateway stop 2>/dev/null || true
-        kill "$GATEWAY_PID" 2>/dev/null || true
-        sleep 1
-        log_ok "Gateway 已停止"
-    fi
-}
-
 stop_all() {
     stop_service "后端" "$BACKEND_PORT" ""
     stop_service "前端" "$FRONTEND_PORT" ""
-    stop_gateway
     log_ok "全部服务已停止"
 }
 
@@ -109,14 +93,6 @@ status() {
         log_ok "前端 http://localhost:$FRONTEND_PORT (PID: $pid)"
     else
         log_err "前端 :$FRONTEND_PORT — 未运行"
-    fi
-
-    # Gateway (Hermes)
-    if pgrep -f "hermes_cli.*gateway" >/dev/null 2>&1; then
-        local pid=$(pgrep -f "hermes_cli.*gateway" 2>/dev/null | head -1)
-        log_ok "Gateway (PID: $pid)"
-    else
-        log_err "Gateway — 未运行"
     fi
 
     # Qwen LLM
@@ -172,9 +148,12 @@ start_frontend() {
         log_err "前端目录不存在: $FRONTEND_DIR"
         exit 1
     fi
-    if [ ! -f "$PNPM" ]; then
-        log_err "pnpm 不存在: $PNPM"
-        exit 1
+    if [ ! -f "$FRONTEND_DIR/node_modules/.package-lock.json" ]; then
+        if [ ! -f "$FRONTEND_DIR/node_modules/.pnpm-lock.yaml" ]; then
+            log_warn "node_modules 可能未安装，先执行 pnpm install..."
+            cd "$FRONTEND_DIR"
+            pnpm install || npm install || { log_err "依赖安装失败，请手动执行: cd frontend && pnpm install"; exit 1; }
+        fi
     fi
 
     cd "$FRONTEND_DIR"
@@ -193,33 +172,6 @@ start_frontend() {
 
     log_err "前端启动超时，日志最后 10 行:"
     tail -10 "$FRONTEND_LOG" 2>/dev/null
-    return 1
-}
-
-start_gateway() {
-    echo ""
-    echo "🚀 启动 Hermes Gateway ..."
-
-    if pgrep -f "hermes_cli.*gateway" >/dev/null 2>&1; then
-        log_warn "Gateway 已在运行"
-        return 0
-    fi
-
-    nohup python3 -m hermes_cli.main gateway run --replace > "$GATEWAY_LOG" 2>&1 &
-    local pid=$!
-    log_info "PID: $pid，日志: $GATEWAY_LOG"
-
-    # 等待启动（最多 10 秒）
-    for i in $(seq 1 10); do
-        sleep 1
-        if pgrep -f "hermes_cli.*gateway" >/dev/null 2>&1; then
-            log_ok "Gateway 启动成功（${i}s）"
-            return 0
-        fi
-    done
-
-    log_err "Gateway 启动失败，日志:"
-    tail -5 "$GATEWAY_LOG" 2>/dev/null
     return 1
 }
 
@@ -247,25 +199,20 @@ case "${1:-all}" in
     frontend)
         start_frontend
         ;;
-    gateway)
-        start_gateway
-        ;;
     all|"")
         start_backend
         start_frontend
-        start_gateway
         echo ""
         log_ok "全部服务启动完成"
         echo ""
         status
         ;;
     *)
-        echo "用法: $0 {all|backend|frontend|gateway|stop|status|restart}"
+        echo "用法: $0 {all|backend|frontend|stop|status|restart}"
         echo ""
-        echo "  all        启动全部（后端 + 前端 + Gateway）"
+        echo "  all        启动全部（后端 + 前端）"
         echo "  backend    仅后端"
         echo "  frontend   仅前端"
-        echo "  gateway    仅消息网关"
         echo "  stop       全部停止"
         echo "  status     查看状态"
         echo "  restart    全部重启"

@@ -1,4 +1,4 @@
-"""AI 引擎 — 调用 Qwen3.5-9B / Hermes 处理用户输入，更新 Thinking Map"""
+"""AI 引擎 — 调用 Qwen3.5-9B 处理用户输入，更新 Thinking Map"""
 import json
 import os
 import subprocess
@@ -27,7 +27,6 @@ def _weather_maybe(user_text: str) -> str | None:
 
 
 from config.urls import QWEN_API, DEEPSEEK_BASE_URL
-from config.paths import HERMES_BIN
 
 # ── DeepSeek 云 API 配置（读取环境变量） ──
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")

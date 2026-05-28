@@ -8,7 +8,7 @@
 - 知识管理、笔记沉淀
 
 NOTES:
-- 沉淀内容存储在 ~/.hermes/precipitate/ 目录下
+- 沉淀内容存储在 ~/.zuoshanke/precipitate/ 目录下
 - 按日期组织文件（YYYY-MM-DD.md）
 - 每条沉淀记录包含时间戳、标签和来源
 """
@@ -19,7 +19,7 @@ import datetime
 from pathlib import Path
 
 # ── 存储路径 ──
-PRECIPITATE_DIR = os.path.expanduser("~/.hermes/precipitate")
+PRECIPITATE_DIR = os.path.expanduser("~/.zuoshanke/precipitate")
 
 # ── OpenAI Function-Calling Schema ──
 

@@ -28,20 +28,20 @@ export function ActionMapDrawer() {
 
   // ═══ Hermes 生成状态 ═══
   const [generatingNodeId, setGeneratingNodeId] = useState<string | null>(null);
-  const [hermesLogs, setHermesLogs] = useState<string[]>([]);
+  const [zuoshankeLogs, setZuoshankeLogs] = useState<string[]>([]);
   const [genError, setGenError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const handleGenerate = useCallback(async (thinkNodeId: string) => {
     setGeneratingNodeId(thinkNodeId);
-    setHermesLogs([]);
+    setZuoshankeLogs([]);
     setGenError(null);
 
     try {
       const generator = generateActionMapStream(thinkNodeId);
       for await (const event of generator) {
-        if (event.type === 'hermes_log' || event.type === 'status') {
-          setHermesLogs(prev => [...prev, event.line]);
+        if (event.type === 'zuoshanke_log' || event.type === 'status') {
+          setZuoshankeLogs(prev => [...prev, event.line]);
         } else if (event.type === 'result') {
           const store = useStore.getState();
           if (store.thinkingMap) {
@@ -90,7 +90,7 @@ export function ActionMapDrawer() {
           setExecNodeStatus(prev => ({ ...prev, [event.node_id]: event.status }));
           const icon = event.status === 'completed' ? '✅' : '❌';
           setExecLogs(prev => [...prev, { nodeId: event.node_id, line: `${icon} ${event.label} (${event.status})` }]);
-        } else if (event.type === 'hermes_log') {
+        } else if (event.type === 'zuoshanke_log') {
           setExecLogs(prev => [...prev, { nodeId: event.node_id, line: event.line }]);
         } else if (event.type === 'tools_documented') {
           setNewTools(event.tools);
@@ -126,7 +126,7 @@ export function ActionMapDrawer() {
     if (generatingNodeId && logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [hermesLogs, generatingNodeId]);
+  }, [zuoshankeLogs, generatingNodeId]);
 
   // ═══ 可拖拽调整宽度 ═══
   const [drawerWidth, setDrawerWidth] = useState(840);
@@ -287,15 +287,15 @@ export function ActionMapDrawer() {
               <h3 style={{ margin: '0 0 4px' }}>⚡ Action Maps</h3>
 
               {generatingNodeId && (
-                <div className="hermes-log-panel">
-                  <div className="hermes-log-header">
-                    <span>🧠 Hermes 正在生成…</span>
+                <div className="zuoshanke-log-panel">
+                  <div className="zuoshanke-log-header">
+                    <span>🧠 正在生成…</span>
                     <button className="btn" style={{ fontSize: '11px', padding: '2px 10px', background: 'rgba(248,81,73,0.1)', borderColor: '#f85149', color: '#f85149' }}
                       onClick={() => setGeneratingNodeId(null)}>停止</button>
                   </div>
-                  <div className="hermes-log-body">
-                    {hermesLogs.map((line, i) => (
-                      <div key={i} className="hermes-log-line">{line}</div>
+                  <div className="zuoshanke-log-body">
+                    {zuoshankeLogs.map((line, i) => (
+                      <div key={i} className="zuoshanke-log-line">{line}</div>
                     ))}
                     <div ref={logEndRef} />
                   </div>
@@ -303,7 +303,7 @@ export function ActionMapDrawer() {
               )}
 
               {genError && (
-                <div className="hermes-error" onClick={() => setGenError(null)}>
+                <div className="zuoshanke-error" onClick={() => setGenError(null)}>
                   ❌ {genError} <span style={{ fontSize: '11px', opacity: 0.7 }}>(点击关闭)</span>
                 </div>
               )}
@@ -424,11 +424,11 @@ export function ActionMapDrawer() {
 
               {/* ═══ Hermes 实时执行日志面板 ═══ */}
               {(executingMapId && executingMapId === currentActionMap?.id) && (
-                <div className="hermes-log-panel" style={{ margin: 0, borderTop: '1px solid #21262d' }}>
-                  <div className="hermes-log-header"><span>⚡ Hermes 正在执行...</span></div>
-                  <div className="hermes-log-body" style={{ maxHeight: '160px' }}>
+                <div className="zuoshanke-log-panel" style={{ margin: 0, borderTop: '1px solid #21262d' }}>
+                  <div className="zuoshanke-log-header"><span>⚡ 正在执行...</span></div>
+                  <div className="zuoshanke-log-body" style={{ maxHeight: '160px' }}>
                     {execLogs.map((entry, i) => (
-                      <div key={i} className="hermes-log-line">{entry.line}</div>
+                      <div key={i} className="zuoshanke-log-line">{entry.line}</div>
                     ))}
                     <div ref={logEndRef} />
                   </div>
@@ -437,7 +437,7 @@ export function ActionMapDrawer() {
 
               {/* 执行错误 */}
               {execError && (
-                <div className="hermes-error" onClick={() => setExecError(null)}>
+                <div className="zuoshanke-error" onClick={() => setExecError(null)}>
                   ❌ {execError} <span style={{ fontSize: '11px', opacity: 0.7 }}>(点击关闭)</span>
                 </div>
               )}
@@ -500,13 +500,13 @@ export function ActionMapDrawer() {
 
                   {/* 执行记录面板 */}
                   {showExecHistory && (
-                    <div className="hermes-log-panel" style={{ margin: '0 16px 12px', borderTop: '1px solid #21262d' }}>
-                      <div className="hermes-log-header"><span>📋 执行记录</span></div>
-                      <div className="hermes-log-body" style={{ maxHeight: '300px' }}>
+                    <div className="zuoshanke-log-panel" style={{ margin: '0 16px 12px', borderTop: '1px solid #21262d' }}>
+                      <div className="zuoshanke-log-header"><span>📋 执行记录</span></div>
+                      <div className="zuoshanke-log-body" style={{ maxHeight: '300px' }}>
                         {execHistoryLoading ? (
-                          <div className="hermes-log-line">⏳ 加载中...</div>
+                          <div className="zuoshanke-log-line">⏳ 加载中...</div>
                         ) : execHistoryLogs.length === 0 ? (
-                          <div className="hermes-log-line" style={{ color: '#8b949e' }}>暂无执行记录</div>
+                          <div className="zuoshanke-log-line" style={{ color: '#8b949e' }}>暂无执行记录</div>
                         ) : (
                           execHistoryLogs.map((log, i) => {
                             const prefix = log.event_type === 'node_start' ? '▶' :
@@ -514,7 +514,7 @@ export function ActionMapDrawer() {
                                            log.event_type === 'tools_documented' ? '🔧' : '  ';
                             const label = log.node_label ? `[${log.node_label}] ` : '';
                             return (
-                              <div key={log.id || i} className="hermes-log-line">
+                              <div key={log.id || i} className="zuoshanke-log-line">
                                 {prefix} {label}{log.line || ''}
                                 {log.result && (
                                   <div style={{ fontSize: '11px', color: '#8b949e', paddingLeft: '24px', marginTop: '2px' }}>

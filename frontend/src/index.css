@@ -1107,15 +1107,15 @@ body {
   padding: 0 !important;
 }
 
-/* ═══ Hermes 实时日志面板（终端风格）═══ */
-.hermes-log-panel {
+/* ═══ zuoshanke 实时日志面板（终端风格）═══ */
+.zuoshanke-log-panel {
   margin: 8px 0 12px;
   border: 1px solid #30363d;
   border-radius: 8px;
   overflow: hidden;
   background: #0d1117;
 }
-.hermes-log-header {
+.zuoshanke-log-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1126,7 +1126,7 @@ body {
   font-weight: 500;
   color: #58a6ff;
 }
-.hermes-log-body {
+.zuoshanke-log-body {
   padding: 8px 12px;
   max-height: 260px;
   overflow-y: auto;
@@ -1136,23 +1136,23 @@ body {
   color: #7ee787;
   background: #0a0e14;
 }
-.hermes-log-body::-webkit-scrollbar {
+.zuoshanke-log-body::-webkit-scrollbar {
   width: 4px;
 }
-.hermes-log-body::-webkit-scrollbar-thumb {
+.zuoshanke-log-body::-webkit-scrollbar-thumb {
   background: #30363d;
   border-radius: 2px;
 }
-.hermes-log-line {
+.zuoshanke-log-line {
   word-break: break-all;
   white-space: pre-wrap;
 }
-.hermes-log-line::before {
+.zuoshanke-log-line::before {
   content: '> ';
   color: #484f58;
 }
 
-.hermes-error {
+.zuoshanke-error {
   margin: 8px 0;
   padding: 10px 14px;
   background: rgba(248,81,73,0.1);
@@ -1163,7 +1163,7 @@ body {
   cursor: pointer;
   transition: opacity 0.2s;
 }
-.hermes-error:hover {
+.zuoshanke-error:hover {
   opacity: 0.8;
 }
 

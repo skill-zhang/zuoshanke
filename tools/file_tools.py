@@ -26,7 +26,7 @@ from typing import Optional
 # ── 常量 ──────────────────────────────────────────────────────────────────────
 
 STDOUT_MAX_BYTES = 50 * 1024  # 50 KB 输出截断
-GITIGNORE_PATTERNS = {".git", "__pycache__", "node_modules", ".venv", ".hermes"}
+GITIGNORE_PATTERNS = {".git", "__pycache__", "node_modules", ".venv", ".zuoshanke"}
 MAX_RESULTS = 200
 
 # ── 路径安全 ──────────────────────────────────────────────────────────────────

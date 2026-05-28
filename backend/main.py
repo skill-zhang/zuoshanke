@@ -7,13 +7,13 @@ from pathlib import Path
 from utils import sync_version_from_schema
 sync_version_from_schema()
 
-# 加载环境变量（优先加载 hermes 的 .env，它含有 DEEPSEEK_API_KEY 等）
+# 加载环境变量（优先加载 ~/.zuoshanke/.env，它含有 DEEPSEEK_API_KEY 等）
 try:
     from dotenv import load_dotenv
-    from config.paths import HERMES_ENV
-    if HERMES_ENV.exists():
-        load_dotenv(HERMES_ENV)
-        logging.info(f"✅ 已加载环境变量: {HERMES_ENV}")
+    from config.paths import ZUOSHANKE_ENV
+    if ZUOSHANKE_ENV.exists():
+        load_dotenv(ZUOSHANKE_ENV)
+        logging.info(f"✅ 已加载环境变量: {ZUOSHANKE_ENV}")
 except ImportError:
     pass
 

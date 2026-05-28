@@ -75,7 +75,7 @@ Chat 和 Task 是两套并行会话空间，不是先后顺序：
 Hermes 作为子进程被调用，不修改 Hermes 代码：
 
 ```
-坐山客                          Hermes（子进程）
+坐山客                          子进程
 ──────                          ────────────────
 Task 调度  ──spawn──→          hermes chat -q "..."
                               ↓ 返回结果

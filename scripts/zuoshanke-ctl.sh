@@ -64,14 +64,6 @@ status() {
         log_warn "Qwen LLM :$QWEEN_PORT — 未运行"
     fi
 
-    # Gateway (Hermes)
-    if pgrep -f "hermes_cli.*gateway" >/dev/null 2>&1; then
-        local pid=$(pgrep -f "hermes_cli.*gateway" | head -1)
-        log_ok "Gateway (PID: $pid)"
-    else
-        log_err "Gateway — 未运行"
-    fi
-
     # Uptime Kuma 监控面板
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q uptime-kuma; then
         log_ok "Uptime Kuma 监控面板 — 运行中 (http://localhost:3001)"
@@ -110,14 +102,6 @@ fix() {
         log_ok "前端正常"
     fi
 
-    # Gateway
-    if ! pgrep -f "hermes_cli.*gateway" >/dev/null 2>&1; then
-        log_warn "Gateway 异常，正在重启..."
-        bash "$SCRIPTS_DIR/start-zuoshanke.sh" gateway && fixed=$((fixed+1))
-    else
-        log_ok "Gateway 正常"
-    fi
-
     # Uptime Kuma
     if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q uptime-kuma; then
         log_warn "Uptime Kuma 异常，正在重启..."
@@ -153,10 +137,6 @@ logs() {
             echo "═══ 前端日志 (最后 50 行) ═══"
             tail -50 /tmp/zuoshanke-frontend.log 2>/dev/null || echo "(日志文件不存在)"
             ;;
-        gateway)
-            echo "═══ Gateway 日志 (最后 50 行) ═══"
-            tail -50 /tmp/zuoshanke-gateway.log 2>/dev/null || echo "(日志文件不存在)"
-            ;;
         kuma)
             echo "═══ Uptime Kuma 日志 (最后 50 行) ═══"
             docker logs --tail 50 uptime-kuma 2>/dev/null || echo "(Uptime Kuma 未运行)"
@@ -168,14 +148,11 @@ logs() {
             echo "═══ 前端日志 ═══"
             tail -20 /tmp/zuoshanke-frontend.log 2>/dev/null || echo "(无)"
             echo ""
-            echo "═══ Gateway 日志 ═══"
-            tail -20 /tmp/zuoshanke-gateway.log 2>/dev/null || echo "(无)"
-            echo ""
             echo "═══ Uptime Kuma 日志 ═══"
             docker logs --tail 20 uptime-kuma 2>/dev/null || echo "(Uptime Kuma 未运行)"
             ;;
         *)
-            echo "用法: $0 logs {backend|frontend|gateway|kuma|all}"
+    echo "  $0 logs {backend|frontend|kuma|all}"
             exit 1
             ;;
     esac

@@ -21,6 +21,7 @@ import uuid
 import time
 import signal
 import re
+import shutil
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -61,11 +62,8 @@ DANGEROUS_PATTERNS = [
     "halt",
 ]
 
-# JavaScript 解释器路径
-_NODE_PATH = os.environ.get(
-    "NODE_PATH",
-    os.path.expanduser("~/.hermes/node/bin/node"),
-)
+# JavaScript 解释器路径（默认用系统 PATH 中的 node）
+_NODE_PATH = os.environ.get("NODE_PATH", shutil.which("node") or "node")
 
 
 # ---------------------------------------------------------------------------

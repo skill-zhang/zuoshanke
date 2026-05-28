@@ -32,7 +32,6 @@ start_server() {
 
     echo "🚀 启动测试环境前端 (端口 9002)..."
     cd "$FRONTEND_DIR"
-    export PATH="$PATH:$HOME/.hermes/node/bin"
     npx vite --port 9002 &
     FRONTEND_PID=$!
     echo "  前端 PID: $FRONTEND_PID"
@@ -91,14 +90,12 @@ run_py_all() {
 run_js() {
     echo "🧪 运行前端 vitest..."
     cd "$FRONTEND_DIR"
-    export PATH="$PATH:$HOME/.hermes/node/bin"
     npx vitest run --config vitest.config.ts "$@"
 }
 
 run_e2e() {
     echo "🧪 运行 Playwright E2E 测试..."
     cd "$FRONTEND_DIR"
-    export PATH="$PATH:$HOME/.hermes/node/bin"
     npx playwright test "$@"
 }
 

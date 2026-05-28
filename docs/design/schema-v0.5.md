@@ -26,15 +26,15 @@
 
 ### 为什么
 
-v0.4 的执行引擎是 Hermes 子进程（`subprocess.Popen("hermes chat -q ...")`）。问题：
+v0.4 的执行引擎是子进程（`subprocess.Popen("hermes chat -q ...")`）。问题：
 
 | 问题 | 代价 |
 |------|------|
 | 冷启动 8-12s 每次 | 每个工具调用都要等 |
 | 黑盒 | stdout 解析不可靠，错误难排查 |
-| 无法深度集成 | memory、skill 都是 Hermes 的，不是我们的 |
+|| 无法深度集成 | memory、skill 都是子进程的，不是我们的 |
 | 并行受限 | 进程模型太重 |
-| 无工具主动发现 | Hermes 的 function calling 是框架实现的，我们拿不到中间状态 |
+| 无工具主动发现 | 子进程的 function calling 是框架实现的，我们拿不到中间状态 |
 
 ### Agent Core 定义
 

@@ -205,7 +205,7 @@ def build_agent_system_prompt(memory_context: str = "") -> str:
 
 ## 沙箱约束
 - 所有新建文件必须在 ~/zuoshanke/ 目录下
-- 不要修改 ~/.hermes/ 和系统文件
+- 不要修改 ~/.zuoshanke/ 和系统文件
 - 不要执行危险命令（rm -rf、shutdown 等）"""
 
     if memory_context:
