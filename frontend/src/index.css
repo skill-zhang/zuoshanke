@@ -4248,6 +4248,17 @@ body {
 .trace-panel-actions button:hover {
   background: #202028; color: #e0e0e6;
 }
+.trace-filter-btn {
+  font-size: 11px; padding: 0 8px; min-width: auto; white-space: nowrap;
+  background: none; border: 1px solid #21262d; color: #8b949e;
+  height: 26px; border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; gap: 3px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.trace-filter-btn:hover { background: #202028; color: #e0e0e6; }
+.trace-filter-btn.active {
+  background: rgba(167,139,250,0.1); border-color: #a78bfa; color: #a78bfa;
+}
 
 /* 统计栏 */
 .trace-panel-stats {

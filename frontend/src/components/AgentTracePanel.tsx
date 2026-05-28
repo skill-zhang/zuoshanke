@@ -137,10 +137,33 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
           )}
           {event.result && (
             <div className="trace-detail-section">
-              <div className="trace-detail-label">输出</div>
-              <div className="trace-detail-output success">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{formatResult(event.result)}</ReactMarkdown>
-              </div>
+              {event.tool === 'patch' && typeof event.result === 'object' && event.result?.diff ? (
+                <>
+                  <div className="trace-detail-label">
+                    📄 {event.result.files_modified?.[0] || event.result.path || 'patch'}
+                  </div>
+                  <SyntaxHighlighter
+                    language="diff"
+                    style={oneDark}
+                    customStyle={{ margin: 0, borderRadius: 4, fontSize: 10.5, lineHeight: 1.4 }}
+                    showLineNumbers={false}
+                    wrapLines
+                  >
+                    {typeof event.result.diff === 'string'
+                      ? event.result.diff
+                      : JSON.stringify(event.result.diff, null, 2)}
+                  </SyntaxHighlighter>
+                </>
+              ) : (
+                <>
+                  <div className="trace-detail-label">输出</div>
+                  <div className="trace-detail-output success">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                      {formatResult(event.result)}
+                    </ReactMarkdown>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -232,10 +255,20 @@ export const AgentTracePanel: React.FC = () => {
   const panelBodyRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [panelWidth, setPanelWidth] = useState(640);
+  const [showDiffsOnly, setShowDiffsOnly] = useState(false);
 
   const sceneId = currentScene?.id || '';
   const steps = sceneId ? traceStore.getSteps(sceneId) : [];
   const hasTraces = steps.length > 0;
+  const patchCount = steps.reduce((s, st) => s + st.events.filter(e =>
+    e.tool === 'patch' && (e.eventType === 'tool_done' || e.eventType === 'tool_start')
+  ).length, 0);
+  const filteredSteps = showDiffsOnly
+    ? steps.map(s => ({
+        ...s,
+        events: s.events.filter(e => e.tool === 'patch'),
+      })).filter(s => s.events.length > 0)
+    : steps;
 
   // 自动滚动：ResizeObserver + _updateVersion 双保险
   const prevOpenRef = useRef(false);
@@ -341,6 +374,15 @@ export const AgentTracePanel: React.FC = () => {
           {isRunning && <span className="trace-badge">实时</span>}
         </div>
         <div className="trace-panel-actions">
+          {hasTraces && patchCount > 0 && (
+            <button
+              className={`trace-filter-btn ${showDiffsOnly ? 'active' : ''}`}
+              onClick={() => setShowDiffsOnly(v => !v)}
+              title={showDiffsOnly ? '显示全部' : '仅显示文件修改'}
+            >
+              📋 Diffs{showDiffsOnly ? '' : ` ${patchCount}`}
+            </button>
+          )}
           <button onClick={() => {
             document.querySelectorAll('.trace-step-group').forEach(el => el.classList.add('expanded'));
           }} title="全部展开">⊞</button>
@@ -367,8 +409,10 @@ export const AgentTracePanel: React.FC = () => {
       <div className="trace-panel-body" ref={panelBodyRef}>
         {!hasTraces ? (
           <div className="trace-empty">暂无执行记录</div>
+        ) : filteredSteps.length === 0 ? (
+          <div className="trace-empty">当前无文件修改记录</div>
         ) : (
-          steps.map(s => <TraceStepView key={s.step} step={s} />)
+          filteredSteps.map(s => <TraceStepView key={s.step} step={s} />)
         )}
       </div>
 
