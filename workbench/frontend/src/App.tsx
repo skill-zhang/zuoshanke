@@ -471,6 +471,8 @@ export default function App() {
         <div style={{ width: 56, height: 56, margin: '3px auto 0', filter: 'drop-shadow(0 2px 16px rgba(0,212,255,0.12))' }}>
           <AvatarSVG />
         </div>
+        {/* 🆕 移动端渐变紫色用户名 — 独立 fixed 定位在 avatar 右上 */}
+        <span className="wb-username-mobile" style={{ display: 'none' }}>清泉</span>
         {/* 状态气泡 — hover 显示 */}
         <div style={{
           position: 'absolute', top: 10, left: 78,
@@ -491,6 +493,25 @@ export default function App() {
         <style>{`
           .avatar-area:hover .avatar-bubble,
           .avatar-area:hover .avatar-label { opacity: 1 !important; }
+          /* 🆕 移动端：渐变紫色用户名独立定位在 avatar 右上 */
+          @media (max-width: 760px) {
+            .wb-username-mobile {
+              display: inline !important;
+              position: fixed !important;
+              top: 5px;
+              left: calc(50% + 131px);
+              z-index: 100;
+              font-size: 20px;
+              font-weight: 700;
+              background: linear-gradient(135deg, #a855f7, #7c3aed, #c084fc);
+              -webkit-background-clip: text !important;
+              -webkit-text-fill-color: transparent !important;
+              background-clip: text !important;
+              white-space: nowrap;
+              font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+              letter-spacing: 1px;
+            }
+          }
         `}</style>
       </div>
 
