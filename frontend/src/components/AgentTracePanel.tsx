@@ -401,7 +401,7 @@ export const AgentTracePanel: React.FC = () => {
               onClick={() => setShowDiffsOnly(v => !v)}
               title={showDiffsOnly ? '显示全部' : '仅显示文件修改'}
             >
-              📋 Diffs{showDiffsOnly ? '' : ` ${patchCount}`}
+              📋 Diffs
             </button>
           )}
           <button onClick={() => {
