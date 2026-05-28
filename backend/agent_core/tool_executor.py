@@ -81,7 +81,15 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None) -> d
     # 🆕 高危命令扫描器：run_code 的 bash shell 命令执行前扫描
     if name == "run_code":
         language = params.get("language", "python")
+        # 也检查 code_b64 参数（base64 编码的代码）
         code = params.get("code", "")
+        code_b64 = params.get("code_b64", "")
+        if not code and code_b64:
+            try:
+                import base64
+                code = base64.b64decode(code_b64).decode('utf-8')
+            except Exception:
+                pass
         if code:
             from .command_scanner import scan_command
 
@@ -118,15 +126,6 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None) -> d
                                 "error": f"[Python subprocess 检测] {scan_result['reason']}",
                                 "high_risk": scan_result,
                             }
-                # 额外检测 kill -9 + 数字PID（直接数字参数）
-                if re.search(r'["\']kill\s+-?9?\s*\d+["\']', code):
-                    return {
-                        "success": False,
-                        "result": None,
-                        "error": "⚠️ 危险操作【Python 代码通过 subprocess 杀死进程】\n\nPython 代码尝试执行 `kill` 命令杀死进程，请确认是否放行。",
-                        "high_risk": {"block": True, "category": "config",
-                                      "description": "Python 代码通过 subprocess 执行 kill"},
-                    }
 
     file_path = tool_def.get("file", "")
     func_name = tool_def.get("function", name)

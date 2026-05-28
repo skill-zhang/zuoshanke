@@ -20,6 +20,7 @@ import tempfile
 import uuid
 import time
 import signal
+import re
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -86,7 +87,6 @@ def _scan_python_subprocess(code: str) -> tuple[bool, str]:
     即使 language="python"，代码也可能通过 subprocess.run("kill", shell=True)
     执行危险系统命令。此函数检查 Python 特定的危险子进程调用模式。
     """
-    import re
     patterns = [
         # subprocess.run("kill ...", shell=True) 或 subprocess.Popen("kill ...", ...)
         (r'subprocess\.(?:run|Popen|call|check_call)\s*\(\s*["\']\s*kill\s', 'Python subprocess kill'),
