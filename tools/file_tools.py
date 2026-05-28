@@ -21,6 +21,8 @@ import fnmatch
 import difflib
 from pathlib import Path
 
+from typing import Optional
+
 # ── 常量 ──────────────────────────────────────────────────────────────────────
 
 STDOUT_MAX_BYTES = 50 * 1024  # 50 KB 输出截断

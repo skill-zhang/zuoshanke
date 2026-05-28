@@ -30,6 +30,24 @@ export function WorkbenchView() {
     .filter(s => s.show_on_workbench)
     .sort((a, b) => (a.workbench_position ?? 0) - (b.workbench_position ?? 0));
 
+  // 🆕 打开工作台时自动刷新 stock 类场景的最新股价
+  const [stockRefreshed, setStockRefreshed] = useState(false);
+  useEffect(() => {
+    if (!loadingScenes && workbenchScenes.length > 0 && !stockRefreshed) {
+      const stockScenes = workbenchScenes.filter(s => s.category === 'stock');
+      if (stockScenes.length > 0) {
+        Promise.all(stockScenes.map(s =>
+          fetch(`/api/scenes/${s.id}/refresh-stock`, { method: 'POST' }).catch(() => {})
+        )).then(() => {
+          loadScenes();
+          setStockRefreshed(true);
+        });
+      } else {
+        setStockRefreshed(true);
+      }
+    }
+  }, [loadingScenes, workbenchScenes.length, stockRefreshed]);
+
   // ═══ 时钟 + 问候语 ═══
   useEffect(() => {
     const tick = () => {
@@ -293,27 +311,63 @@ export function WorkbenchView() {
       );
     }
 
-    // ⑦ 股票 / stock
+// 7語解布 / stock —平K目要洗图
     if (cat === 'stock') {
       const s = sc.stock || {};
       const isUp = (s.change ?? 0) >= 0;
+      const kline = s.kline || [];
+      // 浸渓最近日K庛消城图片（纯SVG，无夗外号
+      let chartSvg = null;
+      if (kline.length >= 2) {
+        const w = 260, h = 80, pad = 4;
+        const prices = kline.map(d => parseFloat(d.close));
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+        const range = maxP - minP || 1;
+        const xStep = (w - pad * 2) / (prices.length - 1);
+        const toY = (v: number) => h - pad - ((v - minP) / range) * (h - pad * 2);
+        const pts = prices.map((v, i) => `${pad + i * xStep},${toY(v)}`).join(' ');
+        const lastP = prices[prices.length - 1];
+        const firstP = prices[0];
+        const trendUp = lastP >= firstP;
+        const strokeColor = trendUp ? '#3fb950' : '#f85149';
+        const fillColor = trendUp ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.08)';
+        const fillPts = prices.map((v, i) => `${pad + i * xStep},${toY(v)}`).join(' ');
+        const fillPath = `M${pad},${h - pad} L${fillPts} L${pad + (prices.length - 1) * xStep},${h - pad} Z`;
+        chartSvg = (
+          <svg width={w} height={h} style={{display:'block',margin:'8px auto 4px'}}>
+            <path d={fillPath} fill={fillColor} />
+            <polyline points={pts} fill="none" stroke={strokeColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+            <text x={pad + (prices.length - 1) * xStep - 4} y={toY(lastP) - 6} textAnchor="end" fill={strokeColor} fontSize="11" fontWeight="600">
+              {lastP.toFixed(2)}
+            </text>
+            {kline.length >= 3 && (
+              <>
+                <text x={pad} y={h - 2} fill="#484f58" fontSize="9">{kline[0].date.slice(5)}</text>
+                <text x={w - pad} y={h - 2} textAnchor="end" fill="#484f58" fontSize="9">{kline[kline.length-1].date.slice(5)}</text>
+              </>
+            )}
+          </svg>
+        );
+      }
       return (
         <div className="wb-card-body">
-          <div className="wb-data-main" style={{marginBottom: '12px'}}>
-            <div className="wb-data-icon" style={{fontSize: '32px'}}>{scene.icon || '📈'}</div>
+          <div className="wb-data-main" style={{marginBottom: '8px'}}>
+            <div className="wb-data-icon" style={{fontSize: '32px'}}>{scene.icon || '🎈'}</div>
             <div className="wb-data-info">
               <div className="wb-data-value" style={{fontSize: '30px'}}>{s.price}<span className="wb-temp-unit" style={{fontSize: '16px'}}>{s.currency || ''}</span></div>
               <div className="wb-data-desc" style={{color: isUp ? '#3fb950' : '#f85149'}}>
-                {isUp ? '▲' : '▼'} {s.change} ({s.change_pct})
+                {isUp ? '▲' : '▔'} {s.change} ({s.change_pct})
               </div>
-              <div className="wb-data-location">{s.name} · {s.code}</div>
+              <div className="wb-data-location">{s.name} . {s.code}</div>
             </div>
           </div>
+          {chartSvg}
           <div className="wb-data-details">
             <div className="wb-data-detail"><span className="wb-data-label">最高</span><span className="wb-data-val">{s.high}</span></div>
             <div className="wb-data-detail"><span className="wb-data-label">最低</span><span className="wb-data-val">{s.low}</span></div>
             <div className="wb-data-detail"><span className="wb-data-label">成交量</span><span className="wb-data-val">{s.volume}</span></div>
-            <div className="wb-data-detail"><span className="wb-data-label">市值</span><span className="wb-data-val">{s.market_cap}</span></div>
+            <div className="wb-data-detail"><span className="wb-data-label">市数</span><span className="wb-data-val">{s.market_cap}</span></div>
           </div>
         </div>
       );
@@ -447,6 +501,8 @@ export function WorkbenchView() {
         ) : workbenchScenes.map(s => {
           const sc = s.scene_config || {};
           const weather = sc.weather;
+          const stock = sc.stock;
+          const cat = s.category || 'other';
           return (
           <div key={s.id} className="wb-card">
             {/* header */}
@@ -459,6 +515,15 @@ export function WorkbenchView() {
                     <button className="wb-header-btn" title="切换城市">📍 {weather.city}</button>
                     <button className="wb-header-btn" title="刷新" onClick={e => { e.stopPropagation(); loadScenes(); }}>🔄</button>
                   </>
+                ) : null}
+                {cat === 'stock' && stock ? (
+                  <button className="wb-header-btn" title="刷新股价" onClick={async e => {
+                    e.stopPropagation();
+                    try {
+                      await fetch(`/api/scenes/${s.id}/refresh-stock`, { method: 'POST' });
+                      loadScenes();
+                    } catch {}
+                  }}>🔄</button>
                 ) : null}
               </div>
             </div>

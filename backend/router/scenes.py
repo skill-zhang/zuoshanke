@@ -407,6 +407,28 @@ def refresh_stock(scene_id: str, db: Session = Depends(get_db)):
             "currency": "HKD",
             "time": time_str,
         }
+
+        # 同时拉取最近3日K线数据
+        try:
+            kline_url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=hk01810,day,,,3,qfq"
+            kreq = urllib.request.Request(kline_url, headers={"User-Agent": "Mozilla/5.0"})
+            kresp = urllib.request.urlopen(kreq, timeout=10)
+            kdata = json.loads(kresp.read().decode("utf-8"))
+            kdays = kdata.get("data", {}).get("hk01810", {}).get("day", [])
+            kline = []
+            for d in kdays:
+                kline.append({
+                    "date": d[0],
+                    "open": d[1],
+                    "close": d[2],
+                    "high": d[3],
+                    "low": d[4],
+                    "volume": d[5],
+                })
+            stock_data["kline"] = kline
+        except Exception:
+            pass  # K线数据非关键，失败不影响主流程
+
         existing = dict(scene.scene_config or {})
         existing["stock"] = stock_data
         scene.scene_config = existing

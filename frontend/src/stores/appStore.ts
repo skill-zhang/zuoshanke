@@ -571,6 +571,10 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     try {
+      // 🆕 新轮 Agent Loop 开始，清空上一轮的执行追踪数据
+      const { useTraceStore } = await import('../stores/traceStore');
+      useTraceStore.getState().clearTraces(sceneId);
+
       const sessionId = get().currentSessionId;
       const stream = sendSceneMessageStream(sceneId, content, sessionId || undefined, attachments);
 
