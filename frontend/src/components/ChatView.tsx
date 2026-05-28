@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { Message, ToolCard, ToolLog, Scene, Attachment } from '../api/client';
-import { getActionMap, updateScene, uploadFile } from '../api/client';
+import { getActionMap, updateScene, uploadFile, listSceneMessages, batchDeleteMessages } from '../api/client';
 import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
 import { showConfirm, showAlert } from '../stores/dialogStore';
 import { DelegationMonitor } from './DelegationMonitor';
@@ -536,6 +536,14 @@ export function ChatView() {
   // 会话切换面板
   const [showSessionPanel, setShowSessionPanel] = useState(false);
 
+  // 🆕 历史记录浏览器
+  const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historySelectedIds, setHistorySelectedIds] = useState<Set<string>>(new Set());
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyTotal, setHistoryTotal] = useState(0);
+
   // 清空确认：两步确认防误触
   const [clearStep, setClearStep] = useState(0);
 
@@ -957,6 +965,74 @@ export function ChatView() {
     }
   };
 
+  // 🆕 加载历史记录
+  const loadHistoryMessages = useCallback(async (sceneId: string) => {
+    setHistoryLoading(true);
+    try {
+      const result = await listSceneMessages(sceneId, undefined, 100);
+      setHistoryMessages(result.messages);
+      setHistoryHasMore(result.has_more);
+      setHistoryTotal(result.total);
+      setHistorySelectedIds(new Set());
+      setHistorySearch('');
+    } catch (e) {
+      console.error('加载历史记录失败:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // 🆕 加载更多历史
+  const loadMoreHistory = useCallback(async () => {
+    if (!currentScene || historyLoading || !historyHasMore || historyMessages.length === 0) return;
+    setHistoryLoading(true);
+    try {
+      const oldestId = historyMessages[0].id;
+      const result = await listSceneMessages(currentScene.id, undefined, 100, oldestId);
+      setHistoryMessages(prev => [...result.messages, ...prev]);
+      setHistoryHasMore(result.has_more);
+    } catch (e) {
+      console.error('加载更多历史失败:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [currentScene, historyLoading, historyHasMore, historyMessages]);
+
+  // 🆕 搜索过滤
+  const filteredHistory = historySearch.trim()
+    ? historyMessages.filter(m => m.content.toLowerCase().includes(historySearch.toLowerCase()))
+    : historyMessages;
+
+  // 🆕 勾选/取消
+  const toggleHistorySelect = (id: string) => {
+    setHistorySelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // 🆕 全选/取消
+  const toggleHistorySelectAll = () => {
+    if (historySelectedIds.size === filteredHistory.length) {
+      setHistorySelectedIds(new Set());
+    } else {
+      setHistorySelectedIds(new Set(filteredHistory.map(m => m.id)));
+    }
+  };
+
+  // 🆕 批量删除
+  const handleHistoryBatchDelete = async () => {
+    if (historySelectedIds.size === 0) return;
+    if (!await showConfirm(`确定删除选中的 ${historySelectedIds.size} 条消息？`)) return;
+    try {
+      await batchDeleteMessages(Array.from(historySelectedIds));
+      if (currentScene) loadHistoryMessages(currentScene.id);
+    } catch (e) {
+      console.error('批量删除失败:', e);
+    }
+  };
+
   const handleSwitchSession = async (sessionId: string | null) => {
     setShowSessionPanel(false);
     switchSceneSession(sessionId);
@@ -985,7 +1061,7 @@ export function ChatView() {
             <div className="chat-label-actions">
               <>
                 {!isChannel && currentScene && (
-                  <button className="new-session-btn" onClick={() => { setShowSessionPanel(!showSessionPanel); loadSceneSessions(currentScene.id); }} title="查看历史会话">
+                  <button className="new-session-btn" onClick={() => { setShowSessionPanel(!showSessionPanel); if (!showSessionPanel) loadHistoryMessages(currentScene.id); }} title="查看历史记录">
                     📋 记录
                   </button>
                 )}
@@ -1011,25 +1087,85 @@ export function ChatView() {
           </div>
         )}
 
-        {/* 会话切换面板 */}
+        {/* 🆕 历史记录浏览器 — 原会话切换面板改造 */}
         {showSessionPanel && currentScene && (
-          <div className="session-panel">
-            <div className="session-panel-header">历史会话</div>
+          <div className="session-panel" style={{ maxHeight: '360px' }}>
+            <div className="session-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>聊天记录 · 共 {historyTotal} 条</span>
+              <input
+                type="text"
+                placeholder="🔍 搜索消息..."
+                value={historySearch}
+                onChange={e => setHistorySearch(e.target.value)}
+                style={{
+                  background: '#161b22', border: '1px solid #30363d', borderRadius: 4,
+                  padding: '3px 10px', fontSize: 12, color: '#c9d1d9', width: 200, outline: 'none',
+                }}
+              />
+            </div>
             <div className="session-panel-list">
-              <div className="session-item" onClick={() => handleSwitchSession(null)}>
-                <span className="session-item-name">📋 全部消息</span>
-                <span className="session-item-count">{sessions.reduce((s, x) => s + x.message_count, 0)} 条</span>
-              </div>
-              {sessions.map(s => (
-                <div key={s.session_id} className="session-item" onClick={() => handleSwitchSession(s.session_id)}>
-                  <span className="session-item-name">🗂 会话</span>
-                  <span className="session-item-info">
-                    <span>{s.message_count} 条</span>
-                    {s.last_active && <span> · {new Date(s.last_active).toLocaleString('zh-CN')}</span>}
-                  </span>
-                </div>
-              ))}
-              {sessions.length === 0 && <div className="session-empty">暂无历史会话</div>}
+              {historyLoading && historyMessages.length === 0 ? (
+                <div className="session-empty">⏳ 加载中...</div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="session-empty">{historySearch ? '无匹配消息' : '暂无聊天记录'}</div>
+              ) : (
+                <>
+                  {/* 全选 + 批量删除栏 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 16px 8px', borderBottom: '1px solid #21262d', marginBottom: 4 }}>
+                    <span
+                      onClick={toggleHistorySelectAll}
+                      style={{ cursor: 'pointer', fontSize: 12, color: historySelectedIds.size === filteredHistory.length ? '#58a6ff' : '#8b949e', userSelect: 'none' }}
+                    >
+                      {historySelectedIds.size === filteredHistory.length ? '☑️ 取消全选' : '⬜ 全选'}
+                    </span>
+                    <button
+                      onClick={handleHistoryBatchDelete}
+                      disabled={historySelectedIds.size === 0}
+                      style={{
+                        background: 'rgba(248,81,73,0.1)', border: '1px solid #f85149', color: '#f85149',
+                        padding: '3px 12px', borderRadius: 4, cursor: historySelectedIds.size ? 'pointer' : 'not-allowed',
+                        fontSize: 11, opacity: historySelectedIds.size ? 1 : 0.4,
+                      }}
+                    >
+                      🗑 删除选中 ({historySelectedIds.size})
+                    </button>
+                  </div>
+                  {/* 消息列表 */}
+                  {filteredHistory.map(msg => (
+                    <div
+                      key={msg.id}
+                      className={`session-item ${historySelectedIds.has(msg.id) ? 'chat-msg-selected' : ''}`}
+                      style={{ gap: 8, padding: '6px 16px' }}
+                      onClick={() => toggleHistorySelect(msg.id)}
+                    >
+                      <div className="check-box" style={{ flexShrink: 0 }} onClick={e => { e.stopPropagation(); toggleHistorySelect(msg.id); }}>
+                        {historySelectedIds.has(msg.id) && <span className="check-box-on" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#58a6ff', borderRadius: 2 }}>✓</span>}
+                      </div>
+                      <span style={{ fontSize: 12, flexShrink: 0, width: 20, textAlign: 'center' }}>
+                        {msg.role === 'user' ? '👤' : '🤖'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {msg.content.slice(0, 100)}{msg.content.length > 100 ? '...' : ''}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 10, color: '#484f58', flexShrink: 0 }}>
+                        {new Date(msg.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  ))}
+                  {/* 加载更多 */}
+                  {historyHasMore && (
+                    <div
+                      onClick={loadMoreHistory}
+                      className="session-item"
+                      style={{ justifyContent: 'center', fontSize: 12, color: '#8b949e' }}
+                    >
+                      {historyLoading ? '⏳ 加载中...' : '⬆ 加载更早消息'}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
