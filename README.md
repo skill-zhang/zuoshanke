@@ -20,7 +20,7 @@
 | 前端 | React + Markmap（思维导图）+ React Flow（行动图） |
 | 后端 | Python FastAPI |
 | 存储 | SQLite + Alembic |
-| 引擎 | Hermes（子进程方式调用） |
+| 引擎 | DeepSeek v4 Flash / Claude / Qwen（可切换 Provider） |
 
 ## 仓库结构
 
