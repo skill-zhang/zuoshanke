@@ -4312,6 +4312,24 @@ body {
 .trace-thinking-text {
   font-size: 12px; line-height: 1.5; color: #8b949e;
 }
+/* Markdown 在追踪面板中的紧凑样式 */
+.trace-thinking-text p { margin: 0 0 4px; }
+.trace-thinking-text p:last-child { margin-bottom: 0; }
+.trace-thinking-text ul, .trace-thinking-text ol { margin: 2px 0; padding-left: 16px; }
+.trace-thinking-text li { margin-bottom: 1px; }
+.trace-thinking-text code {
+  background: #1c1c22; border-radius: 3px; padding: 1px 4px;
+  font-size: 11px; font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  color: #e0e0e6;
+}
+.trace-thinking-text pre {
+  background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+  padding: 6px 8px; margin: 4px 0; overflow-x: auto;
+}
+.trace-thinking-text pre code {
+  background: none; padding: 0; font-size: 11px;
+}
+.trace-thinking-text strong { color: #c9d1d9; }
 
 /* 工具卡片 */
 .trace-tool-card {
@@ -4351,20 +4369,37 @@ body {
 .trace-detail-label {
   font-size: 10px; color: #484f58; margin-bottom: 3px; font-weight: 500;
 }
-.trace-detail-code {
-  background: #0d1117; border-radius: 4px; padding: 6px 8px;
-  font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 11px;
-  line-height: 1.4; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
-  color: #c8d6e5; margin: 0;
+.trace-md-inline-code {
+  background: #1c1c22; border-radius: 3px; padding: 1px 5px;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 10.5px;
+  color: #e0e0e6;
 }
+
 .trace-detail-output {
   background: #0d1117; border-radius: 4px; padding: 6px 8px;
-  font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 11px;
-  line-height: 1.4; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  font-size: 11px; line-height: 1.4; overflow-x: auto; white-space: pre-wrap;
   margin: 0;
 }
-.trace-detail-output.success { border-left: 2px solid #4ade80; color: #e0e0e6; }
-.trace-detail-output.error { border-left: 2px solid #f87171; color: #f87171; }
+.trace-detail-output.success { border-left: 2px solid #4ade80; }
+.trace-detail-output.error { border-left: 2px solid #f87171; }
+/* Markdown 在工具输出中的紧凑样式 */
+.trace-detail-output p { margin: 0 0 2px; }
+.trace-detail-output p:last-child { margin-bottom: 0; }
+.trace-detail-output ul, .trace-detail-output ol { margin: 2px 0; padding-left: 14px; }
+.trace-detail-output li { margin-bottom: 1px; }
+.trace-detail-output code {
+  background: #1c1c22; border-radius: 3px; padding: 1px 4px;
+  font-size: 10.5px; font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  color: #c9d1d9;
+}
+.trace-detail-output pre {
+  background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+  padding: 6px 8px; margin: 4px 0; overflow-x: auto;
+}
+.trace-detail-output pre code {
+  background: none; padding: 0; font-size: 10.5px;
+}
+.trace-detail-output strong { color: #c9d1d9; }
 
 /* 面板底部 */
 .trace-panel-footer {

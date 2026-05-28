@@ -5,6 +5,10 @@
  * 悬浮按钮（场景专属），可上下拖动。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ReactMarkdown, { Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useStore } from '../stores/appStore';
 import { useTraceStore, TraceEvent, TraceStep } from '../stores/traceStore';
 
@@ -48,15 +52,47 @@ function fmtTime(iso: string): string {
   }
 }
 
+// ── SyntaxHighlighter 共享组件 ──
+/** 从 className 中提取语言（如 "language-typescript" → "typescript"） */
+function extractLang(className?: string): string {
+  if (!className) return 'text';
+  const m = className.match(/language-(\w+)/);
+  return m ? m[1] : 'text';
+}
+
+/** ReactMarkdown 的 code 组件 — 行内 code 用浅色背景，代码块用 SyntaxHighlighter */
+const MarkdownCode: Components['code'] = ({ className, children, ..._rest }) => {
+  const isInline = !className;
+  if (isInline) {
+    return <code className="trace-md-inline-code">{children}</code>;
+  }
+  const lang = extractLang(className);
+  return (
+    <SyntaxHighlighter
+      language={lang}
+      style={oneDark}
+      customStyle={{ margin: '4px 0', borderRadius: 4, fontSize: 10.5, lineHeight: 1.4 }}
+      showLineNumbers={false}
+      wrapLines
+    >
+      {String(children).replace(/\n$/, '')}
+    </SyntaxHighlighter>
+  );
+};
+
+const mdComponents: Components = { code: MarkdownCode };
+
 // ══════════════════════════════════════
 //  子组件
 // ══════════════════════════════════════
 
-/** LLM 思考卡片 */
+/** LLM 思考卡片 — Markdown 渲染 */
 const ThinkingCard: React.FC<{ text: string }> = ({ text }) => (
   <div className="trace-thinking-card">
     <div className="trace-thinking-label">💭 LLM 思考</div>
-    <div className="trace-thinking-text">{text}</div>
+    <div className="trace-thinking-text">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>
+    </div>
   </div>
 );
 
@@ -82,7 +118,15 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
           {event.args && (
             <div className="trace-detail-section">
               <div className="trace-detail-label">参数</div>
-              <pre className="trace-detail-code">{formatArgs(event.args)}</pre>
+              <SyntaxHighlighter
+                language="json"
+                style={oneDark}
+                customStyle={{ margin: 0, borderRadius: 4, fontSize: 10.5, lineHeight: 1.4 }}
+                showLineNumbers={false}
+                wrapLines
+              >
+                {formatArgs(event.args)}
+              </SyntaxHighlighter>
             </div>
           )}
           {event.error && (
@@ -94,7 +138,9 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
           {event.result && (
             <div className="trace-detail-section">
               <div className="trace-detail-label">输出</div>
-              <pre className="trace-detail-output success">{formatResult(event.result)}</pre>
+              <div className="trace-detail-output success">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{formatResult(event.result)}</ReactMarkdown>
+              </div>
             </div>
           )}
         </div>
@@ -191,36 +237,59 @@ export const AgentTracePanel: React.FC = () => {
   const steps = sceneId ? traceStore.getSteps(sceneId) : [];
   const hasTraces = steps.length > 0;
 
-  // 自动滚动：面板打开时滚到底，已打开时底部附近跟随
+  // 自动滚动：ResizeObserver + _updateVersion 双保险
   const prevOpenRef = useRef(false);
+
+  // 统一滚动到底部的函数
+  const scrollToBottom = useCallback(() => {
+    const el = panelBodyRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, []);
+
+  // 面板打开时初始滚动，及 _updateVersion 变化时跟随
   useEffect(() => {
-    // 面板关闭 → 重置标记，下次打开时再滚底
     if (!traceStore.isPanelOpen) {
       prevOpenRef.current = false;
       return;
     }
 
+    requestAnimationFrame(() => {
+      const el = panelBodyRef.current;
+      if (!el) return;
+
+      // 面板刚打开 → 强制滚到底
+      if (!prevOpenRef.current) {
+        prevOpenRef.current = true;
+        el.scrollTop = el.scrollHeight;
+        return;
+      }
+
+      // 已打开：只在底部附近时自动跟随
+      const threshold = 120;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+      if (atBottom) el.scrollTop = el.scrollHeight;
+    });
+  }, [traceStore._updateVersion, traceStore.isPanelOpen, scrollToBottom]);
+
+  // ResizeObserver 兜底：当面板内容（含 tool_done 原地更新）改变高度时触发
+  useEffect(() => {
     const el = panelBodyRef.current;
     if (!el) return;
 
-    // 面板刚打开 → 直接滚到底
-    if (!prevOpenRef.current) {
-      prevOpenRef.current = true;
-      requestAnimationFrame(() => {
-        if (panelBodyRef.current) {
-          panelBodyRef.current.scrollTop = panelBodyRef.current.scrollHeight;
-        }
-      });
-      return;
-    }
+    const ro = new ResizeObserver(() => {
+      if (!traceStore.isPanelOpen) return;
+      // 面板已打开且在底部附近 → 跟随
+      const threshold = 120;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+      if (atBottom) el.scrollTop = el.scrollHeight;
+    });
 
-    // 已打开：只在底部附近时自动跟随
-    const threshold = 120;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    if (atBottom) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [steps.length, steps[steps.length - 1]?.events.length, traceStore.isPanelOpen]);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [traceStore.isPanelOpen]);
 
   // 拖拽调宽
   const onResizeStart = useCallback((e: React.MouseEvent) => {
