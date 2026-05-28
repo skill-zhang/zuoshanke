@@ -48,6 +48,17 @@ outputs/*
 # Models (too large for git)
 models/
 
+# Logs
+logs/*.log
+
+# Generated data
+data/images/
+data/qrcodes/
+data/tts_output/
+
+# TypeScript build artifacts
+*.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
