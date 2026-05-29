@@ -39,6 +39,9 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 TEMP_DIR = Path(__file__).resolve().parent.parent / "data" / "temp_ppt_images"
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
+# 图片缓存：keywords -> file_path
+_IMG_CACHE = {}
+
 # ============================================================
 # 6 套配色方案
 # ============================================================
