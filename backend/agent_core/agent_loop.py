@@ -282,7 +282,7 @@ def call_llm_with_tools(
                 "Content-Type": "application/json",
             },
             json=payload,
-            timeout=None,
+            timeout=(10, 120),
         )
         resp.raise_for_status()
         return resp.json()

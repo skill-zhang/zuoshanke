@@ -126,8 +126,8 @@ start_backend() {
     local pid=$!
     log_info "PID: $pid，日志: $BACKEND_LOG"
 
-    # 等待启动（最多 15 秒）
-    for i in $(seq 1 15); do
+    # 等待启动（最多 30 秒）
+    for i in $(seq 1 30); do
         sleep 1
         if curl -sf http://localhost:$BACKEND_PORT/api/channels >/dev/null 2>&1; then
             log_ok "后端启动成功（${i}s）"
@@ -200,7 +200,7 @@ case "${1:-all}" in
         start_frontend
         ;;
     all|"")
-        start_backend
+        start_backend || log_warn "后端健康检查超时，但进程可能仍在启动中，继续启动前端..."
         start_frontend
         echo ""
         log_ok "全部服务启动完成"

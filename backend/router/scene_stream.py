@@ -739,6 +739,9 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
             # 用户断开连接：保存已收到的回复再退出（不能 yield）
             _log.info(f"[scene] 客户端断开，保存部分回复: scene={scene_id}")
             _persist_scene_reply(scene_id, full_reply, data.session_id, model_name)
+            # 显式关闭 Agent Loop，避免它在后台继续跑浪费资源
+            if agent_stream:
+                agent_stream.close()
             return
         except Exception as e:
             _log.error(f"[scene agent loop] 迭代异常: {e}")
