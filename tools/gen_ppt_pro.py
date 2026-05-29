@@ -477,7 +477,14 @@ def _make_background_page(prs, w, h, title, cards_data, style, bg_img=None):
     card_x = Inches(5.8) if bg_img else Inches(0.3)
     card_w = Inches(7.0) if bg_img else Inches(12.5)
 
-    for i, (icon, color_key, ctitle, items) in enumerate(cards_data):
+    for i, card in enumerate(cards_data):
+        if isinstance(card, dict):
+            icon = card.get("icon", "📌")
+            color_key = card.get("color", "primary")
+            ctitle = card.get("title", "")
+            items = card.get("items", [])
+        else:
+            icon, color_key, ctitle, items = card
         x = card_x
         y = Inches(1.1 + i * 1.5)
         hh = Inches(1.3)
