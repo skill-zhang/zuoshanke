@@ -299,6 +299,12 @@ const renderStock = (config: any) => {
   const s2 = Array.isArray(config) ? config[0] : (config || {})
   const changeNum = Number(s2.change ?? 0)
   const isUp = changeNum >= 0
+  const kline: any[] = s2.kline || []
+  // 折线图数据：取最近30日收盘价
+  const prices = kline.map((d: any) => Number(d.close)).filter((v: number) => !isNaN(v))
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : 1
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0
+  const range = maxPrice - minPrice || 1
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -313,6 +319,52 @@ const renderStock = (config: any) => {
           <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{s2.name} · {s2.code}</div>
         </div>
       </div>
+      {/* 📊 最近30日股价折线图 */}
+      {prices.length > 1 && (
+        <div style={{ marginBottom: 12, paddingTop: 8 }}>
+          <div style={{ fontSize: 11, color: C.dim, marginBottom: 6 }}>最近30日走势</div>
+          <svg viewBox={`0 0 ${prices.length * 10} 60`} style={{ width: '100%', height: 60, display: 'block' }}>
+            {/* 网格线 */}
+            <line x1="0" y1="0" x2={prices.length * 10} y2="0" stroke="#21262d" strokeWidth="0.5" />
+            <line x1="0" y1="30" x2={prices.length * 10} y2="30" stroke="#21262d" strokeWidth="0.5" />
+            <line x1="0" y1="60" x2={prices.length * 10} y2="60" stroke="#21262d" strokeWidth="0.5" />
+            {/* 面积填充 */}
+            <path
+              d={prices.map((p: number, i: number) => {
+                const x = i * 10 + 5
+                const y = 60 - ((p - minPrice) / range) * 50
+                return `${i === 0 ? 'M' : 'L'}${x},${y}`
+              }).join(' ') + ` L${(prices.length - 1) * 10 + 5},60 L5,60 Z`}
+              fill={isUp ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.08)'}
+            />
+            {/* 折线 */}
+            <path
+              d={prices.map((p: number, i: number) => {
+                const x = i * 10 + 5
+                const y = 60 - ((p - minPrice) / range) * 50
+                return `${i === 0 ? 'M' : 'L'}${x},${y}`
+              }).join(' ')}
+              fill="none"
+              stroke={isUp ? C.green : C.red}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {/* 起点终点圆点 */}
+            {prices.length > 0 && (
+              <>
+                <circle cx="5" cy={60 - ((prices[0] - minPrice) / range) * 50} r="2" fill={C.faint} />
+                <circle cx={(prices.length - 1) * 10 + 5} cy={60 - ((prices[prices.length - 1] - minPrice) / range) * 50} r="2.5" fill={isUp ? C.green : C.red} />
+              </>
+            )}
+          </svg>
+          {/* 日期标签 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.faint, marginTop: 2 }}>
+            <span>{kline[0]?.date || ''}</span>
+            <span>{kline[kline.length - 1]?.date || ''}</span>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
         {[
           ['最高', s2.high], ['最低', s2.low],

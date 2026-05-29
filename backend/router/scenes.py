@@ -410,7 +410,7 @@ def refresh_stock(scene_id: str, db: Session = Depends(get_db)):
 
         # 同时拉取最近3日K线数据
         try:
-            kline_url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=hk01810,day,,,3,qfq"
+            kline_url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=hk01810,day,,,30,qfq"
             kreq = urllib.request.Request(kline_url, headers={"User-Agent": "Mozilla/5.0"})
             kresp = urllib.request.urlopen(kreq, timeout=10)
             kdata = json.loads(kresp.read().decode("utf-8"))

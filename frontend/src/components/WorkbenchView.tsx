@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 
 export function WorkbenchView() {
   useEffect(() => {
-    window.location.href = '/wb';
+    window.location.href = 'http://localhost:5174/wb/';
   }, []);
 
   return (
@@ -28,7 +28,7 @@ export function WorkbenchView() {
       <div style={{ fontSize: 48, marginBottom: 16 }}>🏠</div>
       <div style={{ fontSize: 16, marginBottom: 8 }}>正在进入个人工作台…</div>
       <div style={{ fontSize: 13, color: '#484f58' }}>
-        如果页面没有自动跳转，<a href="/wb"
+        如果页面没有自动跳转，<a href="http://localhost:5174/wb/"
           style={{ color: '#58a6ff' }}>点击这里</a>
       </div>
     </div>

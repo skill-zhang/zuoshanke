@@ -1,6 +1,15 @@
 import React from 'react'
 import { WidgetProps } from './index'
 
+interface KlineItem {
+  date: string
+  open: number
+  close: number
+  high: number
+  low: number
+  volume: number
+}
+
 interface StockConfig {
   price?: number
   currency?: string
@@ -12,6 +21,7 @@ interface StockConfig {
   low?: number
   volume?: number
   market_cap?: number
+  kline?: KlineItem[]
 }
 
 const s: Record<string, React.CSSProperties> = {
@@ -62,7 +72,23 @@ const s: Record<string, React.CSSProperties> = {
   nameRow: {
     fontSize: 13,
     color: '#8b949e',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  chartSection: {
+    marginBottom: 12,
+    paddingTop: 8,
+  },
+  chartLabel: {
+    fontSize: 11,
+    color: '#8b949e',
+    marginBottom: 6,
+  },
+  chartDates: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: 10,
+    color: '#484f58',
+    marginTop: 2,
   },
   grid: {
     display: 'grid',
@@ -115,6 +141,45 @@ function formatNumber(v: number | undefined | null): string {
   return v.toLocaleString()
 }
 
+/** 折线图 SVG 组件 */
+function KlineChart({ kline, isUp }: { kline: KlineItem[]; isUp: boolean }) {
+  const prices = kline.map(d => Number(d.close)).filter(v => !isNaN(v))
+  if (prices.length < 2) return null
+
+  const maxPrice = Math.max(...prices)
+  const minPrice = Math.min(...prices)
+  const range = maxPrice - minPrice || 1
+  const w = prices.length * 10
+  const h = 60
+  const color = isUp ? '#3fb950' : '#f85149'
+  const fillColor = isUp ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.08)'
+
+  const linePath = prices.map((p, i) => {
+    const x = i * 10 + 5
+    const y = h - ((p - minPrice) / range) * 50
+    return `${i === 0 ? 'M' : 'L'}${x},${y}`
+  }).join(' ')
+
+  const areaPath = linePath + ` L${(prices.length - 1) * 10 + 5},${h} L5,${h} Z`
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: h, display: 'block' }}>
+      {/* 网格线 */}
+      <line x1="0" y1="0" x2={w} y2="0" stroke="#21262d" strokeWidth="0.5" />
+      <line x1="0" y1={h / 2} x2={w} y2={h / 2} stroke="#21262d" strokeWidth="0.5" />
+      <line x1="0" y1={h} x2={w} y2={h} stroke="#21262d" strokeWidth="0.5" />
+      {/* 面积填充 */}
+      <path d={areaPath} fill={fillColor} />
+      {/* 折线 */}
+      <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* 起点圆点 */}
+      <circle cx="5" cy={h - ((prices[0] - minPrice) / range) * 50} r="2" fill="#484f58" />
+      {/* 终点圆点 */}
+      <circle cx={(prices.length - 1) * 10 + 5} cy={h - ((prices[prices.length - 1] - minPrice) / range) * 50} r="2.5" fill={color} />
+    </svg>
+  )
+}
+
 const gridFields: { label: string; key: keyof StockConfig; fmt?: (v: any) => string }[] = [
   { label: '最高', key: 'high', fmt: (v) => Number(v).toFixed(2) },
   { label: '最低', key: 'low', fmt: (v) => Number(v).toFixed(2) },
@@ -154,6 +219,8 @@ export default function StockWidget({ config }: WidgetProps) {
   const changeColor = isUp ? s.changeUp : s.changeDown;
   const changeText = `${isUp ? '+' : ''}${changeNum.toFixed(2)} (${changePctNum >= 0 ? '+' : ''}${changePctNum.toFixed(2)}%)`
 
+  const kline: KlineItem[] = c.kline || []
+
   return (
     <div style={s.container}>
       {/* Price + Currency */}
@@ -174,6 +241,18 @@ export default function StockWidget({ config }: WidgetProps) {
         {c.name || '--'}
         {c.code ? ` (${c.code})` : ''}
       </div>
+
+      {/* 📊 最近30日股价折线图 */}
+      {kline.length > 1 && (
+        <div style={s.chartSection}>
+          <div style={s.chartLabel}>最近30日走势</div>
+          <KlineChart kline={kline} isUp={isUp} />
+          <div style={s.chartDates}>
+            <span>{kline[0]?.date || ''}</span>
+            <span>{kline[kline.length - 1]?.date || ''}</span>
+          </div>
+        </div>
+      )}
 
       {/* 2x2 Grid: 最高 / 最低 / 成交量 / 市值 */}
       <div style={s.grid}>

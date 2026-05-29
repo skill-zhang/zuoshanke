@@ -1,5 +1,5 @@
 /** 工作台前端 API */
-const API_BASE = '/wb-api'
+const API_BASE = '/api'
 
 export interface WidgetConfig {
   id: string

@@ -12,7 +12,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/wb-api/, '/api'),
       },
       '/wb': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:5174',
         rewrite: (path) => path.replace(/^\/wb/, ''),
       },
     },
