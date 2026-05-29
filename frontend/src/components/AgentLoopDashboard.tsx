@@ -28,6 +28,10 @@ function LoopDiagram() {
   const [threshold, setThreshold] = useState(currentScene?.converge_threshold ?? 2.0);
   const [rounds, setRounds] = useState(currentScene?.diverge_min_rounds ?? 2);
   const [enabled, setEnabled] = useState(currentScene?.converge_enabled ?? true);
+  const [wipLimit, setWipLimit] = useState<number>(() => {
+    const saved = localStorage.getItem('pq-wip-limit');
+    return saved ? Number(saved) : 3;
+  });
 
   const saveParams = async () => {
     if (!currentScene) return;
@@ -41,6 +45,7 @@ function LoopDiagram() {
           converge_enabled: enabled,
         }),
       });
+      localStorage.setItem('pq-wip-limit', String(wipLimit));
       setShowParams(false);
     } catch (e) {
       console.error('保存参数失败', e);
@@ -109,6 +114,18 @@ function LoopDiagram() {
                 }} />
               </span>
             </label>
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 4 }}>
+              WIP 限制: <strong style={{ color: '#e6edf3' }}>{wipLimit}</strong>
+            </div>
+            <input type="range" min={1} max={5} step={1} value={wipLimit}
+              onChange={e => setWipLimit(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#a78bfa' }} />
+            <div style={{ fontSize: 10, color: '#484f58', display: 'flex', justifyContent: 'space-between' }}>
+              <span>1</span><span>3</span><span>5</span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -436,10 +453,6 @@ function GroupSection({ group, allNodes }: { group: { parentId: string; parentLa
 // ═══ Priority Queue 卡片 ═══
 function PriorityQueueCard() {
   const pq = useStore(s => s.priorityQueue);
-  const [wipLimit, setWipLimit] = useState<number>(() => {
-    const saved = localStorage.getItem('pq-wip-limit');
-    return saved ? Number(saved) : 3;
-  });
   const [localItems, setLocalItems] = useState<DashboardQueueItem[]>([]);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
@@ -473,11 +486,7 @@ function PriorityQueueCard() {
 
   const all = [...running, ...pending, ...blocked, ...completed];
 
-  const handleWipChange = (val: number) => {
-    const clamped = Math.max(1, Math.min(5, Number(val) || 1));
-    setWipLimit(clamped);
-    localStorage.setItem('pq-wip-limit', String(clamped));
-  };
+
 
   // --- Drag & Drop ---
   const handleDragStart = (idx: number) => {
@@ -534,21 +543,6 @@ function PriorityQueueCard() {
   return (
     <div className="card">
       <h3>📊 Priority Queue <span className="badge badge-purple">DAG + 拓扑排序</span></h3>
-
-      {/* WIP 限制 */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-        fontSize: 12, color: '#a78bfa',
-      }}>
-        <span>WIP 限制:</span>
-        <input type="number" min={1} max={5} value={wipLimit}
-          onChange={e => handleWipChange(Number(e.target.value))}
-          style={{
-            width: 48, padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(139,92,246,0.3)',
-            background: 'rgba(139,92,246,0.08)', color: '#c084fc', fontSize: 12, textAlign: 'center',
-          }} />
-        <span style={{ color: '#666' }}>/ 5</span>
-      </div>
 
       {all.length === 0 ? (
         <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
