@@ -28,7 +28,7 @@ import shutil
 # ---------------------------------------------------------------------------
 
 
-DEFAULT_TIMEOUT = 30  # seconds (used by run_code)
+DEFAULT_TIMEOUT = 300  # seconds (used by run_code)
 FILE_TIMEOUT = 60     # seconds (used by run_file)
 
 # 危险命令黑名单 — 匹配子进程命令中的任意子串（大小写不敏感）

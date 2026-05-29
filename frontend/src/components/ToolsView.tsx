@@ -19,6 +19,7 @@ const CATEGORIES = [
 
 // ── Emoji 图标映射 ──
 const ICON_MAP: Record<string, string> = {
+  markdown_to_pdf: '📄', gen_docx: '📝', gen_report: '📊', gen_ppt: '📽',
   get_weather: '🌤', recommend_attractions: '🏛', get_equipment_checklist: '🎒',
   web_search: '🔍', todo_list: '📋', todo_add: '➕', todo_update: '📝',
   todo_delete: '🗑', todo_stats: '📊', session_search: '🕰', session_list: '💬',

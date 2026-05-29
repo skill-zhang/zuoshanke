@@ -68,12 +68,12 @@ def _clean_html(html: str) -> str:
     return text.strip()
 
 
-def web_fetch(url: str, max_chars: int = 3000) -> str:
+def web_fetch(url: str, max_chars: int = 15000) -> str:
     """抓取指定 URL 的网页文本内容
 
     Args:
         url: 网页 URL（http/https）
-        max_chars: 返回文本最大字符数，默认 3000
+        max_chars: 返回文本最大字符数，默认 15000
 
     Returns:
         JSON 字符串 {success, url, title, text, length}

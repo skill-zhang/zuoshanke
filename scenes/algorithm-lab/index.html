@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算法实验平台 - MVP</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .tab-btn.active { background: #3b82f6; color: white; }
+  .tab-btn:not(.active):hover { background: #e5e7eb; }
+  .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; }
+  .metric-card { background: #f8fafc; border-radius: 8px; padding: 12px 16px; text-align: center; }
+  .metric-card .value { font-size: 24px; font-weight: 700; color: #1e293b; }
+  .metric-card .label { font-size: 12px; color: #64748b; margin-top: 2px; }
+  #chart { width: 100%; height: 420px; }
+  #anomalyChart { width: 100%; height: 320px; }
+  .data-table { font-size: 13px; }
+  .data-table th { background: #f1f5f9; position: sticky; top: 0; }
+  .data-table td, .data-table th { padding: 6px 12px; border: 1px solid #e2e8f0; }
+  .data-table-wrap { max-height: 300px; overflow-y: auto; }
+  .anomaly-point { color: #ef4444; font-weight: bold; }
+  .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 40px; text-align: center; transition: all 0.3s; cursor: pointer; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #3b82f6; background: #eff6ff; }
+  .drop-zone.has-file { border-color: #22c55e; background: #f0fdf4; }
+  .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; color: white; font-size: 14px; z-index: 9999; animation: fadeIn 0.3s; }
+  .toast.success { background: #22c55e; }
+  .toast.error { background: #ef4444; }
+  .toast.info { background: #3b82f6; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <!-- 头部 -->
+  <header class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">🧪 算法实验平台</h1>
+      <p class="text-sm text-gray-500 mt-1">时序预测 · 异常检测 · 一键实验</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="dataStatus" class="text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-600">未加载数据</span>
+    </div>
+  </header>
+
+  <!-- 主布局 -->
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <!-- 左侧：数据与算法配置 -->
+    <div class="lg:col-span-1 space-y-4">
+      <!-- 数据上传 -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">📂 数据上传</h2>
+        <div id="dropZone" class="drop-zone" onclick="document.getElementById('fileInput').click()">
+          <div id="dropContent">
+            <div class="text-3xl mb-2">📤</div>
+            <p class="text-sm text-gray-500">点击或拖拽上传 Excel/CSV</p>
+            <p class="text-xs text-gray-400 mt-1">支持 .xlsx .xls .csv</p>
+          </div>
+          <div id="fileInfo" class="hidden">
+            <div class="text-3xl mb-2">✅</div>
+            <p id="fileName" class="text-sm font-medium text-green-700"></p>
+            <p id="fileSize" class="text-xs text-green-600"></p>
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFile(this.files[0])">
+        <div id="uploadError" class="text-xs text-red-500 mt-2 hidden"></div>
+      </div>
+
+      <!-- 数据配置 -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">⚙️ 数据配置</h2>
+        <div class="space-y-3">
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">时间列</label>
+            <select id="timeCol" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="">-- 请先上传数据 --</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">数值列</label>
+            <select id="valueCol" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="">-- 请先上传数据 --</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">训练集比例</label>
+            <div class="flex items-center gap-3">
+              <input type="range" id="trainRatio" min="50" max="95" value="80" class="flex-1 accent-blue-500" oninput="document.getElementById('trainRatioLabel').textContent=this.value+'%'">
+              <span id="trainRatioLabel" class="text-sm font-medium text-gray-700 w-10 text-right">80%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 算法选择 -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">🔬 算法选择</h2>
+        <div class="space-y-2">
+          <p class="text-xs text-gray-500 font-medium">时序预测</p>
+          <label class="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-gray-50 cursor-pointer"><input type="radio" name="predAlgo" value="movingAvg" checked class="accent-blue-500"> 移动平均 (Moving Avg)</label>
+          <label class="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-gray-50 cursor-pointer"><input type="radio" name="predAlgo" value="expSmoothing" class="accent-blue-500"> 指数平滑 (Exp Smoothing)</label>
+          <label class="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-gray-50 cursor-pointer"><input type="radio" name="predAlgo" value="prophetDecomp" class="accent-blue-500"> Prophet 分解</label>
+          <div class="border-t border-gray-100 my-2"></div>
+          <p class="text-xs text-gray-500 font-medium">异常检测</p>
+          <label class="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-gray-50 cursor-pointer"><input type="radio" name="anomAlgo" value="threeSigma" checked class="accent-red-500"> 3σ 检测</label>
+          <label class="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-gray-50 cursor-pointer"><input type="radio" name="anomAlgo" value="iqr" class="accent-red-500"> IQR 四分位</label>
+          <label class="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-gray-50 cursor-pointer"><input type="radio" name="anomAlgo" value="slidingWindow" class="accent-red-500"> 滑动窗口</label>
+        </div>
+        <button id="runBtn" onclick="runExperiment()" class="w-full mt-4 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          ▶ 运行实验
+        </button>
+      </div>
+    </div>
+
+    <!-- 右侧：结果展示 -->
+    <div class="lg:col-span-3 space-y-4">
+      <!-- 数据预览 -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-700">👁️ 数据预览</h2>
+          <div class="flex items-center gap-2 text-xs text-gray-400">
+            <span>行数: <span id="rowCount">0</span></span>
+            <span>|</span>
+            <span>列数: <span id="colCount">0</span></span>
+          </div>
+        </div>
+        <div class="data-table-wrap rounded-lg border border-gray-200">
+          <table class="data-table w-full">
+            <thead><tr id="tableHead"></tr></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div id="noDataMsg" class="text-center py-8 text-gray-400 text-sm">上传数据后这里会显示预览</div>
+      </div>
+
+      <!-- 预测结果 -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-700">📈 预测结果</h2>
+          <div id="predStatus" class="text-xs text-gray-400">等待运行</div>
+        </div>
+        <div id="chart"></div>
+      </div>
+
+      <!-- 异常检测 + 评估指标 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="card">
+          <h2 class="text-sm font-semibold text-gray-700 mb-3">🔴 异常检测</h2>
+          <div id="anomalyChart"></div>
+          <div id="anomalyStats" class="mt-2 text-xs text-gray-500 text-center hidden"></div>
+        </div>
+        <div class="card">
+          <h2 class="text-sm font-semibold text-gray-700 mb-3">📋 评估指标</h2>
+          <div id="metricsContainer" class="grid grid-cols-2 gap-3">
+            <div class="metric-card"><div class="value">--</div><div class="label">MAE</div></div>
+            <div class="metric-card"><div class="value">--</div><div class="label">MAPE</div></div>
+            <div class="metric-card"><div class="value">--</div><div class="label">RMSE</div></div>
+            <div class="metric-card"><div class="value">--</div><div class="label">R²</div></div>
+          </div>
+          <div id="metricsEmpty" class="text-center py-6 text-gray-400 text-sm">运行实验后显示评估指标</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 全局状态
+// ============================================================
+const state = {
+  rawData: null,       // 原始数据 (array of objects)
+  headers: [],         // 列名
+  parsedRows: [],      // 解析后的行数据
+  timeCol: null,       // 选中的时间列名
+  valueCol: null,      // 选中的数值列名
+  trainData: [],       // 训练集 [{time, value}]
+  testData: [],        // 测试集 [{time, value}]
+  prediction: [],      // 预测结果 [{time, actual, predicted}]
+  anomalies: [],       // 异常点 [{time, value, reason}]
+  metrics: null,       // {mae, mape, rmse, r2}
+  chart: null,
+  anomalyChart: null,
+};
+
+// ============================================================
+// 工具函数
+// ============================================================
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function showError(msg) {
+  const el = document.getElementById('uploadError');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function hideError() {
+  document.getElementById('uploadError').classList.add('hidden');
+}
+
+function updateDataStatus(text, type='gray') {
+  const el = document.getElementById('dataStatus');
+  el.textContent = text;
+  el.className = `text-xs px-3 py-1 rounded-full bg-${type}-100 text-${type}-700`;
+}
+
+// ============================================================
+// 文件上传与解析
+// ============================================================
+function handleFile(file) {
+  hideError();
+  if (!file) return;
+  
+  const validTypes = ['.xlsx', '.xls', '.csv'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!validTypes.includes(ext)) {
+    showError('仅支持 .xlsx .xls .csv 格式');
+    return;
+  }
+
+  // 更新拖拽区
+  document.getElementById('dropContent').classList.add('hidden');
+  document.getElementById('fileInfo').classList.remove('hidden');
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+  document.getElementById('dropZone').classList.add('has-file');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      let data;
+      if (ext === '.csv') {
+        data = parseCSV(e.target.result);
+      } else {
+        data = parseXLSX(e.target.result);
+      }
+      
+      if (!data || data.length === 0) {
+        showError('文件为空或无法解析');
+        return;
+      }
+
+      state.rawData = data;
+      state.headers = Object.keys(data[0]);
+      state.parsedRows = data;
+      
+      populateColumnSelects();
+      renderTable(data);
+      updateDataStatus(`已加载 ${data.length} 行`, 'green');
+      toast(`成功加载 ${data.length} 行数据`, 'success');
+      
+      // 启用运行按钮
+      document.getElementById('runBtn').disabled = false;
+      
+    } catch(err) {
+      showError('解析失败: ' + err.message);
+      console.error(err);
+    }
+  };
+  
+  if (ext === '.csv') {
+    reader.readAsText(file);
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function parseXLSX(buffer) {
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(sheet, { defval: null });
+}
+
+function parseCSV(text) {
+  const workbook = XLSX.read(text, { type: 'string' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(sheet, { defval: null });
+}
+
+// 拖拽支持
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+// ============================================================
+// 列选择 & 表格渲染
+// ============================================================
+function populateColumnSelects() {
+  const timeSelect = document.getElementById('timeCol');
+  const valueSelect = document.getElementById('valueCol');
+  
+  timeSelect.innerHTML = '<option value="">-- 选择时间列 --</option>';
+  valueSelect.innerHTML = '<option value="">-- 选择数值列 --</option>';
+  
+  state.headers.forEach(h => {
+    timeSelect.innerHTML += `<option value="${h}">${h}</option>`;
+    valueSelect.innerHTML += `<option value="${h}">${h}</option>`;
+  });
+  
+  // 智能猜测：第一列是时间，第二列是数值
+  if (state.headers.length >= 2) {
+    timeSelect.value = state.headers[0];
+    valueSelect.value = state.headers[1];
+  }
+}
+
+function renderTable(data) {
+  const headers = Object.keys(data[0]);
+  const thead = document.getElementById('tableHead');
+  const tbody = document.getElementById('tableBody');
+  
+  thead.innerHTML = headers.map(h => `<th>${h}</th>`).join('');
+  
+  const maxRows = Math.min(data.length, 50);
+  tbody.innerHTML = data.slice(0, maxRows).map(row => {
+    return '<tr>' + headers.map(h => `<td>${row[h] !== null && row[h] !== undefined ? row[h] : ''}</td>`).join('') + '</tr>';
+  }).join('');
+  
+  document.getElementById('rowCount').textContent = data.length;
+  document.getElementById('colCount').textContent = headers.length;
+  document.getElementById('noDataMsg').classList.add('hidden');
+}
+
+// ============================================================
+// 算法引擎
+// ============================================================
+
+// 准备数据：根据选中的列提取时间序列
+function prepareTimeSeries() {
+  const timeCol = document.getElementById('timeCol').value;
+  const valueCol = document.getElementById('valueCol').value;
+  
+  if (!timeCol || !valueCol) {
+    toast('请选择时间列和数值列', 'error');
+    return null;
+  }
+  
+  state.timeCol = timeCol;
+  state.valueCol = valueCol;
+  
+  const series = state.rawData.map((row, i) => {
+    let t = row[timeCol];
+    let v = parseFloat(row[valueCol]);
+    return { time: t !== null && t !== undefined ? String(t) : `#${i}`, value: isNaN(v) ? null : v };
+  }).filter(d => d.value !== null);
+  
+  if (series.length < 10) {
+    toast('有效数据点不足10个，请检查数值列', 'error');
+    return null;
+  }
+  
+  // 训练/测试划分
+  const ratio = parseInt(document.getElementById('trainRatio').value) / 100;
+  const splitIdx = Math.floor(series.length * ratio);
+  
+  state.trainData = series.slice(0, splitIdx);
+  state.testData = series.slice(splitIdx);
+  
+  return { series, train: state.trainData, test: state.testData };
+}
+
+// ----- 时序预测算法 -----
+
+// 移动平均
+function movingAvg(train, windowSize) {
+  windowSize = windowSize || Math.max(3, Math.floor(train.length * 0.1));
+  const result = [];
+  for (let i = 0; i < train.length; i++) {
+    const start = Math.max(0, i - windowSize + 1);
+    const slice = train.slice(start, i + 1);
+    const avg = slice.reduce((s, d) => s + d.value, 0) / slice.length;
+    result.push({ time: train[i].time, actual: train[i].value, predicted: avg });
+  }
+  return result;
+}
+
+// 指数平滑
+function expSmoothing(train, alpha) {
+  alpha = alpha || 0.3;
+  const result = [];
+  let prev = train[0].value;
+  result.push({ time: train[0].time, actual: train[0].value, predicted: train[0].value });
+  for (let i = 1; i < train.length; i++) {
+    const smoothed = alpha * train[i].value + (1 - alpha) * prev;
+    result.push({ time: train[i].time, actual: train[i].value, predicted: smoothed });
+    prev = smoothed;
+  }
+  return result;
+}
+
+// Prophet 风格分解（STL分解简化版）
+function prophetDecomp(train, period) {
+  period = period || Math.max(2, Math.floor(train.length * 0.2));
+  const n = train.length;
+  const values = train.map(d => d.value);
+  
+  // 1. 趋势分量：移动平均
+  const trend = [];
+  for (let i = 0; i < n; i++) {
+    const start = Math.max(0, i - Math.floor(period/2));
+    const end = Math.min(n, i + Math.floor(period/2) + 1);
+    const slice = values.slice(start, end);
+    trend.push(slice.reduce((s, v) => s + v, 0) / slice.length);
+  }
+  
+  // 2. 季节性分量：周期平均
+  const detrended = values.map((v, i) => v - trend[i]);
+  const seasonal = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    let sum = 0, count = 0;
+    for (let j = i % period; j < n; j += period) {
+      sum += detrended[j];
+      count++;
+    }
+    seasonal[i] = count > 0 ? sum / count : 0;
+  }
+  
+  // 3. 预测 = 趋势 + 季节性
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    result.push({
+      time: train[i].time,
+      actual: train[i].value,
+      predicted: trend[i] + seasonal[i]
+    });
+  }
+  return result;
+}
+
+// 预测测试集（用最后一个训练点的预测方法外推）
+function predictTest(trainResult, testData, algo) {
+  const lastPred = trainResult[trainResult.length - 1];
+  const lastActual = trainResult[trainResult.length - 1].actual;
+  const trainValues = trainResult.map(d => d.actual);
+  
+  return testData.map((d, i) => {
+    let predicted;
+    if (algo === 'movingAvg') {
+      // 用最近窗口的平均值
+      const window = Math.max(3, Math.floor(trainValues.length * 0.1));
+      const recent = [...trainValues.slice(-window), ...testData.slice(0, i).map(x => x.value)];
+      predicted = recent.reduce((s, v) => s + v, 0) / recent.length;
+    } else if (algo === 'expSmoothing') {
+      // 指数平滑外推
+      const alpha = 0.3;
+      const prev = i === 0 ? lastActual : testData[i-1].value;
+      predicted = alpha * prev + (1 - alpha) * (i === 0 ? lastPred.predicted : testData[i-1].value);
+    } else {
+      // Prophet: 用最后一个趋势+季节性
+      const period = Math.max(2, Math.floor(trainValues.length * 0.2));
+      const trendSlope = (trainResult[trainResult.length-1].predicted - trainResult[Math.max(0, trainResult.length-11)].predicted) / Math.min(10, trainResult.length);
+      const seasonIdx = (trainResult.length + i) % period;
+      const seasonalOffset = trainResult.filter((_, idx) => idx % period === seasonIdx).reduce((s, x) => s + (x.predicted - x.actual), 0) / Math.max(1, trainResult.filter((_, idx) => idx % period === seasonIdx).length);
+      predicted = lastPred.predicted + trendSlope * (i + 1) + seasonalOffset;
+    }
+    return { time: d.time, actual: d.value, predicted: Math.max(0, predicted) };
+  });
+}
+
+// ----- 异常检测算法 -----
+
+// 3σ 检测
+function threeSigmaDetect(data) {
+  const values = data.map(d => d.value);
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const std = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length);
+  const threshold = 3 * std;
+  
+  return data.map(d => ({
+    ...d,
+    isAnomaly: Math.abs(d.value - mean) > threshold,
+    reason: Math.abs(d.value - mean) > threshold ? `|${d.value.toFixed(2)} - μ(${mean.toFixed(2)})| > 3σ(${threshold.toFixed(2)})` : ''
+  }));
+}
+
+// IQR 检测
+function iqrDetect(data) {
+  const values = data.map(d => d.value).sort((a, b) => a - b);
+  const q1 = values[Math.floor(values.length * 0.25)];
+  const q3 = values[Math.floor(values.length * 0.75)];
+  const iqr = q3 - q1;
+  const lower = q1 - 1.5 * iqr;
+  const upper = q3 + 1.5 * iqr;
+  
+  return data.map(d => ({
+    ...d,
+    isAnomaly: d.value < lower || d.value > upper,
+    reason: d.value < lower ? `低于下界 ${lower.toFixed(2)}` : d.value > upper ? `高于上界 ${upper.toFixed(2)}` : ''
+  }));
+}
+
+// 滑动窗口检测
+function slidingWindowDetect(data, windowSize) {
+  windowSize = windowSize || Math.max(5, Math.floor(data.length * 0.05));
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    const start = Math.max(0, i - windowSize);
+    const window = data.slice(start, i);
+    if (window.length < 3) {
+      result.push({ ...data[i], isAnomaly: false, reason: '' });
+      continue;
+    }
+    const mean = window.reduce((s, d) => s + d.value, 0) / window.length;
+    const std = Math.sqrt(window.reduce((s, d) => s + (d.value - mean) ** 2, 0) / window.length);
+    const threshold = 3 * std;
+    result.push({
+      ...data[i],
+      isAnomaly: Math.abs(data[i].value - mean) > threshold,
+      reason: Math.abs(data[i].value - mean) > threshold ? `窗口均值=${mean.toFixed(2)}, 阈值=${threshold.toFixed(2)}` : ''
+    });
+  }
+  return result;
+}
+
+// ============================================================
+// 评估指标
+// ============================================================
+function calcMetrics(actual, predicted) {
+  const n = actual.length;
+  if (n === 0) return null;
+  
+  const errors = actual.map((a, i) => a - predicted[i]);
+  const absErrors = errors.map(e => Math.abs(e));
+  const sqErrors = errors.map(e => e * e);
+  
+  const mae = absErrors.reduce((s, v) => s + v, 0) / n;
+  const mape = absErrors.reduce((s, v, i) => s + (actual[i] !== 0 ? v / Math.abs(actual[i]) : 0), 0) / n * 100;
+  const rmse = Math.sqrt(sqErrors.reduce((s, v) => s + v, 0) / n);
+  
+  const meanActual = actual.reduce((s, v) => s + v, 0) / n;
+  const ssRes = sqErrors.reduce((s, v) => s + v, 0);
+  const ssTot = actual.reduce((s, v) => s + (v - meanActual) ** 2, 0);
+  const r2 = ssTot !== 0 ? 1 - ssRes / ssTot : 0;
+  
+  return { mae, mape, rmse, r2 };
+}
+
+// ============================================================
+// 主实验流程
+// ============================================================
+function runExperiment() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> 运行中...';
+  
+  setTimeout(() => {
+    try {
+      // 1. 准备数据
+      const prepared = prepareTimeSeries();
+      if (!prepared) { btn.disabled = false; btn.innerHTML = '▶ 运行实验'; return; }
+      
+      const algo = document.querySelector('input[name="predAlgo"]:checked').value;
+      const anomAlgo = document.querySelector('input[name="anomAlgo"]:checked').value;
+      
+      // 2. 训练
+      let trainResult;
+      if (algo === 'movingAvg') trainResult = movingAvg(prepared.train);
+      else if (algo === 'expSmoothing') trainResult = expSmoothing(prepared.train);
+      else trainResult = prophetDecomp(prepared.train);
+      
+      // 3. 预测测试集
+      const testPred = predictTest(trainResult, prepared.test, algo);
+      const fullPrediction = [...trainResult, ...testPred];
+      
+      // 4. 异常检测（全量数据）
+      let anomalyResult;
+      if (anomAlgo === 'threeSigma') anomalyResult = threeSigmaDetect(prepared.series);
+      else if (anomAlgo === 'iqr') anomalyResult = iqrDetect(prepared.series);
+      else anomalyResult = slidingWindowDetect(prepared.series);
+      
+      // 5. 评估指标（仅测试集）
+      const testActual = testPred.map(d => d.actual);
+      const testPredicted = testPred.map(d => d.predicted);
+      const metrics = calcMetrics(testActual, testPredicted);
+      
+      // 6. 保存状态
+      state.prediction = fullPrediction;
+      state.anomalies = anomalyResult.filter(d => d.isAnomaly);
+      state.metrics = metrics;
+      
+      // 7. 渲染
+      renderPredictionChart(fullPrediction, prepared.train.length);
+      renderAnomalyChart(anomalyResult);
+      renderMetrics(metrics);
+      
+      document.getElementById('predStatus').textContent = `✅ 完成 | 算法: ${algo} | 异常检测: ${anomAlgo}`;
+      document.getElementById('predStatus').className = 'text-xs text-green-600';
+      
+      const anomCount = anomalyResult.filter(d => d.isAnomaly).length;
+      document.getElementById('anomalyStats').classList.remove('hidden');
+      document.getElementById('anomalyStats').textContent = `检测到 ${anomCount} 个异常点 / 共 ${anomalyResult.length} 个数据点 (${(anomCount/anomalyResult.length*100).toFixed(1)}%)`;
+      
+      toast('实验运行完成！', 'success');
+      
+    } catch(err) {
+      toast('运行出错: ' + err.message, 'error');
+      console.error(err);
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '▶ 运行实验';
+  }, 100);
+}
+
+// ============================================================
+// 图表渲染
+// ============================================================
+
+function renderPredictionChart(data, splitIdx) {
+  if (!state.chart) {
+    state.chart = echarts.init(document.getElementById('chart'));
+  }
+  
+  const times = data.map(d => d.time);
+  const actuals = data.map(d => d.actual);
+  const predicted = data.map(d => d.predicted);
+  
+  // 训练/测试分界线
+  const markLineData = [{ xAxis: splitIdx > 0 ? times[splitIdx - 1] : times[0] }];
+  
+  const option = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['实际值', '预测值'], bottom: 0 },
+    grid: { left: 50, right: 20, top: 20, bottom: 40 },
+    xAxis: { type: 'category', data: times, axisLabel: { rotate: 45, fontSize: 10 } },
+    yAxis: { type: 'value', name: '数值' },
+    series: [
+      {
+        name: '实际值',
+        type: 'line',
+        data: actuals,
+        smooth: true,
+        lineStyle: { width: 2, color: '#3b82f6' },
+        symbol: 'none',
+        markLine: {
+          silent: true,
+          data: [{ xAxis: times[splitIdx] || times[Math.floor(times.length * 0.8)], label: { formatter: '训练/测试分界', fontSize: 10 } }],
+          lineStyle: { type: 'dashed', color: '#f59e0b' }
+        }
+      },
+      {
+        name: '预测值',
+        type: 'line',
+        data: predicted,
+        smooth: true,
+        lineStyle: { width: 2, color: '#ef4444', type: 'dashed' },
+        symbol: 'none'
+      }
+    ]
+  };
+  
+  state.chart.setOption(option, true);
+  state.chart.resize();
+}
+
+function renderAnomalyChart(data) {
+  if (!state.anomalyChart) {
+    state.anomalyChart = echarts.init(document.getElementById('anomalyChart'));
+  }
+  
+  const times = data.map(d => d.time);
+  const values = data.map(d => d.value);
+  const anomalyTimes = data.filter(d => d.isAnomaly).map(d => d.time);
+  const anomalyValues = data.filter(d => d.isAnomaly).map(d => d.value);
+  
+  const option = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['数据值', '异常点'], bottom: 0 },
+    grid: { left: 50, right: 20, top: 20, bottom: 40 },
+    xAxis: { type: 'category', data: times, axisLabel: { rotate: 45, fontSize: 10 } },
+    yAxis: { type: 'value', name: '数值' },
+    series: [
+      {
+        name: '数据值',
+        type: 'line',
+        data: values,
+        smooth: true,
+        lineStyle: { width: 1.5, color: '#94a3b8' },
+        symbol: 'none'
+      },
+      {
+        name: '异常点',
+        type: 'scatter',
+        data: anomalyTimes.map((t, i) => [t, anomalyValues[i]]),
+        symbolSize: 12,
+        itemStyle: { color: '#ef4444', borderColor: '#fff', borderWidth: 2 }
+      }
+    ]
+  };
+  
+  state.anomalyChart.setOption(option, true);
+  state.anomalyChart.resize();
+}
+
+function renderMetrics(metrics) {
+  if (!metrics) return;
+  
+  document.getElementById('metricsEmpty').classList.add('hidden');
+  
+  const cards = document.querySelectorAll('.metric-card');
+  const labels = ['MAE', 'MAPE', 'RMSE', 'R²'];
+  const values = [metrics.mae, metrics.mape, metrics.rmse, metrics.r2];
+  const formats = [v => v.toFixed(4), v => v.toFixed(2) + '%', v => v.toFixed(4), v => v.toFixed(4)];
+  
+  cards.forEach((card, i) => {
+    card.querySelector('.value').textContent = formats[i](values[i]);
+    card.querySelector('.label').textContent = labels[i];
+  });
+}
+
+// ============================================================
+// 窗口大小自适应
+// ============================================================
+window.addEventListener('resize', () => {
+  if (state.chart) state.chart.resize();
+  if (state.anomalyChart) state.anomalyChart.resize();
+});
+
+// 初始化完成
+console.log('🧪 算法实验平台 MVP 已加载');
+</script>
+</body>
+</html>

@@ -261,7 +261,7 @@ venv/bin/python main.py
 | **奠基** | v1.0-v1.4 | Agent Core 架构、8 层 Context 组合、分身场景 MVP |
 | **高可靠** | v1.5-v1.6 | 写入校验、热重载、Git 快照、Agent Loop 三层追踪、25 项可用性测试 |
 | **安全** | v1.7 | subprocess 命令扫描器绕过修复、分身沙箱隔离、安全规则注入 |
-| **正式发布** | **v1.8** | 个人工作台独立沙箱、Hermes 全量解耦、72 工具、Memory Cache Layer、契约协作 |
+| **正式发布** | **v1.8** | 个人工作台独立沙箱、72 工具、Memory Cache Layer、契约协作 |
 
 ## 👥 贡献者
 

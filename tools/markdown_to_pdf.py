@@ -93,7 +93,7 @@ class PDF(FPDF):
             if stripped.startswith("```"):
                 self._is_code_block = not self._is_code_block
                 if self._is_code_block:
-                    self.set_font("Courier", "", 9)
+                    self._cjk("", 8)
                 else:
                     self._cjk("", 10)
                     self.ln(2)
@@ -101,8 +101,8 @@ class PDF(FPDF):
                 continue
 
             if self._is_code_block:
-                # 代码内容用等宽字体
-                self.set_font("Courier", "", 9)
+                # 代码内容用 CJK 字体（支持中文）
+                self._cjk("", 8)
                 self._mc(0, 4.5, self._escape(line))
                 i += 1
                 continue

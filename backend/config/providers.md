@@ -4,7 +4,7 @@
 > 覆盖市面上所有主流 AI 模型提供商。
 > 每日自动检查更新。
 >
-> 最后更新: 2026-05-28
+> 最后更新: 2026-05-29
 
 ## DeepSeek
 - display_name: DeepSeek
@@ -210,6 +210,51 @@
 - vision: true
 - function_calling: true
 
+### claude-sonnet-4-6
+- display_name: Claude Sonnet 4.6
+- temperature: 0.7
+- max_tokens: 64000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-opus-4-5
+- display_name: Claude Opus 4.5
+- temperature: 0.7
+- max_tokens: 32000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-opus-4-6
+- display_name: Claude Opus 4.6
+- temperature: 0.7
+- max_tokens: 64000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-opus-4-7
+- display_name: Claude Opus 4.7
+- temperature: 0.7
+- max_tokens: 64000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-opus-4-8
+- display_name: Claude Opus 4.8
+- temperature: 0.7
+- max_tokens: 64000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Google
 - display_name: Google Gemini
 - base_url: https://generativelanguage.googleapis.com
@@ -253,6 +298,15 @@
 
 ### gemini-3.5-flash
 - display_name: Gemini 3.5 Flash
+- temperature: 0.7
+- max_tokens: 65535
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gemini-3.1-pro-preview
+- display_name: Gemini 3.1 Pro (Preview)
 - temperature: 0.7
 - max_tokens: 65535
 - context_length: 1048576
@@ -401,6 +455,24 @@
 - vision: true
 - function_calling: true
 
+### qwen3.6-plus
+- display_name: Qwen3.6 Plus
+- temperature: 0.7
+- max_tokens: 65536
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### qwen3.6-max
+- display_name: Qwen3.6 Max
+- temperature: 0.7
+- max_tokens: 65536
+- context_length: 262144
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## ByteDance
 - display_name: 豆包 (ByteDance)
 - base_url: https://ark.cn-beijing.volces.com/api/v3
@@ -519,6 +591,15 @@
 - vision: true
 - function_calling: true
 
+### glm-5-1
+- display_name: GLM-5.1
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Yi
 - display_name: 零一万物 Yi
 - base_url: https://api.lingyiwanwu.com
@@ -601,6 +682,15 @@
 - vision: true
 - function_calling: true
 
+### kimi-k2-6
+- display_name: Kimi K2.6
+- temperature: 0.7
+- max_tokens: 262144
+- context_length: 262144
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Stepfun
 - display_name: 阶跃星辰 Stepfun
 - base_url: https://api.stepfun.com
@@ -622,6 +712,15 @@
 - context_length: 8192
 - repeat_penalty: 1.05
 - vision: false
+- function_calling: true
+
+### step-3-5-flash
+- display_name: Step 3.5 Flash
+- temperature: 0.7
+- max_tokens: 32768
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
 - function_calling: true
 
 ## SiliconFlow

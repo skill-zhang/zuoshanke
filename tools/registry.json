@@ -159,7 +159,7 @@
         },
         "max_chars": {
           "type": "integer",
-          "description": "返回文本最大字符数，默认3000",
+          "description": "返回文本最大字符数，默认15000",
           "optional": true
         }
       },
@@ -2128,6 +2128,145 @@
       },
       "returns": "JSON {success, audio_path, duration_sec, voice, voice_label, text_length, file_size_bytes}",
       "category": "system",
+      "verified": true
+    },
+    {
+      "name": "markdown_to_pdf",
+      "description": "📄 Markdown → PDF — 将 Markdown 文本或文件转换为 PDF 文档，支持中文、代码块、表格、标题层级、列表",
+      "file": "tools/markdown_to_pdf.py",
+      "function": "markdown_to_pdf",
+      "parameters": {
+        "content": {
+          "type": "string",
+          "description": "Markdown 文本内容（与 file_path 二选一）",
+          "optional": true
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Markdown 文件路径（与 content 二选一）",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "description": "文档标题（用于封面和元信息）",
+          "optional": true
+        },
+        "author": {
+          "type": "string",
+          "description": "文档作者",
+          "optional": true
+        },
+        "output_name": {
+          "type": "string",
+          "description": "输出文件名（不含 .pdf，默认自动生成）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, file_path, title, pages?, error?}",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "gen_docx",
+      "description": "📝 Word 文档生成器 — 从 Markdown 或结构化文本生成 .docx，支持标题/列表/表格/代码/图片嵌入",
+      "file": "tools/gen_docx.py",
+      "function": "gen_docx",
+      "parameters": {
+        "content": {
+          "type": "string",
+          "description": "Markdown 文本内容（与 file_path 二选一）",
+          "optional": true
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Markdown 文件路径（与 content 二选一）",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "description": "文档标题",
+          "optional": true
+        },
+        "author": {
+          "type": "string",
+          "description": "作者名称",
+          "optional": true
+        },
+        "output_name": {
+          "type": "string",
+          "description": "输出文件名（不含 .docx，默认自动生成）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, file_path, title, error?}",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "gen_report",
+      "description": "📊 结构化报告生成器 — 从结构化数据生成多格式报告（Markdown / HTML / PDF / 纯文本），适合数据分析汇总",
+      "file": "tools/gen_report.py",
+      "function": "gen_report",
+      "parameters": {
+        "title": {
+          "type": "string",
+          "description": "报告标题",
+          "optional": true
+        },
+        "sections": {
+          "type": "array",
+          "description": "章节列表 [{\"heading\": \"章节名\", \"content\": \"内容(支持Markdown)\", \"level\": 2}]",
+          "optional": true
+        },
+        "format": {
+          "type": "string",
+          "description": "输出格式 — markdown / html / pdf / text",
+          "optional": true
+        },
+        "metadata": {
+          "type": "object",
+          "description": "元数据 {\"key\": \"value\", ...}",
+          "optional": true
+        },
+        "output_name": {
+          "type": "string",
+          "description": "输出文件名（不含扩展名，默认自动生成）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, file_path, format, content?, error?}",
+      "category": "data",
+      "verified": true
+    },
+    {
+      "name": "gen_ppt",
+      "description": "📽 PowerPoint 生成器 — 从结构化数据生成 .pptx 演示文稿，支持 bullet/两栏/代码/表格多种布局",
+      "file": "tools/gen_ppt.py",
+      "function": "gen_ppt",
+      "parameters": {
+        "title": {
+          "type": "string",
+          "description": "演示文稿标题（第一页标题）",
+          "optional": true
+        },
+        "slides": {
+          "type": "array",
+          "description": "幻灯片列表。每项: {\"heading\": \"标题\", \"content\": \"正文(支持Markdown)\", \"layout\": \"bullet|blank|two_column|code|table\", \"subtitle\": \"副标题(可选)\"}",
+          "optional": true
+        },
+        "author": {
+          "type": "string",
+          "description": "作者",
+          "optional": true
+        },
+        "output_name": {
+          "type": "string",
+          "description": "输出文件名（不含 .pptx，默认自动生成）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, file_path, slide_count, title, error?}",
+      "category": "data",
       "verified": true
     }
   ]
