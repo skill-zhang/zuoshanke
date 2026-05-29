@@ -210,14 +210,17 @@ def _c(style, key):
 def _download_image(keywords, idx=0):
     """从网上搜索并下载配图（使用 Pollinations 或 placeholder）"""
     try:
-        # 使用 pollinations.ai 生成配图（免费，无需 API Key）
         safe_kw = keywords.replace(" ", "+")
         url = f"https://image.pollinations.ai/prompt/{safe_kw}?width=1024&height=768&seed={random.randint(1, 99999)}"
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"ppt_img_{ts}_{idx}_{random.randint(100,999)}.jpg"
         fpath = str(TEMP_DIR / fname)
-        urllib.request.urlretrieve(url, fpath)
-        if os.path.getsize(fpath) > 1000:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read()
+        if len(data) > 1000:
+            with open(fpath, 'wb') as f:
+                f.write(data)
             return fpath
     except Exception:
         pass
