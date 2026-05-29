@@ -211,22 +211,28 @@ def _c(style, key):
 
 
 def _download_image(keywords, idx=0):
-    """从网上搜索并下载配图（使用 Pollinations 或 placeholder）"""
+    """从网上搜索并下载配图（使用 Pollinations），带缓存"""
+    cache_key = f"{keywords}_{idx}"
+    if cache_key in _IMG_CACHE:
+        return _IMG_CACHE[cache_key]
     try:
         safe_kw = keywords.replace(" ", "+")
-        url = f"https://image.pollinations.ai/prompt/{safe_kw}?width=1024&height=768&seed={random.randint(1, 99999)}"
+        seed = random.randint(1, 99999)
+        url = f"https://image.pollinations.ai/prompt/{safe_kw}?width=1024&height=768&seed={seed}"
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"ppt_img_{ts}_{idx}_{random.randint(100,999)}.jpg"
         fpath = str(TEMP_DIR / fname)
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = resp.read()
-        if len(data) > 1000:
+        if len(data) > 2000:
             with open(fpath, 'wb') as f:
                 f.write(data)
+            _IMG_CACHE[cache_key] = fpath
             return fpath
     except Exception:
         pass
+    _IMG_CACHE[cache_key] = None
     return None
 
 
