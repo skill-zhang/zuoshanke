@@ -23,7 +23,6 @@ const PHASES = [
 function LoopDiagram() {
   const phase = useStore(s => s.dashboardPhase);
   const idx = PHASES.findIndex(p => p.key === phase);
-  const highlightArrow = (i: number) => i < idx ? '#a78bfa' : '#3a3a4a';
   const currentScene = useStore(s => s.currentScene);
   const [showParams, setShowParams] = useState(false);
   const [threshold, setThreshold] = useState(currentScene?.converge_threshold ?? 2.0);
@@ -130,24 +129,24 @@ function LoopDiagram() {
           <span key={p.key} style={{ display: 'flex', alignItems: 'center' }}>
             <div className="loop-step">
               <div className={`icon ${p.key}`} style={{
-                background: i <= idx ? `rgba(139,92,246,0.2)` : `rgba(60,60,80,0.2)`,
-                border: i === idx ? `2px solid #a78bfa` : i < idx ? `2px solid #555` : `2px solid #333`,
-                opacity: i > idx ? 0.5 : 1,
+                background: `rgba(139,92,246,0.2)`,
+                border: i === idx ? `2px solid #a78bfa` : `2px solid rgba(139,92,246,0.4)`,
+                opacity: 1,
               }}>
                 {p.icon}
               </div>
-              <div className="label" style={{ color: i === idx ? '#c084fc' : i < idx ? '#999' : '#666' }}>{p.label}</div>
+              <div className="label" style={{ color: '#c084fc' }}>{p.label}</div>
               <div className="desc">{p.desc}</div>
             </div>
             {i < PHASES.length - 1 && (
               <div className="loop-arrow" style={{
-                background: highlightArrow(i),
+                background: '#a78bfa',
                 width: 56, height: 2, margin: '0 6px', flexShrink: 0,
                 position: 'relative',
               }}>
                 <span style={{
                   position: 'absolute', right: -4, top: -7,
-                  color: highlightArrow(i), fontSize: 15,
+                  color: '#a78bfa', fontSize: 15,
                 }}>›</span>
               </div>
             )}
