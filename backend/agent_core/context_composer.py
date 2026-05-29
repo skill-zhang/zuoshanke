@@ -1,3 +1,7 @@
+import logging
+
+_log = logging.getLogger(__name__)
+
 """Context Composer — Schema v1.0 上下文分层组合器
 
 将 LLM context 按 8 层独立组合，每层控制加载策略和 token 预算：

@@ -701,6 +701,20 @@ def _row_to_pending(t) -> dict:
     }
 
 
+def _json_load(val):
+    """安全解析 JSON 字符串字段，失败返回空列表"""
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    return []
+
+
 def _row_to_profile(r) -> dict:
     return {
         "id": r.id,
@@ -708,12 +722,12 @@ def _row_to_profile(r) -> dict:
         "content": r.content,
         "category": r.category,
         "priority": r.priority,
-        "tags": r.tags or [],
-        "source_scenes": r.source_scenes or [],
-        "merged_from": r.merged_from or [],
+        "tags": _json_load(r.tags),
+        "source_scenes": _json_load(r.source_scenes),
+        "merged_from": _json_load(r.merged_from),
         "is_active": r.is_active,
         "deprecated_by": r.deprecated_by,
-        "correction_trail": r.correction_trail or [],
+        "correction_trail": _json_load(r.correction_trail),
         "total_injections": r.total_injections,
         "last_injected_at": _iso(r.last_injected_at),
         "created_at": _iso(r.created_at),
