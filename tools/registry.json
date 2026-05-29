@@ -2268,6 +2268,52 @@
       "returns": "JSON {success, file_path, slide_count, title, error?}",
       "category": "data",
       "verified": true
+    },
+    {
+      "name": "gen_ppt_pro",
+      "description": "📽 专业版PPT生成器 — 6种风格配色(科技/时尚/美食/医疗/人文/学习) + 7种布局模板 + 自动配图，适合对比报告/项目汇报/产品介绍",
+      "file": "tools/gen_ppt_pro.py",
+      "function": "gen_ppt_pro",
+      "parameters": {
+        "title": {
+          "type": "string",
+          "description": "演示文稿标题",
+          "optional": true
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "副标题",
+          "optional": true
+        },
+        "slides": {
+          "type": "array",
+          "description": "幻灯片数据列表。每项: {\"type\": \"cover|transition|background|comparison|three_column|table|card_grid|summary\", \"title\": \"页面标题\", ...}",
+          "optional": true
+        },
+        "style": {
+          "type": "string",
+          "description": "风格配色: tech(科技)/fashion(时尚)/food(美食)/medical(医疗)/culture(人文)/study(学习)",
+          "optional": true
+        },
+        "template": {
+          "type": "string",
+          "description": "模板名称: 对比报告/项目汇报/产品介绍",
+          "optional": true
+        },
+        "author": {
+          "type": "string",
+          "description": "作者",
+          "optional": true
+        },
+        "output_name": {
+          "type": "string",
+          "description": "输出文件名（不含 .pptx）",
+          "optional": true
+        }
+      },
+      "returns": "JSON {success, file_path, slide_count, title, style, error?}",
+      "category": "data",
+      "verified": true
     }
   ]
 }

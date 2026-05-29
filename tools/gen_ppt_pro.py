@@ -732,14 +732,17 @@ def gen_ppt_pro(
         output_path = str(OUTPUT_DIR / f"{output_name}.pptx")
         prs.save(output_path)
 
-        return json.dumps({
+        result = {
             "success": True,
             "file_path": output_path,
             "slide_count": len(slides),
             "title": title,
             "style": style,
             "style_name": STYLES.get(style, {}).get("name", "未知"),
-        }, ensure_ascii=False)
+        }
+        if slide_errors:
+            result["warnings"] = slide_errors
+        return json.dumps(result, ensure_ascii=False)
 
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
