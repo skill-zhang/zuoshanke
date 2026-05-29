@@ -503,7 +503,7 @@ export default function App() {
   }
 
   const handleEnterMain = () => {
-    window.location.href = '/'
+    window.location.href = 'http://localhost:5173/'
   }
 
   return (

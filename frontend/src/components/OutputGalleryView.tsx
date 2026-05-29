@@ -64,7 +64,7 @@ export function OutputGalleryView() {
               href = `/outputs/${out.file_path}`;
             }
             // 前端 5173 端口 → 后端 8000 端口
-            const fullHref = href ? `http://localhost:9001${href}` : '';
+            const fullHref = href ? `${window.location.protocol}//${window.location.hostname}:8000${href}` : '';
             return (
               <div
                 key={out.id}
