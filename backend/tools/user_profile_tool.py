@@ -6,7 +6,7 @@ User Profile Tool — 坐山客用户画像系统
 2. profile_list — 查询正式用户画像，按优先级分组返回
 
 用法：
-    from tools.user_profile_tool import pending_extract, profile_list
+    from backend.tools.user_profile_tool import pending_extract, profile_list
     result = pending_extract(content="...", source_scene="...", ...)
     result = profile_list(category=None, active_only=True)
 """

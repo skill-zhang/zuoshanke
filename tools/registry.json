@@ -1479,7 +1479,7 @@
     {
       "name": "pending_extract",
       "description": "分身提取用户偏好，写入 pending_user_traits 暂存区，等待确认后合入正式用户画像库",
-      "file": "tools/user_profile_tool.py",
+      "file": "backend/tools/user_profile_tool.py",
       "function": "pending_extract",
       "parameters": {
         "content": {
@@ -1514,7 +1514,7 @@
     {
       "name": "profile_list",
       "description": "查询正式用户画像，按优先级（P0/P1/P2/P3）分组返回",
-      "file": "tools/user_profile_tool.py",
+      "file": "backend/tools/user_profile_tool.py",
       "function": "profile_list",
       "parameters": {
         "category": {
