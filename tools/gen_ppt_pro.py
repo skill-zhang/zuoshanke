@@ -525,7 +525,7 @@ def _make_comparison_page(prs, w, h, title, left_data, right_data, style, img_pa
     else:
         top_offset = Inches(0.8)
 
-    card_h = H - top_offset - Inches(0.3)
+    card_h = h - top_offset - Inches(0.3)
 
     _add_comparison_card(slide, Inches(0.3), top_offset, Inches(5.8), card_h,
                          left_data.get("icon", "L"), _c(style, left_data.get("color", "blue")),
