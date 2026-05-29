@@ -683,41 +683,46 @@ def gen_ppt_pro(
         if not bg_img:
             bg_img = _download_image(_c(style, "bg_img_keywords"), 0)
 
-        for sec in slides:
-            stype = sec.get("type", "cover")
+        slide_errors = []
+        for i, sec in enumerate(slides):
+            try:
+                stype = sec.get("type", "cover")
 
-            if stype == "cover":
-                _make_cover(prs, W, H, sec.get("title", title),
-                           sec.get("subtitle", subtitle), style, bg_img)
+                if stype == "cover":
+                    _make_cover(prs, W, H, sec.get("title", title),
+                               sec.get("subtitle", subtitle), style, bg_img)
 
-            elif stype == "transition":
-                _make_section_transition(prs, W, H, sec.get("number", "01"),
-                                        sec.get("title", ""), style, bg_img)
+                elif stype == "transition":
+                    _make_section_transition(prs, W, H, sec.get("number", "01"),
+                                            sec.get("title", ""), style, bg_img)
 
-            elif stype == "background":
-                _make_background_page(prs, W, H, sec.get("title", "报告背景"),
-                                     sec.get("cards", []), style, bg_img)
+                elif stype == "background":
+                    _make_background_page(prs, W, H, sec.get("title", "报告背景"),
+                                         sec.get("cards", []), style, bg_img)
 
-            elif stype == "comparison":
-                _make_comparison_page(prs, W, H, sec.get("title", ""),
-                                     sec.get("left", {}), sec.get("right", {}),
-                                     style, sec.get("img_path"))
+                elif stype == "comparison":
+                    _make_comparison_page(prs, W, H, sec.get("title", ""),
+                                         sec.get("left", {}), sec.get("right", {}),
+                                         style, sec.get("img_path"))
 
-            elif stype == "three_column":
-                _make_three_column_page(prs, W, H, sec.get("title", ""),
-                                       sec.get("columns", []), style)
+                elif stype == "three_column":
+                    _make_three_column_page(prs, W, H, sec.get("title", ""),
+                                           sec.get("columns", []), style)
 
-            elif stype == "table":
-                _make_table_page(prs, W, H, sec.get("title", ""),
-                                sec.get("data", []), sec.get("col_widths"), style)
+                elif stype == "table":
+                    _make_table_page(prs, W, H, sec.get("title", ""),
+                                    sec.get("data", []), sec.get("col_widths"), style)
 
-            elif stype == "card_grid":
-                _make_card_grid_page(prs, W, H, sec.get("title", ""),
-                                    sec.get("cards", []), sec.get("cols", 4), style)
+                elif stype == "card_grid":
+                    _make_card_grid_page(prs, W, H, sec.get("title", ""),
+                                        sec.get("cards", []), sec.get("cols", 4), style)
 
-            elif stype == "summary":
-                _make_summary_page(prs, W, H, sec.get("title", "最终结论"),
-                                  sec.get("points", []), style)
+                elif stype == "summary":
+                    _make_summary_page(prs, W, H, sec.get("title", "最终结论"),
+                                      sec.get("points", []), style)
+            except Exception as slide_err:
+                slide_errors.append(f"第{i+1}页({sec.get('type','?')}): {slide_err}")
+                continue
 
         # 保存
         if not output_name:
