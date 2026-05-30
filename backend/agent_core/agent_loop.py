@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Agent Loop — LLM 自主调工具的执行引擎
 
 核心流程：

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """场景流式消息 — stream_scene_message + Agent Loop 引擎"""
 import json
 import logging

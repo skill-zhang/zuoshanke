@@ -1,3 +1,4 @@
+from __future__ import annotations
 """工具执行器 — 执行工具函数并返回结果
 
 Pre-execution 模式：在调用 LLM 之前，检测用户查询中是否涉及已注册工具，

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """工作台对话 SSE 端点 — Avatar 对话回应（Phase 2）
 
 Phase 1: 接收用户输入 → 轻量 LLM 调用 → 流式返回 speech 事件

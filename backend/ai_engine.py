@@ -1,3 +1,4 @@
+from __future__ import annotations
 """AI 引擎 — 调用 Qwen3.5-9B 处理用户输入，更新 Thinking Map"""
 import json
 import os

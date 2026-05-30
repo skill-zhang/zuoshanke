@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Agent Loop 执行追踪日志 — 写穿透 + 3 天轮转 + DB 批量插入
 

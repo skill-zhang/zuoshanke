@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 
 _log = logging.getLogger(__name__)

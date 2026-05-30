@@ -1,3 +1,4 @@
+from __future__ import annotations
 """子 Agent 执行引擎 — 同步阻塞版 _run_loop_blocking + ThreadPoolExecutor
 
 用于 delegate_task 工具的并行子任务执行。

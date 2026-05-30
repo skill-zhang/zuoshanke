@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Schema v1.1 — Session 管理路由
 
 Web 前端会话（闲聊/频道/场景各自独立）的创建、激活、刷新、销毁。

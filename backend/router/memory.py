@@ -1,3 +1,4 @@
+from __future__ import annotations
 """记忆系统 API — CRUD + 搜索 + 权重调整
 
 端点:

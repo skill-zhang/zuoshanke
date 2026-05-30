@@ -1,3 +1,4 @@
+from __future__ import annotations
 """子 Agent 执行结果 API — 持久化的 delegate 成果展示"""
 from typing import List, Optional
 

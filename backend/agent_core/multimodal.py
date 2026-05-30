@@ -1,3 +1,4 @@
+from __future__ import annotations
 """多模态支持 — 文件附件转为 LLM 可消费的内容格式"""
 
 import base64

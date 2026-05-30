@@ -1,3 +1,4 @@
+from __future__ import annotations
 """多平台网关 — 语境路由
 
 外部平台（微信/Telegram等）消息统一入口，根据 GatewaySession 状态路由到

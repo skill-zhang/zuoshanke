@@ -1,3 +1,4 @@
+from __future__ import annotations
 """系统设置路由 — Settings API
 
 三层分层：
