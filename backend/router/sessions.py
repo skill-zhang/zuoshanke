@@ -100,7 +100,7 @@ def _get_or_create_web_session(
     return session
 
 
-def _find_active_web_session(db: DBSession, context_type: str, context_id: str) -> WebSession | None:
+def _find_active_web_session(db: DBSession, context_type: str, context_id: str) -> Optional[WebSession]:
     """查找指定上下文的活跃 session"""
     return db.query(WebSession).filter(
         WebSession.context_type == context_type,

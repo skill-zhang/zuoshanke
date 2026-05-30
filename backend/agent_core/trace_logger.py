@@ -69,7 +69,7 @@ def _rotate_logs():
     os.rename(LOG_FILE, os.path.join(LOG_DIR, "agent.log.1"))
 
 
-_last_rotate_check: date | None = None
+_last_rotate_check: Optional[date] = None
 
 
 def _format_ts() -> str:

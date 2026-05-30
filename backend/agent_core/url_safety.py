@@ -11,7 +11,7 @@ import logging
 import os
 import socket
 import re
-from typing import Optional
+from typing import Optional, Union
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ _BLOCKED_HOSTNAMES: frozenset = frozenset({
 })
 
 # 始终阻断的 IP / 网段
-_METADATA_SENTINELS: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [
+_METADATA_SENTINELS: list[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]] = [
     ipaddress.IPv4Address("169.254.169.254"),   # AWS / GCP / Azure IMDS
     ipaddress.IPv4Address("169.254.170.2"),     # AWS ECS 任务元数据
     ipaddress.IPv4Address("169.254.169.253"),   # Azure IMDS（旧）
@@ -37,7 +37,7 @@ _METADATA_SENTINELS: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [
 ]
 _METADATA_SENTINEL_IPS: frozenset = frozenset(_METADATA_SENTINELS)
 
-_ALWAYS_BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
+_ALWAYS_BLOCKED_NETWORKS: list[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]] = [
     ipaddress.IPv4Network("169.254.0.0/16"),        # 链路本地 + 元数据服务
     ipaddress.IPv4Network("100.100.100.200/32"),     # 阿里云元数据
 ]
