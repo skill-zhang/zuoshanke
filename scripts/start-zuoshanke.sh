@@ -135,6 +135,10 @@ start_backend() {
     log_ok "依赖检查完成"
 
     cd "$BACKEND_DIR"
+    # 🛡️ 代理防护：系统 http_proxy 可能指向 Windows 侧代理（Clash/v2ray），
+    # 该代理间歇断连会导致 LLM API 调用失败。强制 bypass 代理。
+    export no_proxy="${no_proxy:-localhost,127.0.0.1,api.deepseek.com,*.deepseek.com}"
+    export NO_PROXY="$no_proxy"
     nohup "$VENV_PATH/bin/python" main.py > "$BACKEND_LOG" 2>&1 &
     log_info "PID: $!，日志: $BACKEND_LOG"
 

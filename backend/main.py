@@ -17,6 +17,14 @@ try:
 except ImportError:
     pass
 
+# 🛡️ 代理防护：系统 http_proxy 可能指向 Windows 侧代理（如 Clash/v2ray），
+# 该代理间歇断连会导致 LLM API 调用失败。此处强制 bypass 代理访问外部 API。
+# DeepSeek 在中国可直接访问，无需走系统代理；本地服务更不应走代理。
+for _key in ('no_proxy', 'NO_PROXY'):
+    if not os.environ.get(_key):
+        os.environ[_key] = 'localhost,127.0.0.1,api.deepseek.com,*.deepseek.com'
+logging.info(f"✅ 已设置 no_proxy={os.environ.get('no_proxy', '')}")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

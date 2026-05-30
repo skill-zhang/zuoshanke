@@ -302,8 +302,26 @@ def call_llm_with_tools(
         logger.error("[AgentLoop] LLM 请求超时")
         return None
     except requests.exceptions.ConnectionError as e:
-        logger.error(f"[AgentLoop] LLM 连接失败: {e}")
-        return None
+        logger.error(f"[AgentLoop] LLM 连接失败（可能是系统 http_proxy 问题）: {e}")
+        # 🛡️ 代理防护：如果因 http_proxy 代理断连导致失败，尝试直连
+        logger.info("[AgentLoop] 尝试绕过代理直连 DeepSeek API...")
+        try:
+            fallback_resp = requests.post(
+                f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=(10, 120),
+                proxies={"http": "", "https": ""},
+            )
+            fallback_resp.raise_for_status()
+            logger.info("[AgentLoop] 直连成功")
+            return fallback_resp.json()
+        except Exception as fb_e:
+            logger.error(f"[AgentLoop] 直连也失败: {fb_e}")
+            return None
     except Exception as e:
         logger.error(f"[AgentLoop] LLM 调用异常: {e}")
         return None
