@@ -124,8 +124,7 @@ start_backend() {
 
     cd "$BACKEND_DIR"
     nohup "$VENV_PATH/bin/python" main.py > "$BACKEND_LOG" 2>&1 &
-    pid="$!"
-    log_info "PID: $pid，日志: $BACKEND_LOG"
+    log_info "PID: $!，日志: $BACKEND_LOG"
 
     # 等待启动（最多 30 秒）
     for i in $(seq 1 30); do
@@ -159,8 +158,7 @@ start_frontend() {
 
     cd "$FRONTEND_DIR"
     nohup node ./node_modules/vite/bin/vite.js --host 0.0.0.0 > "$FRONTEND_LOG" 2>&1 &
-    pid="$!"
-    log_info "PID: $pid，日志: $FRONTEND_LOG"
+    log_info "PID: $!，日志: $FRONTEND_LOG"
 
     # 等待启动（最多 30 秒，Vite 编译慢）
     for i in $(seq 1 30); do
