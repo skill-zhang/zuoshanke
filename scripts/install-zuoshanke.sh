@@ -118,35 +118,40 @@ title "3/7  后端 Python 环境"
 BACKEND_DIR="$ZUOSHANKE_DIR/backend"
 cd "$BACKEND_DIR"
 
-# 创建 venv
-if [[ -d "venv" ]]; then
-  ok "venv 已存在"
+# 创建 .venv（统一命名，与 start-zuoshanke.sh 一致）
+VENV_DIR=".venv"
+if [[ -d "$VENV_DIR" ]]; then
+  ok ".venv 已存在"
+elif [[ -d "venv" ]]; then
+  warn "检测到旧的 venv/ 目录，重命名为 .venv..."
+  mv venv "$VENV_DIR"
+  ok "已重命名为 .venv"
 else
-  log "创建 Python venv..."
-  python3 -m venv venv
-  ok "venv 创建完成"
+  log "创建 Python .venv..."
+  python3 -m venv "$VENV_DIR"
+  ok ".venv 创建完成"
 fi
 
 # 国内镜像
 if [[ "$USE_CN_MIRROR" == true ]]; then
   log "配置 pip 国内镜像..."
-  ./venv/bin/pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
+  ./"$VENV_DIR"/bin/pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
 fi
 
 # 安装依赖
 log "安装 Python 依赖..."
-./venv/bin/pip install --upgrade pip -q
-./venv/bin/pip install -r requirements.txt -q
+./"$VENV_DIR"/bin/pip install --upgrade pip -q
+./"$VENV_DIR"/bin/pip install -r requirements.txt -q
 ok "requirements.txt 依赖安装完成"
 
 # 额外依赖（numpy/pandas 供 ml_experiment）
 log "安装额外依赖 (numpy, pandas)..."
-./venv/bin/pip install numpy pandas -q
+./"$VENV_DIR"/bin/pip install numpy pandas -q
 ok "额外依赖安装完成"
 
 # 验证关键依赖
-./venv/bin/python -c "from dotenv import load_dotenv; print('dotenv OK')" 2>/dev/null && ok "dotenv 验证通过" || err "dotenv 验证失败"
-./venv/bin/python -c "from sqlalchemy import create_engine; print('SQLAlchemy OK')" 2>/dev/null && ok "SQLAlchemy 验证通过" || err "SQLAlchemy 验证失败"
+./"$VENV_DIR"/bin/python -c "from dotenv import load_dotenv; print('dotenv OK')" 2>/dev/null && ok "dotenv 验证通过" || err "dotenv 验证失败"
+./"$VENV_DIR"/bin/python -c "from sqlalchemy import create_engine; print('SQLAlchemy OK')" 2>/dev/null && ok "SQLAlchemy 验证通过" || err "SQLAlchemy 验证失败"
 
 # 安装 zuoshanke-ctl 到 PATH
 chmod +x "$ZUOSHANKE_DIR/scripts/zuoshanke-ctl.sh" 2>/dev/null || true
@@ -190,8 +195,12 @@ if [[ -d "$WORKBENCH_DIR" ]]; then
     cd "$WORKBENCH_DIR/backend"
     if [[ -f "requirements.txt" ]]; then
       log "安装工作台后端依赖..."
-      # 复用主项目 venv 或创建独立
-      "$BACKEND_DIR/venv/bin/pip" install -r requirements.txt -q
+      # 复用主项目 .venv 或 fallback 到 venv
+      if [[ -f "$BACKEND_DIR/.venv/bin/pip" ]]; then
+        "$BACKEND_DIR/.venv/bin/pip" install -r requirements.txt -q
+      else
+        "$BACKEND_DIR/venv/bin/pip" install -r requirements.txt -q
+      fi
       ok "工作台后端依赖安装完成"
     fi
   fi
@@ -288,7 +297,9 @@ echo ""
 
 # 摘要
 BACKEND_OK="❌ 未就绪"
-if [[ -d "$BACKEND_DIR/venv" ]]; then
+if [[ -d "$BACKEND_DIR/.venv" ]]; then
+  BACKEND_OK="✅ 就绪 (.venv + $("$BACKEND_DIR/.venv/bin/pip" list --format=columns 2>/dev/null | wc -l | xargs) packages)"
+elif [[ -d "$BACKEND_DIR/venv" ]]; then
   BACKEND_OK="✅ 就绪 (venv + $("$BACKEND_DIR/venv/bin/pip" list --format=columns 2>/dev/null | wc -l | xargs) packages)"
 fi
 

@@ -111,18 +111,19 @@ start_backend() {
     echo ""
     echo "🚀 启动后端 http://localhost:$BACKEND_PORT ..."
 
-    # 检查目录
-    if [ ! -d "$BACKEND_DIR" ]; then
-        log_err "后端目录不存在: $BACKEND_DIR"
-        exit 1
+    # 检查虚拟环境：优先 .venv，回退 venv
+    VENV_PATH="$BACKEND_DIR/.venv"
+    if [ ! -d "$VENV_PATH" ]; then
+        VENV_PATH="$BACKEND_DIR/venv"
     fi
-    if [ ! -f "$BACKEND_DIR/.venv/bin/python" ]; then
-        log_err "虚拟环境不存在: $BACKEND_DIR/.venv"
+    if [ ! -f "$VENV_PATH/bin/python" ]; then
+        log_err "虚拟环境不存在（.venv 或 venv 均未找到）"
+        log_err "请运行: cd $BACKEND_DIR && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
         exit 1
     fi
 
     cd "$BACKEND_DIR"
-    nohup .venv/bin/python main.py > "$BACKEND_LOG" 2>&1 &
+    nohup "$VENV_PATH/bin/python" main.py > "$BACKEND_LOG" 2>&1 &
     local pid=$!
     log_info "PID: $pid，日志: $BACKEND_LOG"
 
