@@ -1,4 +1,3 @@
-from __future__ import annotations
 """子 Agent 执行引擎 — 同步阻塞版 _run_loop_blocking + ThreadPoolExecutor
 
 用于 delegate_task 工具的并行子任务执行。
@@ -32,7 +31,7 @@ def _run_loop_blocking(
     memory_context: str = "",
     model: str = "flash",
     max_steps: int = 25,
-    scene_config: dict | None = None,
+    scene_config: Optional[dict] = None,
 ) -> dict:
     """同步阻塞版 Agent Loop。
 
@@ -43,7 +42,7 @@ def _run_loop_blocking(
     - 命中 clarify 工具时返回错误（子 Agent 不能问用户）
 
     Returns:
-        {"success": bool, "summary": str, "files_created": list[str], "steps": int, "error": str | None}
+        {"success": bool, "summary": str, "files_created": list[str], "steps": int, "error": Optional[str]}
     """
     from agent_core.agent_loop import (
         build_tool_definitions, build_agent_system_prompt,

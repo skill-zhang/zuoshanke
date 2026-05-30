@@ -21,7 +21,13 @@ import { WorkbenchView } from './components/WorkbenchView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ClarifyDialog } from './components/ClarifyDialog';
 import { CommandApprovalDialog } from './components/CommandApprovalDialog';
-import { Scene, createScene } from './api/client';
+import {
+  Scene,
+  createScene,
+  listCategories,
+  createCategory as apiCreateCategory,
+} from './api/client';
+import type { Category } from './api/client';
 import { showAlert } from './stores/dialogStore';
 
 // ═══ 稳定选择器（避免 useSyncExternalStore getSnapshot 引用变化）═══
@@ -35,13 +41,19 @@ const selectIsGenerating = (s: any) => s.isGenerating;
 
 export default function App() {
   const {
-    view, setView,
-    currentScene, setCurrentScene,
-    loadThinkingMap, loadSceneMessages,
-    channels, setCurrentChannel,
+    view,
+    setView,
+    currentScene,
+    setCurrentScene,
+    loadThinkingMap,
+    loadSceneMessages,
+    channels,
+    setCurrentChannel,
     loadWorkshopScenes,
-    createSceneModalOpen, setCreateSceneModalOpen,
-    loadScenes, scenes,
+    createSceneModalOpen,
+    setCreateSceneModalOpen,
+    loadScenes,
+    scenes,
   } = useStore();
 
   // ═══ 启动时加载 scenes + 工作台默认首页（仅首次） ═══
@@ -61,13 +73,14 @@ export default function App() {
   const [createUseNewCategory, setCreateUseNewCategory] = useState(false);
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // 从 /api/health 获取版本号
   const [version, setVersion] = useState('...');
   useEffect(() => {
     fetch('/api/health')
-      .then(r => r.json())
-      .then(d => setVersion(d.version || '?'))
+      .then((r) => r.json())
+      .then((d) => setVersion(d.version || '?'))
       .catch(() => setVersion('offline'));
   }, []);
 
@@ -156,24 +169,38 @@ export default function App() {
         setAgentHidden(false);
       }
     }, 3000);
-    return () => { if (idleCheckRef.current) clearInterval(idleCheckRef.current); };
+    return () => {
+      if (idleCheckRef.current) clearInterval(idleCheckRef.current);
+    };
   }, [isGenerating, isIdle]);
 
   // 空闲时自娱自乐
   useEffect(() => {
     if (!isIdle) {
-      if (entertainRef.current) { clearInterval(entertainRef.current); entertainRef.current = null; }
+      if (entertainRef.current) {
+        clearInterval(entertainRef.current);
+        entertainRef.current = null;
+      }
       return;
     }
     // 初始随机延迟后开始娱乐
-    const startDelay = setTimeout(() => {
-      entertainRef.current = setInterval(() => {
-        const pick = entertainments[Math.floor(Math.random() * entertainments.length)];
-        setAgentStatus(pick.status);
-        setAgentMessage(pick.msg);
-      }, 5000 + Math.random() * 7000);
-    }, 3000 + Math.random() * 5000);
-    return () => { clearTimeout(startDelay); if (entertainRef.current) clearInterval(entertainRef.current); };
+    const startDelay = setTimeout(
+      () => {
+        entertainRef.current = setInterval(
+          () => {
+            const pick = entertainments[Math.floor(Math.random() * entertainments.length)];
+            setAgentStatus(pick.status);
+            setAgentMessage(pick.msg);
+          },
+          5000 + Math.random() * 7000
+        );
+      },
+      3000 + Math.random() * 5000
+    );
+    return () => {
+      clearTimeout(startDelay);
+      if (entertainRef.current) clearInterval(entertainRef.current);
+    };
   }, [isIdle]);
 
   // ═══ 页面关闭时提取最后一个场景的记忆 ═══
@@ -218,6 +245,15 @@ export default function App() {
     setCreateSceneModalOpen(true);
   };
 
+  // 弹窗打开时加载已有类别供下拉选择（支持从 Sidebar/Plaza/Workshop 任意入口）
+  useEffect(() => {
+    if (createSceneModalOpen) {
+      listCategories()
+        .then(setCategories)
+        .catch(() => {});
+    }
+  }, [createSceneModalOpen]);
+
   const handleCloseCreate = () => {
     if (creating) return;
     setCreateSceneModalOpen(false);
@@ -257,6 +293,12 @@ export default function App() {
         description: createDescription.trim() || undefined,
         category: category || 'other',
       });
+      // 如果是新建类别，同时注册到 CategoryMeta 表
+      if (createUseNewCategory && category && category !== 'other') {
+        apiCreateCategory({ name: category }).catch((err: any) => {
+          console.warn('注册类别失败:', err.message);
+        });
+      }
       setCreateSceneModalOpen(false);
       loadWorkshopScenes();
       // 自动进入新创建的场景
@@ -270,134 +312,179 @@ export default function App() {
 
   const getTitle = () => {
     switch (view) {
-      case 'plaza': return '🏪 场景广场';
-      case 'workbench': return '🏠 工作台';
-      case 'workshop': return '🛠 工坊';
-      case 'secret-garden': return '🌸 秘密花园';
-      case 'delegate-results': return '🧩 子 Agent 成果';
-      case 'dashboard': return '📊 仪表盘';
+      case 'plaza':
+        return '🏪 场景广场';
+      case 'workbench':
+        return '🏠 工作台';
+      case 'workshop':
+        return '🛠 工坊';
+      case 'secret-garden':
+        return '🌸 秘密花园';
+      case 'delegate-results':
+        return '🧩 子 Agent 成果';
+      case 'dashboard':
+        return '📊 仪表盘';
       case 'chat':
         if (currentScene) return `${currentScene.icon || '📦'} ${currentScene.name}`;
         return '💬 聊天';
-      default: return '坐山客';
+      default:
+        return '坐山客';
     }
   };
 
   return (
-    <>{view === 'workbench' ? (
-      // ═══ 工作台：独立页面，无 Topbar / Sidebar ═══
-      <>
-        <AgentCharacter hidden={agentHidden} />
-        <ErrorBoundary>
-          <WorkbenchView />
-        </ErrorBoundary>
-      </>
-    ) : (
-      <>
-      <Topbar extraTitle={getTitle()} />
-      <AgentCharacter
-        hidden={agentHidden}
-      />
+    <>
+      {view === 'workbench' ? (
+        // ═══ 工作台：独立页面，无 Topbar / Sidebar ═══
+        <>
+          <AgentCharacter hidden={agentHidden} />
+          <ErrorBoundary>
+            <WorkbenchView />
+          </ErrorBoundary>
+        </>
+      ) : (
+        <>
+          <Topbar extraTitle={getTitle()} />
+          <AgentCharacter hidden={agentHidden} />
 
-      <div className="main">
-        <Sidebar />
+          <div className="main">
+            <Sidebar />
 
-        {view === 'plaza' ? (
-           <PlazaView
-             onEnterScene={handleEnterScene}
-             onCreateScene={handleCreateScene}
-             onImportScene={handleImportScene}
-           />
-         ) :
-         view === 'workshop' ? (
-           <WorkshopView
-             onEnterScene={handleEnterScene}
-             onCreateScene={handleCreateScene}
-           />
-         ) :
-         view === 'tools' ? (
-          <ToolsView />
-        ) :        view === 'capability-verify' ? (
-          <CapabilityVerify />
-        ) : view === 'skills' ? (
-          <SkillsView />
-        ) : view === 'dashboard' ? (
-          <AgentLoopDashboard />
-        ) : view === 'memory' ? (
-          <MemoryView />
-        ) : view === 'outputs' ? (
-          <OutputGalleryView />
-        ) : view === 'delegate-results' ? (
-          <DelegateResultsView />
-        ) : view === 'secret-garden' ? (
-          <SecretGarden />
-        ) : view === 'settings' ? (
-          <SettingsView />
-        ) : (
-          <ChatView />
-        )}
-      </div>
-
-      <div className="statusbar">
-        <span className="dot green" /> 坐山客 v{version}
-        <span>|</span> API: http://localhost:9001
-      </div>
-
-      <Dialog />
-      <ClarifyDialog />
-      <CommandApprovalDialog />
-
-      {/* ═══ 创建场景弹窗 ═══ */}
-      <div className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`} onClick={handleCloseCreate}>
-        <div className="modal" onClick={e => e.stopPropagation()}>
-          <div className="modal-title">
-            创建新场景
-            <button className="modal-close" onClick={handleCloseCreate}>✕</button>
+            {view === 'plaza' ? (
+              <PlazaView
+                onEnterScene={handleEnterScene}
+                onCreateScene={handleCreateScene}
+                onImportScene={handleImportScene}
+              />
+            ) : view === 'workshop' ? (
+              <WorkshopView onEnterScene={handleEnterScene} onCreateScene={handleCreateScene} />
+            ) : view === 'tools' ? (
+              <ToolsView />
+            ) : view === 'capability-verify' ? (
+              <CapabilityVerify />
+            ) : view === 'skills' ? (
+              <SkillsView />
+            ) : view === 'dashboard' ? (
+              <AgentLoopDashboard />
+            ) : view === 'memory' ? (
+              <MemoryView />
+            ) : view === 'outputs' ? (
+              <OutputGalleryView />
+            ) : view === 'delegate-results' ? (
+              <DelegateResultsView />
+            ) : view === 'secret-garden' ? (
+              <SecretGarden />
+            ) : view === 'settings' ? (
+              <SettingsView />
+            ) : (
+              <ChatView />
+            )}
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">场景名称</label>
-              <input className="form-input" value={createName} onChange={e => setCreateName(e.target.value)} placeholder="例：天气查询" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">类别</label>
-              {createUseNewCategory ? (
-                <input className="form-input" value={createNewCategory} onChange={e => setCreateNewCategory(e.target.value)} placeholder="输入新类别名称" />
-              ) : (
-                <select className="form-select" value={createCategory} onChange={e => setCreateCategory(e.target.value)}>
-                  <option value="life">🌿 生活</option>
-                  <option value="ecommerce">🛒 电商</option>
-                  <option value="work">💼 工作</option>
-                  <option value="learn">📚 学习</option>
-                  <option value="create">🎨 创作</option>
-                  <option value="finance">📈 金融</option>
-                  <option value="media">💬 自媒体</option>
-                  <option value="other">📦 其他</option>
-                </select>
-              )}
-              <div className="form-hint">
-                <span style={{ cursor: 'pointer', color: '#58a6ff' }} onClick={() => {
-                  setCreateUseNewCategory(!createUseNewCategory);
-                  setCreateNewCategory('');
-                }}>
-                  {createUseNewCategory ? '← 选择已有类别' : '➕ 新建类别'}
-                </span>
+
+          <div className="statusbar">
+            <span className="dot green" /> 坐山客 v{version}
+            <span>|</span> API: http://localhost:9001
+          </div>
+
+          <Dialog />
+          <ClarifyDialog />
+          <CommandApprovalDialog />
+
+          {/* ═══ 创建场景弹窗 ═══ */}
+          <div
+            className={`modal-overlay${createSceneModalOpen ? ' show' : ''}`}
+            onClick={handleCloseCreate}
+          >
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-title">
+                创建新场景
+                <button className="modal-close" onClick={handleCloseCreate}>
+                  ✕
+                </button>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">场景名称</label>
+                  <input
+                    className="form-input"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                    placeholder="例：天气查询"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">类别</label>
+                  {createUseNewCategory ? (
+                    <input
+                      className="form-input"
+                      value={createNewCategory}
+                      onChange={(e) => setCreateNewCategory(e.target.value)}
+                      placeholder="输入新类别名称"
+                    />
+                  ) : (
+                    <select
+                      className="form-select"
+                      value={createCategory}
+                      onChange={(e) => setCreateCategory(e.target.value)}
+                    >
+                      {categories.length > 0 ? (
+                        categories.map((c) => (
+                          <option key={c.name} value={c.name}>
+                            {c.icon} {c.label}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="life">🌿 生活</option>
+                          <option value="ecommerce">🛒 电商</option>
+                          <option value="work">💼 工作</option>
+                          <option value="learn">📚 学习</option>
+                          <option value="create">🎨 创作</option>
+                          <option value="finance">📈 金融</option>
+                          <option value="media">💬 自媒体</option>
+                          <option value="other">📦 其他</option>
+                        </>
+                      )}
+                    </select>
+                  )}
+                  <div className="form-hint">
+                    <span
+                      style={{ cursor: 'pointer', color: '#58a6ff' }}
+                      onClick={() => {
+                        setCreateUseNewCategory(!createUseNewCategory);
+                        setCreateNewCategory('');
+                      }}
+                    >
+                      {createUseNewCategory ? '← 选择已有类别' : '➕ 新建类别'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">简介</label>
+                <input
+                  className="form-input"
+                  value={createDescription}
+                  onChange={(e) => setCreateDescription(e.target.value)}
+                  placeholder="场景的简短描述"
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="btn" onClick={handleCloseCreate} disabled={creating}>
+                  取消
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={doCreateScene}
+                  disabled={creating || !createName.trim()}
+                >
+                  {creating ? '创建中...' : '创建'}
+                </button>
               </div>
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">简介</label>
-            <input className="form-input" value={createDescription} onChange={e => setCreateDescription(e.target.value)} placeholder="场景的简短描述" />
-          </div>
-          <div className="modal-actions">
-            <button className="btn" onClick={handleCloseCreate} disabled={creating}>取消</button>
-            <button className="btn btn-primary" onClick={doCreateScene} disabled={creating || !createName.trim()}>
-              {creating ? '创建中...' : '创建'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </>)}
+        </>
+      )}
     </>
   );
 }

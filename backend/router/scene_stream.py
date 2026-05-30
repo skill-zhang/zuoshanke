@@ -1,4 +1,3 @@
-from __future__ import annotations
 """场景流式消息 — stream_scene_message + Agent Loop 引擎"""
 import json
 import logging
@@ -34,7 +33,7 @@ router = APIRouter(tags=["场景流式"])
 
 # 🆕 Schema v1.1: Web session 辅助
 
-def _ensure_web_session(db, context_type: str, context_id: str, context_name: str | None = None):
+def _ensure_web_session(db, context_type: str, context_id: str, context_name: Optional[str] = None):
     """获取或创建 Web session（每个上下文唯一一个活跃 session）
 
     优先复用活跃 session；若无活跃 session，尝试复活已销毁的同上下文 session
@@ -387,7 +386,7 @@ class ThoughtThrottle:
         return True
 
 
-def _self_map_nudge(db, scene_id: str, tool_results: list) -> str | None:
+def _self_map_nudge(db, scene_id: str, tool_results: list) -> Optional[str]:
     """轻量检查：本轮有写产出但没推进 Action Map / TM -> 返回提醒文本"""
     try:
         from models import SceneSelfMap, ThinkingMap
@@ -429,7 +428,7 @@ def _self_map_nudge(db, scene_id: str, tool_results: list) -> str | None:
         return None
 
 
-def _generate_ack(user_message: str) -> str | None:
+def _generate_ack(user_message: str) -> Optional[str]:
     """生成即时确认回执。用 flash 模型，<1 秒返回。简单查询返回 None 跳过确认。"""
     ack_prompt = """你是坐山客。用户刚发来一条消息。
 请用一句话自然地回应，告诉用户你收到了并且正在思考。

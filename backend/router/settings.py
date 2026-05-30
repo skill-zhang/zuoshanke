@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional
 """系统设置路由 — Settings API
 
 三层分层：
@@ -24,7 +24,7 @@ KNOWN_ROUTES = {"channel", "scene", "extraction", "medium", "heavy"}
 
 
 # ── 内存缓存 ──
-_settings_cache: dict | None = None
+_settings_cache: Optional[dict] = None
 
 
 def invalidate_settings_cache():

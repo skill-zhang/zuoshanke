@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional
 """Schema v1.1 — Session 管理路由
 
 Web 前端会话（闲聊/频道/场景各自独立）的创建、激活、刷新、销毁。
@@ -22,7 +22,7 @@ router = APIRouter(tags=["Web Session"])
 class CreateOrActivateRequest(BaseModel):
     context_type: str  # "channel" | "scene"
     context_id: str
-    context_name: str | None = None
+    context_name: Optional[str] = None
 
 
 class TouchSessionRequest(BaseModel):
@@ -37,13 +37,13 @@ class TouchSessionRequest(BaseModel):
     api_calls: int = 0
     estimated_cost_usd: float = 0.0
     cost_status: str = "unknown"
-    cost_source: str | None = None
+    cost_source: Optional[str] = None
 
 
 # ═══ Helper ═══
 
 def _get_or_create_web_session(
-    db: DBSession, context_type: str, context_id: str, context_name: str | None = None
+    db: DBSession, context_type: str, context_id: str, context_name: Optional[str] = None
 ) -> WebSession:
     """获取或创建 Web session（每个上下文唯一一个活跃 session）
 
@@ -213,7 +213,7 @@ def accumulate_tokens(session_id: str, data: TouchSessionRequest, db: DBSession 
 
 
 @router.get("/api/sessions")
-def list_web_sessions(context_type: str | None = None, status: str | None = None, db: DBSession = Depends(get_db)):
+def list_web_sessions(context_type: Optional[str] = None, status: Optional[str] = None, db: DBSession = Depends(get_db)):
     """列出 Web session，可按 context_type 和 status 筛选"""
     q = db.query(WebSession)
     if context_type:

@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional
 """工作台对话 SSE 端点 — Avatar 对话回应（Phase 2）
 
 Phase 1: 接收用户输入 → 轻量 LLM 调用 → 流式返回 speech 事件
@@ -28,7 +28,7 @@ class WorkbenchChatRequest(BaseModel):
     scene_ids: list[str] = []
 
 
-def _parse_actions(text: str | None) -> list[dict]:
+def _parse_actions(text: Optional[str]) -> list[dict]:
     """解析 LLM 返回的 JSON action 列表（3 层容错）"""
     if not text or not text.strip():
         return []

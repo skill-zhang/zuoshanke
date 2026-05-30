@@ -1,4 +1,3 @@
-from __future__ import annotations
 """工具执行器 — 执行工具函数并返回结果
 
 Pre-execution 模式：在调用 LLM 之前，检测用户查询中是否涉及已注册工具，
@@ -64,7 +63,7 @@ def _ensure_path():
         sys.path.insert(0, TOOLS_DIR)
 
 
-def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None) -> dict:
+def execute_tool(name: str, params: dict, extra_kwargs: Optional[dict] = None) -> dict:
     """执行指定工具
 
     Args:
@@ -73,7 +72,7 @@ def execute_tool(name: str, params: dict, extra_kwargs: dict | None = None) -> d
         extra_kwargs: 额外关键字参数（用于注入回调等，如 clarify callback）
 
     Returns:
-        {"success": bool, "result": any, "error": str | None}
+        {"success": bool, "result": any, "error": Optional[str]}
     """
     tool_def = get_tool_by_name(name)
     if not tool_def:

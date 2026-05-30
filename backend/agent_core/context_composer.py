@@ -1,4 +1,3 @@
-from __future__ import annotations
 import logging
 
 _log = logging.getLogger(__name__)
@@ -125,7 +124,7 @@ def compose_context(
 # 各层构建函数
 # ════════════════════════════════════════════
 
-def _hardcoded_scene_role(scene_name: str | None) -> str:
+def _hardcoded_scene_role(scene_name: Optional[str]) -> str:
     """Fallback: 硬编码角色设定（DB 无数据时使用）"""
     if scene_name:
         _CORE_PERSONALITY = "你和用户一起构建能力体系，是用户的AI伙伴"

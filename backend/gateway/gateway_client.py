@@ -2,7 +2,6 @@
 
 负责将微信消息转发到坐山客后端进行 AI 处理，并获取回复。
 """
-from __future__ import annotations
 
 import json
 import logging

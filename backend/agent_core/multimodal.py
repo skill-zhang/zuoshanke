@@ -1,4 +1,3 @@
-from __future__ import annotations
 """多模态支持 — 文件附件转为 LLM 可消费的内容格式"""
 
 import base64
@@ -6,7 +5,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 _log = logging.getLogger(__name__)
 
@@ -175,9 +174,9 @@ def should_use_multimodal_format(route_cfg: dict) -> bool:
     return can_accept_images(provider_name, model_name)
 
 
-def format_message_content(content: str | list,
+def format_message_content(content: Union[str, list],
                            attachments: Optional[list[dict]] = None,
-                           route_cfg: Optional[dict] = None) -> str | list:
+                           route_cfg: Optional[dict] = None) -> Union[str, list]:
     """格式化消息 content 字段
 
     如果有附件且模型支持多模态，返回 content 数组（多模态格式）
@@ -189,7 +188,7 @@ def format_message_content(content: str | list,
         route_cfg: 路由配置，用于检测模型是否支持多模态
 
     Returns:
-        str | list — 兼容 OpenAI API 格式
+        Union[str, list] — 兼容 OpenAI API 格式
     """
     if not attachments:
         return content

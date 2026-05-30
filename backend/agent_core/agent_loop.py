@@ -1,4 +1,3 @@
-from __future__ import annotations
 """Agent Loop — LLM 自主调工具的执行引擎
 
 核心流程：
@@ -222,8 +221,8 @@ def call_llm_with_tools(
     tools: list[dict],
     model: str = "flash",
     temperature: float = 0.3,
-    scene_config: dict | None = None,
-) -> dict | None:
+    scene_config: Optional[dict] = None,
+) -> Optional[dict]:
     """调 DeepSeek API，支持 function calling。
 
     Args:
@@ -496,8 +495,8 @@ def run_agent_loop(
     initial_messages: Optional[list[dict]] = None,
     dialog_engine=None,  # 🆕 DialogEngine 实例
     scene_id: str = "",  # 🆕 Schema v0.7: 仪表盘场景 ID，提供时自动发射 reflect/pq_update 事件
-    scene_config: dict | None = None,  # 🆕 Schema v1.0: 场景扩展配置（如温度覆盖）
-    tool_callbacks: dict | None = None,  # 🆕 工具回调映射（如 clarify callback）
+    scene_config: Optional[dict] = None,  # 🆕 Schema v1.0: 场景扩展配置（如温度覆盖）
+    tool_callbacks: Optional[dict] = None,  # 🆕 工具回调映射（如 clarify callback）
     db=None,  # 🆕 Schema v1.0: DB会话，用于快照写入
     session_id: str = "",  # 🆕 Schema v1.6: 会话 ID，用于 trace 记录
 ) -> Generator[dict, None, None]:

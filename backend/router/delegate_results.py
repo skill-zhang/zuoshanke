@@ -1,4 +1,3 @@
-from __future__ import annotations
 """子 Agent 执行结果 API — 持久化的 delegate 成果展示"""
 from typing import List, Optional
 
@@ -89,8 +88,8 @@ def save_delegate_results(
     scene_id: str,
     children: list[dict],
     db: Session,
-    session_id: str | None = None,
-    parent_message_id: str | None = None,
+    session_id: Optional[str] = None,
+    parent_message_id: Optional[str] = None,
 ) -> list[DelegateResult]:
     """批量保存子 Agent 执行结果到 DB"""
     saved = []

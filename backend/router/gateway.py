@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional
 """多平台网关 — 语境路由
 
 外部平台（微信/Telegram等）消息统一入口，根据 GatewaySession 状态路由到
@@ -24,7 +24,7 @@ SESSION_TIMEOUT_MINUTES = 5  # 场景模式下无消息自动超时回到频道
 
 
 def _get_or_create_session(db: Session, platform: str, platform_user_id: str,
-                           platform_username: str | None = None) -> GatewaySession:
+                           platform_username: Optional[str] = None) -> GatewaySession:
     """查或创建 GatewaySession（同一平台+用户唯一）"""
     session = db.query(GatewaySession).filter(
         GatewaySession.platform == platform,
@@ -97,7 +97,7 @@ def _get_scene_history(db: Session, scene_id: str, limit: int = 20) -> list[dict
     return [{"role": m.role, "content": m.content} for m in msgs]
 
 
-def _detect_scene_switch(content: str) -> str | None:
+def _detect_scene_switch(content: str) -> Optional[str]:
     """关键词检测用户消息是否意图切换到某个场景
 
     返回场景名（匹配时）或 None（不匹配）。

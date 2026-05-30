@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional, Union
 """
 Agent Loop 执行追踪日志 — 写穿透 + 3 天轮转 + DB 批量插入
 
@@ -78,18 +78,18 @@ def _format_ts() -> str:
 
 
 def write_trace(
-    scene_id: str | None = None,
-    session_id: str | None = None,
-    step: int | None = None,
+    scene_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    step: Optional[int] = None,
     event_type: str = "",
-    tool: str | None = None,
-    args: dict | None = None,
-    result: dict | None = None,
-    error: str | None = None,
-    thinking_text: str | None = None,
-    summary: str | None = None,
-    duration_ms: int | None = None,
-    metadata: dict | None = None,
+    tool: Optional[str] = None,
+    args: Optional[dict] = None,
+    result: Optional[dict] = None,
+    error: Optional[str] = None,
+    thinking_text: Optional[str] = None,
+    summary: Optional[str] = None,
+    duration_ms: Optional[int] = None,
+    metadata: Optional[dict] = None,
     **kwargs,
 ):
     """写入一条 trace 到 agent.log（JSONL）
@@ -138,7 +138,7 @@ def write_trace(
         logger.error(f"[trace_logger] 写入 agent.log 失败: {e}")
 
 
-def _serialize_for_log(obj) -> str | dict:
+def _serialize_for_log(obj) -> Union[str, dict]:
     """安全序列化日志对象 — 处理不可 JSON 序列化的类型"""
     if obj is None:
         return ""

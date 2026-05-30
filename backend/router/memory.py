@@ -1,4 +1,3 @@
-from __future__ import annotations
 """记忆系统 API — CRUD + 搜索 + 权重调整
 
 端点:
@@ -29,7 +28,7 @@ from agent_core.memory_manager import MemoryManager
 _MEMORY_SOURCE_NAMES: dict[str, tuple[str, str]] = {}  # (scope, context_id) → (name, icon)
 
 
-def _resolve_group_name(db: Session, scope: str, context_id: str | None) -> tuple[str, str]:
+def _resolve_group_name(db: Session, scope: str, context_id: Optional[str]) -> tuple[str, str]:
     """根据 scope + context_id 解析来源名和图标"""
     cache_key = f"{scope}:{context_id or ''}"
     if cache_key in _MEMORY_SOURCE_NAMES:

@@ -4,7 +4,6 @@
 每个平台适配器继承此类，实现平台特定的连接/收发/生命周期管理。
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging
