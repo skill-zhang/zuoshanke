@@ -129,13 +129,13 @@ start_backend() {
         log_ok ".venv 创建完成"
     fi
 
-    # ── 确保依赖已安装（自动安装） ──
-    if ! "$VENV_PATH/bin/python" -c "import fastapi" 2>/dev/null; then
-        log_warn "Python 依赖未安装，正在安装..."
+    # ── 确保依赖已安装（幂等，已装则秒过） ──
+    "$VENV_PATH/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt" 2>/dev/null || {
+        log_warn "安装 Python 依赖..."
         "$VENV_PATH/bin/pip" install --upgrade pip -q
         "$VENV_PATH/bin/pip" install -r "$BACKEND_DIR/requirements.txt" -q
         log_ok "依赖安装完成"
-    fi
+    }
 
     cd "$BACKEND_DIR"
     nohup "$VENV_PATH/bin/python" main.py > "$BACKEND_LOG" 2>&1 &
