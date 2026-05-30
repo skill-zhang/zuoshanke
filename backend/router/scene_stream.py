@@ -729,6 +729,9 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     _log.error(f"[scene agent loop] {event['message']}")
                     yield sse_event("error", message=event["message"])
                     return
+                # 🆕 SSE keepalive：透传给前端，保持连接活跃
+                elif etype == "keepalive":
+                    yield sse_event("keepalive", ts=event.get("ts", 0))
                 # 🆕 Schema v0.7: 仪表盘事件透传
                 elif etype == "dashboard:reflect":
                     yield sse_event("dashboard:reflect",

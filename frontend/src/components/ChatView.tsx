@@ -10,7 +10,6 @@ import { showConfirm } from '../stores/dialogStore';
 import { DelegationMonitor } from './DelegationMonitor';
 import { FloatingTraceButton, AgentTracePanel } from './AgentTracePanel'; // 🆕 Schema v1.6
 import { ChatInputArea } from './ChatInputArea';
-import { List } from 'react-window';
 
 // ══════════════════════════════════════════════════
 //  工具卡片组件
@@ -556,7 +555,7 @@ export function ChatView() {
   const prevMessageLenRef = useRef(0);
   const wasAtBottomRef = useRef(true); // 用户是否在底部（更新前快照）
   const initialScrollDoneRef = useRef(false); // 首次加载是否已完成滚底
-  const listRef = useRef<any>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const currentScrollOffsetRef = useRef(0);
 
   // ═══ 参数调测 ═══
@@ -636,33 +635,27 @@ export function ChatView() {
   }, [currentScene?.id, currentSessionId]);
 
   // ═══ 自动滚动 — 初始化定位到底部，新消息来时仅在底部时自动滚动 ═══
-  const ITEM_SIZE = 120;
 
   const scrollToBottom = useCallback(
     (smooth = true) => {
-      if (displayMessages.length > 0) {
-        const api = listRef.current;
-        api?.scrollToRow({
-          index: displayMessages.length - 1,
-          align: 'end',
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTo({
+          top: el.scrollHeight,
           behavior: smooth ? 'smooth' : 'instant',
         });
       }
       setShowBackToBottom(false);
       setUnreadCount(0);
     },
-    [displayMessages.length]
+    []
   );
 
   const isAtBottom = useCallback(() => {
-    const api = listRef.current;
-    if (!api) return true;
-    const el = api.element;
+    const el = scrollRef.current;
     if (!el) return true;
-    const totalHeight = displayMessages.length * ITEM_SIZE;
-    const maxScroll = Math.max(0, totalHeight - el.clientHeight);
-    return el.scrollTop >= maxScroll - 120;
-  }, [displayMessages.length]);
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
 
   // ═══ 自动滚动 — 消息变化时如果处于底部则自动滚到最新 ═══
   const prevLenRef = useRef(0);
@@ -701,29 +694,25 @@ export function ChatView() {
   // 滚动监听：检测是否滚动到顶部（加载更早）或到底部（隐藏浮标）
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const scrollTop = (e.target as HTMLDivElement).scrollTop;
+      const el = e.target as HTMLDivElement;
+      const scrollTop = el.scrollTop;
       currentScrollOffsetRef.current = scrollTop;
 
       // 记录用户是否在底部（内容更新前快照）
-      const totalHeight = displayMessages.length * ITEM_SIZE;
-      const listEl = listRef.current?.element;
-      const clientH = listEl?.clientHeight || 400;
-      const maxScroll = Math.max(0, totalHeight - clientH);
-      wasAtBottomRef.current = scrollTop >= maxScroll - 120;
+      wasAtBottomRef.current = el.scrollHeight - scrollTop - el.clientHeight < 120;
 
       // 向上滚到顶部 → 加载更早消息
       if (scrollTop < 80) {
         const entityId = currentScene?.id || currentChannel?.id;
         if (!isLoading && hasOlder && entityId) {
           const loadFn = isChannel ? loadOlderChannelMessages : loadOlderMessages;
-          const prevCount = displayMessages.length;
+          const prevScrollHeight = el.scrollHeight;
           loadFn(entityId).then(() => {
             // prepend 后恢复滚动位置
-            const added = displayMessages.length - prevCount;
-            if (added > 0) {
-              const targetRow = Math.floor((scrollTop + added * ITEM_SIZE) / ITEM_SIZE);
-              listRef.current?.scrollToRow({ index: targetRow, align: 'start' });
-            }
+            requestAnimationFrame(() => {
+              const newScrollHeight = el.scrollHeight;
+              el.scrollTop = newScrollHeight - prevScrollHeight;
+            });
           });
         }
       }
@@ -742,7 +731,6 @@ export function ChatView() {
       loadOlderChannelMessages,
       loadOlderMessages,
       isAtBottom,
-      displayMessages.length,
     ]
   );
 
@@ -972,38 +960,6 @@ export function ChatView() {
     setShowSessionPanel(false);
     switchSceneSession(sessionId);
   };
-
-  // ═══ 虚拟列表行渲染器 ═══
-  const MessageRow = useCallback(
-    ({ index, style, data }: { index: number; style: React.CSSProperties; data: any }) => {
-      const msg = data?.messages?.[index];
-      if (!msg) return null;
-      if (msg.role === 'thought') {
-        return (
-          <div key={msg.id} style={{ ...style, overflow: 'visible' }} className="msg-thought">
-            💭 {msg.content}
-          </div>
-        );
-      }
-      const isLastAI = msg.role === 'ai' && index === data.messages.length - 1;
-      return (
-        <div key={msg.id} style={{ ...style, overflow: 'visible' }}>
-          <MessageBubble
-            msg={msg}
-            toolCards={isLastAI ? msg.toolCards || data.currentToolCards : undefined}
-            toolLogs={msg.id.startsWith('temp-ai-') ? data.currentToolLogs : undefined}
-            onDelete={data.handleDelete}
-            onRegenerate={data.handleRegenerate}
-            onOpenActionMap={data.handleOpenActionMap}
-            selectMode={data.selectMode}
-            selected={data.selectedIds?.has(msg.id)}
-            onToggleSelect={data.toggleSelect}
-          />
-        </div>
-      );
-    },
-    []
-  );
 
   return (
     <div className="chat-overlay">
@@ -1275,28 +1231,32 @@ export function ChatView() {
           ) : (
             <>
               <DelegationMonitor />
-              <List
-                rowCount={displayMessages.length}
-                rowHeight={ITEM_SIZE}
-                listRef={listRef}
-                overscanCount={10}
-                defaultHeight={400}
-                onScroll={handleScroll}
-                rowComponent={MessageRow}
-                rowProps={
-                  {
-                    messages: displayMessages,
-                    currentToolCards,
-                    currentToolLogs,
-                    handleDelete,
-                    handleRegenerate,
-                    handleOpenActionMap,
-                    selectMode,
-                    selectedIds,
-                    toggleSelect,
-                  } as any
-                }
-              />
+              <div className="chat-messages-list" ref={scrollRef} onScroll={handleScroll}>
+                {displayMessages.map((msg, index) => {
+                  if ((msg as any).role === 'thought') {
+                    return (
+                      <div key={msg.id} className="msg-thought">
+                        💭 {msg.content}
+                      </div>
+                    );
+                  }
+                  const isLastAI = msg.role === 'ai' && index === displayMessages.length - 1;
+                  return (
+                    <MessageBubble
+                      key={msg.id}
+                      msg={msg}
+                      toolCards={isLastAI ? msg.toolCards || currentToolCards : undefined}
+                      toolLogs={msg.id.startsWith('temp-ai-') ? currentToolLogs : undefined}
+                      onDelete={handleDelete}
+                      onRegenerate={handleRegenerate}
+                      onOpenActionMap={handleOpenActionMap}
+                      selectMode={selectMode}
+                      selected={selectedIds?.has(msg.id)}
+                      onToggleSelect={toggleSelect}
+                    />
+                  );
+                })}
+              </div>
             </>
           )}
           {/* ═══ 回到最新消息浮标 ═══ */}

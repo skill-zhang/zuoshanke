@@ -423,6 +423,18 @@ body {
   flex-direction:column;
 }
 
+/* 消息列表 — 可滚动容器，替代之前 react-window List */
+.chat-messages-list {
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:8px 0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
 /* 回到最新消息浮标 */
 .back-to-bottom-btn {
   position:absolute;
