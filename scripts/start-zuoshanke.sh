@@ -111,15 +111,30 @@ start_backend() {
     echo ""
     echo "🚀 启动后端 http://localhost:$BACKEND_PORT ..."
 
-    # 检查虚拟环境：优先 .venv，回退 venv
+    # ── 确保后端目录存在 ──
+    if [ ! -d "$BACKEND_DIR" ]; then
+        log_err "后端目录不存在: $BACKEND_DIR"
+        exit 1
+    fi
+
+    # ── 确保虚拟环境存在（自动创建） ──
     VENV_PATH="$BACKEND_DIR/.venv"
     if [ ! -d "$VENV_PATH" ]; then
         VENV_PATH="$BACKEND_DIR/venv"
     fi
-    if [ ! -f "$VENV_PATH/bin/python" ]; then
-        log_err "虚拟环境不存在（.venv 或 venv 均未找到）"
-        log_err "请运行: cd $BACKEND_DIR && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
-        exit 1
+    if [ ! -d "$VENV_PATH" ]; then
+        log_warn "虚拟环境不存在，正在创建 .venv..."
+        python3 -m venv "$BACKEND_DIR/.venv"
+        VENV_PATH="$BACKEND_DIR/.venv"
+        log_ok ".venv 创建完成"
+    fi
+
+    # ── 确保依赖已安装（自动安装） ──
+    if ! "$VENV_PATH/bin/python" -c "import fastapi" 2>/dev/null; then
+        log_warn "Python 依赖未安装，正在安装..."
+        "$VENV_PATH/bin/pip" install --upgrade pip -q
+        "$VENV_PATH/bin/pip" install -r "$BACKEND_DIR/requirements.txt" -q
+        log_ok "依赖安装完成"
     fi
 
     cd "$BACKEND_DIR"
