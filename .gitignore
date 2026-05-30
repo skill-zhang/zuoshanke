@@ -45,6 +45,9 @@ uploads/*
 # Outputs
 outputs/*
 
+# Logs
+logs/
+
 # Models (too large for git)
 models/
 

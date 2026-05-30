@@ -138,6 +138,7 @@ interface AppState {
   capacityWarning: { message: string; percentage: number } | null;
   currentToolCards: ToolCard[];      // 当前 AI 回复的工具卡片数据
   currentToolLogs: ToolLog[];        // 当前工具执行记录（纯前端，不存库）
+  lastError: string | null;          // 最后一次 SSE 错误消息（ChatView 展示横幅）
 
   // 🆕 Schema v0.7: 仪表盘
   priorityQueue: DashboardQueueItem[];
@@ -213,6 +214,7 @@ export const useStore = create<AppState>((set, get) => ({
   capacityWarning: null,
   currentToolCards: [],
   currentToolLogs: [],
+  lastError: null,
   _retryCount: {} as Record<string, number>,
 
   // 🆕 Schema v0.7: 仪表盘初始值
@@ -765,6 +767,7 @@ export const useStore = create<AppState>((set, get) => ({
           set(state => ({
             isGenerating: false,
             generatingEntityId: null,
+            lastError: event.message,
             currentToolCards: [],
             currentToolLogs: [],
             messagesByEntity: {
@@ -1145,6 +1148,7 @@ export const useStore = create<AppState>((set, get) => ({
           set(state => ({
             isGenerating: false,
             generatingEntityId: null,
+            lastError: event.message,
             messagesByEntity: {
               ...state.messagesByEntity,
               [channelKey]: {

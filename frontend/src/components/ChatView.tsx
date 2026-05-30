@@ -450,6 +450,7 @@ export function ChatView() {
     capacityWarning,
     currentToolCards,
     currentToolLogs,
+    lastError,
     userContext, saveUserContext,
     compressChannel,
   } = useStore();
@@ -581,6 +582,15 @@ export function ChatView() {
       }
     };
   }, []);
+
+  // ═══ 自动清除 lastError（6 秒后） ═══
+  useEffect(() => {
+    if (!lastError) return;
+    const t = setTimeout(() => {
+      useStore.setState({ lastError: null });
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [lastError]);
 
   // 在场景切换时加载会话列表
   useEffect(() => {
@@ -852,6 +862,7 @@ export function ChatView() {
     setInput('');
     setAttachments([]);
     setSending(true);
+    useStore.setState({ lastError: null });
 
     try {
       if (isChannel && currentChannel) {
@@ -1188,6 +1199,14 @@ export function ChatView() {
         {/* 🆕 Schema v0.7: Agent Loop 仪表盘（仅场景模式） */}
         {currentScene && !currentChannel && (
           <AgentLoopDashboard />
+        )}
+
+        {/* 🆕 错误横幅 */}
+        {lastError && (
+          <div className="chat-error-banner">
+            <span>❌ {lastError}</span>
+            <span className="chat-error-close" onClick={() => useStore.setState({ lastError: null })}>✕</span>
+          </div>
         )}
 
         {/* 消息列表 */}

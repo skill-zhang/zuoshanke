@@ -197,6 +197,8 @@ def build_agent_system_prompt(memory_context: str = "") -> str:
 - 修改已有文件用 patch（支持模糊匹配）
 - 执行 shell 命令用 run_code(language="bash")
 - 执行 Python 脚本用 run_code(language="python")
+- **前端代码(.tsx/.ts)写完后必须做语法校验**：`pnpm lint:fix`（zuoshanke 主项目）或 `npx eslint --fix .`（workbench），校验通过才算写完
+- 提交前 Husky 会自动拦截格式错误的代码，但不要依赖它——主动校验比被动拦截更可靠
 
 ## 回复格式
 - 每一步简要说明你在做什么

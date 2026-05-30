@@ -4,7 +4,7 @@
 > 覆盖市面上所有主流 AI 模型提供商。
 > 每日自动检查更新。
 >
-> 最后更新: 2026-05-29
+> 最后更新: 2026-05-30
 
 ## DeepSeek
 - display_name: DeepSeek
@@ -160,6 +160,33 @@
 - vision: true
 - function_calling: true
 
+### o1-pro
+- display_name: o1 Pro
+- temperature: 1.0
+- max_tokens: 100000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5-nano
+- display_name: GPT-5 Nano
+- temperature: 0.7
+- max_tokens: 16384
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5-codex
+- display_name: GPT-5 Codex
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Anthropic
 - display_name: Anthropic
 - base_url: https://api.anthropic.com
@@ -185,6 +212,15 @@
 
 ### claude-opus-4
 - display_name: Claude Opus 4
+- temperature: 0.7
+- max_tokens: 32000
+- context_length: 200000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### claude-opus-4.1
+- display_name: Claude Opus 4.1
 - temperature: 0.7
 - max_tokens: 32000
 - context_length: 200000
@@ -346,6 +382,24 @@
 - vision: true
 - function_calling: true
 
+### grok-4.3
+- display_name: Grok 4.3
+- temperature: 0.7
+- max_tokens: 1048576
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### grok-build-0.1
+- display_name: Grok Build 0.1 (代码)
+- temperature: 0.7
+- max_tokens: 131072
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
 ## Mistral
 - display_name: Mistral AI
 - base_url: https://api.mistral.ai
@@ -385,6 +439,24 @@
 - context_length: 131072
 - repeat_penalty: 1.05
 - vision: true
+- function_calling: true
+
+### mistral-large-2512
+- display_name: Mistral Large 2512
+- temperature: 0.7
+- max_tokens: 131072
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### mistral-medium-3.5
+- display_name: Mistral Medium 3.5
+- temperature: 0.7
+- max_tokens: 32768
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: false
 - function_calling: true
 
 ## Alibaba
@@ -469,6 +541,24 @@
 - temperature: 0.7
 - max_tokens: 65536
 - context_length: 262144
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### qwen3.6-flash
+- display_name: Qwen3.6 Flash
+- temperature: 0.7
+- max_tokens: 65536
+- context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### qwen3.7-max
+- display_name: Qwen3.7 Max
+- temperature: 0.7
+- max_tokens: 66536
+- context_length: 131072
 - repeat_penalty: 1.05
 - vision: true
 - function_calling: true
