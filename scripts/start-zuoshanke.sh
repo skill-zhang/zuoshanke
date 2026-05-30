@@ -130,12 +130,9 @@ start_backend() {
     fi
 
     # ── 确保依赖已安装（幂等，已装则秒过） ──
-    "$VENV_PATH/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt" 2>/dev/null || {
-        log_warn "安装 Python 依赖..."
-        "$VENV_PATH/bin/pip" install --upgrade pip -q
-        "$VENV_PATH/bin/pip" install -r "$BACKEND_DIR/requirements.txt" -q
-        log_ok "依赖安装完成"
-    }
+    log_info "检查 Python 依赖..."
+    "$VENV_PATH/bin/pip" install -r "$BACKEND_DIR/requirements.txt" -q 2>&1 | tail -3
+    log_ok "依赖检查完成"
 
     cd "$BACKEND_DIR"
     nohup "$VENV_PATH/bin/python" main.py > "$BACKEND_LOG" 2>&1 &
