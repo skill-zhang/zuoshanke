@@ -3,12 +3,14 @@ import { useStore, entityKey } from '../stores/appStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import type { Message, ToolCard, ToolLog, Scene, Attachment } from '../api/client';
-import { getActionMap, updateScene, uploadFile, listSceneMessages, batchDeleteMessages } from '../api/client';
-import AgentLoopDashboard from './AgentLoopDashboard';  // 🆕 Schema v0.7
-import { showConfirm, showAlert } from '../stores/dialogStore';
+import type { Message, ToolCard, ToolLog } from '../api/client';
+import { getActionMap, updateScene, listSceneMessages, batchDeleteMessages } from '../api/client';
+import AgentLoopDashboard from './AgentLoopDashboard'; // 🆕 Schema v0.7
+import { showConfirm } from '../stores/dialogStore';
 import { DelegationMonitor } from './DelegationMonitor';
-import { FloatingTraceButton, AgentTracePanel } from './AgentTracePanel';  // 🆕 Schema v1.6
+import { FloatingTraceButton, AgentTracePanel } from './AgentTracePanel'; // 🆕 Schema v1.6
+import { ChatInputArea } from './ChatInputArea';
+import { List } from 'react-window';
 
 // ══════════════════════════════════════════════════
 //  工具卡片组件
@@ -24,23 +26,29 @@ function WeatherCard({ data }: { data: Record<string, any> }) {
   const weekday = weekDays[now.getDay()];
 
   // hourly 柱状图计算
-  let minT = 0, maxT = 40;
+  let minT = 0,
+    maxT = 40;
   if (hourly && hourly.length > 0) {
     const temps = hourly.map((h: any) => parseFloat(h.temp_c)).filter((t: number) => !isNaN(t));
     if (temps.length > 0) {
       minT = Math.min(...temps);
       maxT = Math.max(...temps);
       // 留点余量，让柱子有差异感
-      if (maxT - minT < 5) { const mid = (maxT + minT) / 2; minT = mid - 5; maxT = mid + 5; }
+      if (maxT - minT < 5) {
+        const mid = (maxT + minT) / 2;
+        minT = mid - 5;
+        maxT = mid + 5;
+      }
     }
   }
-  const barMin = 36, barMax = 100;
+  const barMin = 36,
+    barMax = 100;
 
   const getTempColor = (t: number) => {
-    if (t >= 30) return '#ff8c00';      // 🔥 炎热 → 橙色
-    if (t >= 20) return '#ffd93d';      // ☀️ 温暖 → 浅黄
-    if (t >= 10) return '#fdf0cc';      // 🌿 清凉 → 米白偏黄
-    return '#b8d4f0';                   // ❄️ 冰 → 浅蓝偏白
+    if (t >= 30) return '#ff8c00'; // 🔥 炎热 → 橙色
+    if (t >= 20) return '#ffd93d'; // ☀️ 温暖 → 浅黄
+    if (t >= 10) return '#fdf0cc'; // 🌿 清凉 → 米白偏黄
+    return '#b8d4f0'; // ❄️ 冰 → 浅蓝偏白
   };
 
   const descToIcon = (d: string) => {
@@ -59,7 +67,9 @@ function WeatherCard({ data }: { data: Record<string, any> }) {
             <span className="tool-card-icon">🌤</span>
             <span className="tool-card-title">天气 · {city || '未知城市'}</span>
           </div>
-          <div className="weather-date">{dateLabel} 周{weekday}</div>
+          <div className="weather-date">
+            {dateLabel} 周{weekday}
+          </div>
           <div className="weather-main">
             <span className="weather-temp">{temp || 'N/A'}</span>
             <span className="weather-desc">{desc || ''}</span>
@@ -74,7 +84,9 @@ function WeatherCard({ data }: { data: Record<string, any> }) {
             <div className="hourly-chart">
               {hourly.map((h: any, i: number) => {
                 const t = parseFloat(h.temp_c);
-                const hVal = isNaN(t) ? 50 : barMin + ((t - minT) / (maxT - minT || 1)) * (barMax - barMin);
+                const hVal = isNaN(t)
+                  ? 50
+                  : barMin + ((t - minT) / (maxT - minT || 1)) * (barMax - barMin);
                 return (
                   <div key={i} className="hourly-bar-col">
                     <span className="hb-icon">{descToIcon(h.desc)}</span>
@@ -159,12 +171,12 @@ function EquipmentCard({ data }: { data: Record<string, any> }) {
         </span>
       </div>
       <div className="tool-card-subtitle">
-        共 {data.total || 0} 项 · 
-        <span style={{ color: '#f85149' }}>必带 {data.must_have || 0}</span> · 
-        <span style={{ color: '#d29922' }}>推荐 {data.recommended || 0}</span> · 
+        共 {data.total || 0} 项 ·
+        <span style={{ color: '#f85149' }}>必带 {data.must_have || 0}</span> ·
+        <span style={{ color: '#d29922' }}>推荐 {data.recommended || 0}</span> ·
         <span style={{ color: '#8b949e' }}>可选 {data.optional || 0}</span>
       </div>
-      {necessityOrder.map(key => {
+      {necessityOrder.map((key) => {
         const group = grouped[key];
         if (!group || group.length === 0) return null;
         return (
@@ -200,7 +212,6 @@ function ToolCardsRenderer({ cards }: { cards: ToolCard[] }) {
   );
 }
 
-
 // ══════════════════════════════════════════════════
 //  工具执行记录条（纯前端，不存库）
 // ══════════════════════════════════════════════════
@@ -208,17 +219,30 @@ function ToolCardsRenderer({ cards }: { cards: ToolCard[] }) {
 function ToolLogBar({ logs }: { logs: ToolLog[] }) {
   if (!logs || logs.length === 0) return null;
   const last = logs[logs.length - 1];
-  const icon = last.status === 'running'
-    ? (last.tool === '_analysis' ? '🤔' : '⏳')
-    : last.status === 'error' ? '❌' : (last.success ? '✅' : '⚠️');
+  const icon =
+    last.status === 'running'
+      ? last.tool === '_analysis'
+        ? '🤔'
+        : '⏳'
+      : last.status === 'error'
+        ? '❌'
+        : last.success
+          ? '✅'
+          : '⚠️';
   return (
     <div className="tool-log-bar">
       {logs.map((log, i) => (
         <div key={i} className={`tool-log-item tool-log-${log.status}`}>
           <span className="tool-log-icon">
             {log.status === 'running'
-              ? (log.tool === '_analysis' ? '🤔' : '⏳')
-              : log.status === 'error' ? '❌' : (log.success ? '✅' : '⚠️')}
+              ? log.tool === '_analysis'
+                ? '🤔'
+                : '⏳'
+              : log.status === 'error'
+                ? '❌'
+                : log.success
+                  ? '✅'
+                  : '⚠️'}
           </span>
           <span className="tool-log-label">{log.tool === '_analysis' ? '' : `[${log.tool}] `}</span>
           <span className="tool-log-msg">{log.message}</span>
@@ -228,12 +252,21 @@ function ToolLogBar({ logs }: { logs: ToolLog[] }) {
   );
 }
 
-
 // ══════════════════════════════════════════════════
 //  消息气泡
 // ══════════════════════════════════════════════════
 
-function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpenActionMap, selectMode, selected, onToggleSelect }: {
+function MessageBubble({
+  msg,
+  toolCards,
+  toolLogs,
+  onDelete,
+  onRegenerate,
+  onOpenActionMap,
+  selectMode,
+  selected,
+  onToggleSelect,
+}: {
   msg: Message;
   toolCards?: ToolCard[];
   toolLogs?: ToolLog[];
@@ -256,9 +289,7 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
     <div className={`chat-msg ${msg.role} ${selected ? 'chat-msg-selected' : ''}`}>
       {selectMode && (
         <div className="chat-msg-check" onClick={() => onToggleSelect(msg.id)}>
-          <div className={`check-box ${selected ? 'check-box-on' : ''}`}>
-            {selected ? '✓' : ''}
-          </div>
+          <div className={`check-box ${selected ? 'check-box-on' : ''}`}>{selected ? '✓' : ''}</div>
         </div>
       )}
       <div className="chat-msg-content">
@@ -275,26 +306,34 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
           <div className="asset-card">
             <div className="asset-card-header">
               <span className="asset-card-icon">
-                {msg.asset.type === 'checklist' ? '📋' : msg.asset.type === 'guide' ? '📖' : msg.asset.type === 'table' ? '📊' : '📄'}
+                {msg.asset.type === 'checklist'
+                  ? '📋'
+                  : msg.asset.type === 'guide'
+                    ? '📖'
+                    : msg.asset.type === 'table'
+                      ? '📊'
+                      : '📄'}
               </span>
               <span className="asset-card-title">{msg.asset.title}</span>
             </div>
             <div className="asset-card-body">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-              >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {msg.asset.content}
               </ReactMarkdown>
             </div>
             <div className="asset-card-footer">
-              <button className="asset-download-btn" onClick={() => {
-                const blob = new Blob([msg.asset!.content], { type: 'text/markdown' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = `${msg.asset!.title}.md`;
-                a.click(); URL.revokeObjectURL(url);
-              }}>
+              <button
+                className="asset-download-btn"
+                onClick={() => {
+                  const blob = new Blob([msg.asset!.content], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${msg.asset!.title}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
                 📥 下载 Markdown
               </button>
             </div>
@@ -307,9 +346,12 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
               <span className="output-ref-icon">📄</span>
               <span className="output-ref-title">{msg.outputRef.title}</span>
             </div>
-            <button className="output-ref-open-btn" onClick={() => {
-              window.open(`http://localhost:9001/outputs/${msg.outputRef!.filePath}`, '_blank');
-            }}>
+            <button
+              className="output-ref-open-btn"
+              onClick={() => {
+                window.open(`http://localhost:9001/outputs/${msg.outputRef!.filePath}`, '_blank');
+              }}
+            >
               ↗ 打开
             </button>
           </div>
@@ -354,7 +396,10 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
                     <span className="msg-file-icon">📄</span>
                     <span className="msg-file-name">{att.filename}</span>
                   </div>
-                  <button className="msg-file-open-btn" onClick={() => window.open(fileUrl, '_blank')}>
+                  <button
+                    className="msg-file-open-btn"
+                    onClick={() => window.open(fileUrl, '_blank')}
+                  >
                     ↗ 打开
                   </button>
                 </div>
@@ -367,8 +412,12 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
             <button
               className="msg-action-btn"
               style={{
-                background: 'rgba(63,185,80,0.1)', borderColor: '#3fb950', color: '#3fb950',
-                fontSize: '12px', padding: '4px 12px', borderRadius: '4px',
+                background: 'rgba(63,185,80,0.1)',
+                borderColor: '#3fb950',
+                color: '#3fb950',
+                fontSize: '12px',
+                padding: '4px 12px',
+                borderRadius: '4px',
               }}
               onClick={() => onOpenActionMap(msg.map_ref!)}
             >
@@ -377,15 +426,29 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
           </div>
         )}
         {msg.role === 'ai' && msg.model && (
-          <div style={{
-            marginTop: '8px', fontSize: '11px', color: '#8b949e',
-            display: 'flex', alignItems: 'center', gap: '4px',
-            borderTop: '1px solid rgba(139,148,158,0.15)', paddingTop: '6px',
-          }}>
-            <span style={{
-              background: 'rgba(88,166,255,0.1)', color: '#58a6ff',
-              padding: '1px 6px', borderRadius: '3px', fontSize: '10px',
-            }}>⚙ {msg.model}</span>
+          <div
+            style={{
+              marginTop: '8px',
+              fontSize: '11px',
+              color: '#8b949e',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderTop: '1px solid rgba(139,148,158,0.15)',
+              paddingTop: '6px',
+            }}
+          >
+            <span
+              style={{
+                background: 'rgba(88,166,255,0.1)',
+                color: '#58a6ff',
+                padding: '1px 6px',
+                borderRadius: '3px',
+                fontSize: '10px',
+              }}
+            >
+              ⚙ {msg.model}
+            </span>
           </div>
         )}
       </div>
@@ -402,15 +465,26 @@ function MessageBubble({ msg, toolCards, toolLogs, onDelete, onRegenerate, onOpe
             📤 分享
           </button>
           {msg.role === 'ai' && (
-            <button className="msg-action-btn" onClick={() => onRegenerate(msg.id)} title="重新生成">
+            <button
+              className="msg-action-btn"
+              onClick={() => onRegenerate(msg.id)}
+              title="重新生成"
+            >
               🔄 重新生成
             </button>
           )}
-          <button className="msg-action-btn msg-action-delete" onClick={() => onDelete(msg.id)} title="删除">
+          <button
+            className="msg-action-btn msg-action-delete"
+            onClick={() => onDelete(msg.id)}
+            title="删除"
+          >
             🗑 删除
           </button>
           <span className="msg-time">
-            {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+            {new Date(msg.created_at).toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </span>
         </div>
       )}
@@ -424,7 +498,9 @@ function EmptyState({ isChannel }: { isChannel: boolean }) {
     <div className="chat-empty">
       <div className="chat-empty-icon">💬</div>
       <div className="chat-empty-text">
-        {isChannel ? '在闲聊频道随便聊聊，AI 是你的聊天伙伴' : '选择左侧场景开始讨论需求，AI 帮你构建 Thinking Map'}
+        {isChannel
+          ? '在闲聊频道随便聊聊，AI 是你的聊天伙伴'
+          : '选择左侧场景开始讨论需求，AI 帮你构建 Thinking Map'}
       </div>
       <div className="chat-empty-hint">
         {isChannel ? '按 Enter 发送，Shift+Enter 换行' : '说「梳理需求」让 AI 帮你分析'}
@@ -436,99 +512,56 @@ function EmptyState({ isChannel }: { isChannel: boolean }) {
 export function ChatView() {
   const {
     messagesByEntity,
-    currentScene, currentChannel,
-    sendSceneMsg, sendChannelMsg,
-    deleteMsg, regenerateMsg, newSceneSession,
-    batchDeleteMsgs, clearSceneMsgs, clearChannelHistory,
-    sessions, loadSceneSessions, loadSceneMessages, switchSceneSession,
+    currentScene,
+    currentChannel,
+    sendSceneMsg,
+    sendChannelMsg,
+    deleteMsg,
+    regenerateMsg,
+    newSceneSession,
+    batchDeleteMsgs,
+    clearSceneMsgs,
+    clearChannelHistory,
+    sessions,
+    loadSceneSessions,
+    loadSceneMessages,
+    switchSceneSession,
     currentSessionId,
-    loadOlderMessages, loadOlderChannelMessages,
+    loadOlderMessages,
+    loadOlderChannelMessages,
     isGenerating,
     generatingEntityId,
-    currentModelName,
-    contextUsage,
-    capacityWarning,
     currentToolCards,
     currentToolLogs,
     lastError,
-    userContext, saveUserContext,
-    compressChannel,
+    userContext,
+    saveUserContext,
   } = useStore();
 
   // 当前实体（场景/频道）是否在生成中 — 不影响其他实体的发送按钮
   const currentEntityId = currentScene?.id || currentChannel?.id;
   const entityGenerating = isGenerating && generatingEntityId === currentEntityId;
 
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  // 🆕 文件上传状态
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   // 用户输入背景设定
   const [ucExpanded, setUcExpanded] = useState(false);
   const [ucText, setUcText] = useState('');
   const [ucSaving, setUcSaving] = useState(false);
-  const [ucEditMode, setUcEditMode] = useState(false);  // 是否正在编辑
-  const [compressing, setCompressing] = useState(false);
+  const [ucEditMode, setUcEditMode] = useState(false); // 是否正在编辑
   const ucSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ucTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const inputAreaRef = useRef<HTMLDivElement>(null);
-
-  // 输入区折叠状态
-  const [inputCollapsed, setInputCollapsed] = useState(false);
 
   // ═══ 分页加载状态 ═══
   const [showBackToBottom, setShowBackToBottom] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageLenRef = useRef(0);
-  const wasAtBottomRef = useRef(true);       // 用户是否在底部（更新前快照）
+  const wasAtBottomRef = useRef(true); // 用户是否在底部（更新前快照）
   const initialScrollDoneRef = useRef(false); // 首次加载是否已完成滚底
-  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<any>(null);
+  const currentScrollOffsetRef = useRef(0);
 
   // ═══ 参数调测 ═══
   const [tempModalOpen, setTempModalOpen] = useState(false);
   const [tempValue, setTempValue] = useState(0.3);
-
-  // ═══ 输入框拖拽调整高度 ═══
-  const [inputHeight, setInputHeight] = useState(72);
-  const resizingInput = useRef(false);
-  const startResizeY = useRef(0);
-  const startResizeH = useRef(72);
-
-  const onInputResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizingInput.current = true;
-    startResizeY.current = e.clientY;
-    startResizeH.current = textareaRef.current?.offsetHeight || 72;
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-  }, []);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!resizingInput.current || !textareaRef.current) return;
-      const dy = e.clientY - startResizeY.current;
-      const newH = Math.max(72, Math.min(400, startResizeH.current + dy));
-      textareaRef.current.style.height = newH + 'px';
-      setInputHeight(newH);
-    };
-    const onUp = () => {
-      resizingInput.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, []);
 
   // 多选模式
   const [selectMode, setSelectMode] = useState(false);
@@ -564,14 +597,6 @@ export function ChatView() {
     : currentScene
       ? `🧠 ${currentScene.name} · AI 分析模式`
       : '';
-
-  // 根据当前上下文推算默认模型（显示在输入框下方）
-  const defaultModel = isChannel
-    ? 'Qwen3.5 本地'
-    : currentScene
-      ? ({ 'light': 'Qwen3.5 本地', 'medium': 'DeepSeek Flash', 'heavy': 'DeepSeek Pro' } as Record<string, string>)[currentScene.complexity || ''] || 'Qwen3.5 本地'
-      : null;
-  const displayModel = currentModelName || defaultModel;
 
   // 组件卸载时重置生成状态，防止 SSE 断连后 isGenerating 卡死
   useEffect(() => {
@@ -611,22 +636,33 @@ export function ChatView() {
   }, [currentScene?.id, currentSessionId]);
 
   // ═══ 自动滚动 — 初始化定位到底部，新消息来时仅在底部时自动滚动 ═══
-  const scrollToBottom = useCallback((smooth = true) => {
-    const container = messagesContainerRef.current;
-    if (container) {
-      requestAnimationFrame(() => {
-        container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
-      });
+  const ITEM_SIZE = 120;
+
+  const scrollToBottom = useCallback(
+    (smooth = true) => {
+      if (displayMessages.length > 0) {
+        const api = listRef.current;
+        api?.scrollToRow({
+          index: displayMessages.length - 1,
+          align: 'end',
+          behavior: smooth ? 'smooth' : 'instant',
+        });
+      }
       setShowBackToBottom(false);
       setUnreadCount(0);
-    }
-  }, []);
+    },
+    [displayMessages.length]
+  );
+
   const isAtBottom = useCallback(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return true;
-    const threshold = 120; // px from bottom
-    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
-  }, []);
+    const api = listRef.current;
+    if (!api) return true;
+    const el = api.element;
+    if (!el) return true;
+    const totalHeight = displayMessages.length * ITEM_SIZE;
+    const maxScroll = Math.max(0, totalHeight - el.clientHeight);
+    return el.scrollTop >= maxScroll - 120;
+  }, [displayMessages.length]);
 
   // ═══ 自动滚动 — 消息变化时如果处于底部则自动滚到最新 ═══
   const prevLenRef = useRef(0);
@@ -647,7 +683,7 @@ export function ChatView() {
     } else if (displayMessages.length > prevLenRef.current) {
       // 有新增消息且不在底部 → 显示浮标
       setShowBackToBottom(true);
-      setUnreadCount(prev => prev + 1);
+      setUnreadCount((prev) => prev + 1);
     }
     prevLenRef.current = displayMessages.length;
   }, [displayMessages, scrollToBottom]);
@@ -663,47 +699,52 @@ export function ChatView() {
   }, [entityGenerating, scrollToBottom]);
 
   // 滚动监听：检测是否滚动到顶部（加载更早）或到底部（隐藏浮标）
-  const handleScroll = useCallback(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
+  const handleScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const scrollTop = (e.target as HTMLDivElement).scrollTop;
+      currentScrollOffsetRef.current = scrollTop;
 
-    // 记录用户是否在底部（内容更新前快照）
-    wasAtBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+      // 记录用户是否在底部（内容更新前快照）
+      const totalHeight = displayMessages.length * ITEM_SIZE;
+      const listEl = listRef.current?.element;
+      const clientH = listEl?.clientHeight || 400;
+      const maxScroll = Math.max(0, totalHeight - clientH);
+      wasAtBottomRef.current = scrollTop >= maxScroll - 120;
 
-    // 向上滚到顶部 → 加载更早消息
-    if (container.scrollTop < 80) {
-      const entityId = currentScene?.id || currentChannel?.id;
-      if (!isLoading && hasOlder && entityId) {
-        // 记录当前高度，用于 prepend 后保持滚动位置
-        const oldScrollHeight = container.scrollHeight;
-        const loadFn = isChannel ? loadOlderChannelMessages : loadOlderMessages;
-        loadFn(entityId).then(() => {
-          // prepend 后恢复滚动位置：新内容在顶部撑开
-          const newScrollHeight = container.scrollHeight;
-          container.scrollTop = newScrollHeight - oldScrollHeight;
-        });
+      // 向上滚到顶部 → 加载更早消息
+      if (scrollTop < 80) {
+        const entityId = currentScene?.id || currentChannel?.id;
+        if (!isLoading && hasOlder && entityId) {
+          const loadFn = isChannel ? loadOlderChannelMessages : loadOlderMessages;
+          const prevCount = displayMessages.length;
+          loadFn(entityId).then(() => {
+            // prepend 后恢复滚动位置
+            const added = displayMessages.length - prevCount;
+            if (added > 0) {
+              const targetRow = Math.floor((scrollTop + added * ITEM_SIZE) / ITEM_SIZE);
+              listRef.current?.scrollToRow({ index: targetRow, align: 'start' });
+            }
+          });
+        }
       }
-    }
 
-    // 检测是否在底部 → 隐藏浮标
-    if (isAtBottom()) {
-      setShowBackToBottom(false);
-      setUnreadCount(0);
-    }
-  }, [isLoading, hasOlder, currentScene, currentChannel, loadOlderChannelMessages, loadOlderMessages, isAtBottom]);
-
-  // 自动调整 textarea 高度（仅当内容超出现有高度时，不覆盖手动拖拽）
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta || resizingInput.current) return;
-    const curH = ta.offsetHeight;
-    ta.style.height = '0px';
-    const scrollH = ta.scrollHeight;
-    ta.style.height = curH + 'px';
-    if (scrollH > curH + 4) {
-      ta.style.height = Math.min(scrollH, 400) + 'px';
-    }
-  }, [input]);
+      // 检测是否在底部 → 隐藏浮标
+      if (isAtBottom()) {
+        setShowBackToBottom(false);
+        setUnreadCount(0);
+      }
+    },
+    [
+      isLoading,
+      hasOlder,
+      currentScene,
+      currentChannel,
+      loadOlderChannelMessages,
+      loadOlderMessages,
+      isAtBottom,
+      displayMessages.length,
+    ]
+  );
 
   // ═══ 用户背景设定：同步 store → local ═══
   useEffect(() => {
@@ -718,22 +759,28 @@ export function ChatView() {
   }, []);
 
   // ═══ 用户背景设定：失焦自动保存 ═══
-  const ucDoSave = useCallback(async (text: string) => {
-    if (!currentScene) return;
-    setUcSaving(true);
-    await saveUserContext(currentScene.id, text);
-    setUcSaving(false);
-  }, [currentScene, saveUserContext]);
+  const ucDoSave = useCallback(
+    async (text: string) => {
+      if (!currentScene) return;
+      setUcSaving(true);
+      await saveUserContext(currentScene.id, text);
+      setUcSaving(false);
+    },
+    [currentScene, saveUserContext]
+  );
 
-  const handleUcChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setUcText(val);
-    // 防抖自动保存：1.5s 无输入后触发
-    if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
-    ucSaveTimer.current = setTimeout(() => {
-      ucDoSave(val);
-    }, 1500);
-  }, [ucDoSave]);
+  const handleUcChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const val = e.target.value;
+      setUcText(val);
+      // 防抖自动保存：1.5s 无输入后触发
+      if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
+      ucSaveTimer.current = setTimeout(() => {
+        ucDoSave(val);
+      }, 1500);
+    },
+    [ucDoSave]
+  );
 
   const handleUcBlur = useCallback(() => {
     if (ucSaveTimer.current) clearTimeout(ucSaveTimer.current);
@@ -763,145 +810,19 @@ export function ChatView() {
     }
   }, [ucText]);
 
-  // 🆕 文件上传处理器
-  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    try {
-      for (const f of Array.from(files)) {
-        const result = await uploadFile(f);
-        setAttachments(prev => [...prev, {
-          url: result.url,
-          file_type: result.file_type as 'image' | 'doc',
-          filename: result.filename,
-          size: result.size,
-        }]);
-      }
-    } catch (err: any) {
-      console.error('[upload] 图片上传失败:', err);
-      await showAlert(err.message || '图片上传失败');
-    } finally {
-      setUploading(false);
-      if (imageInputRef.current) imageInputRef.current.value = '';
-    }
-  }, []);
-
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    try {
-      for (const f of Array.from(files)) {
-        const result = await uploadFile(f);
-        setAttachments(prev => [...prev, {
-          url: result.url,
-          file_type: result.file_type as 'image' | 'doc',
-          filename: result.filename,
-          size: result.size,
-        }]);
-      }
-    } catch (err: any) {
-      console.error('[upload] 文件上传失败:', err);
-      await showAlert(err.message || '文件上传失败');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  }, []);
-
-  const removeAttachment = useCallback((index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleAttachImage = useCallback(() => {
-    imageInputRef.current?.click();
-  }, []);
-
-  const handleAttachFile = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  // 生成附件预览 URL（用于缩略图渲染）
-  const getPreviewUrl = (att: Attachment): string => {
-    if (att.url.startsWith('/uploads/')) {
-      return `http://localhost:9001${att.url}`;
-    }
-    return att.url;
-  };
-
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  };
-
-  // ═══ 上下文压缩 ═══
-  const handleCompress = useCallback(async () => {
-    if (!currentChannel || compressing) return;
-    setCompressing(true);
-    try {
-      const summary = await compressChannel(currentChannel.id);
-      if (summary) {
-        console.log('[compress] 压缩完成:', summary.slice(0, 100));
-      } else {
-        console.warn('[compress] 压缩失败');
-      }
-    } catch (e) {
-      console.error('[compress] error:', e);
-    } finally {
-      setCompressing(false);
-    }
-  }, [currentChannel, compressing, compressChannel]);
-
-  const handleSend = useCallback(async () => {
-    const text = input.trim();
-    if ((!text && attachments.length === 0) || sending || entityGenerating) return;
-    const currentAttachments = [...attachments];
-    setInput('');
-    setAttachments([]);
-    setSending(true);
-    useStore.setState({ lastError: null });
-
-    try {
-      if (isChannel && currentChannel) {
-        sendChannelMsg(currentChannel.id, text, currentAttachments.length > 0 ? currentAttachments : undefined);
-        setSending(false);
-        return;
-      } else if (currentScene) {
-        sendSceneMsg(currentScene.id, text, currentAttachments.length > 0 ? currentAttachments : undefined);
-        setSending(false);
-        return;
-      }
-    } catch (e) {
-      console.error('发送失败', e);
-    } finally {
-      setSending(false);
-    }
-  }, [input, sending, entityGenerating, isChannel, currentChannel, currentScene,
-      sendChannelMsg, sendSceneMsg, attachments]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   const handleDelete = async (msgId: string) => {
-    if (!await showConfirm('确定删除这条消息？')) return;
+    if (!(await showConfirm('确定删除这条消息？'))) return;
     await deleteMsg(msgId);
   };
 
   const handleNewSession = async () => {
     if (isChannel && currentChannel) {
-      if (!await showConfirm('开始新对话？当前聊天记录将清空。')) return;
+      if (!(await showConfirm('开始新对话？当前聊天记录将清空。'))) return;
       await clearChannelHistory(currentChannel.id);
       return;
     }
     if (!currentScene) return;
-    if (!await showConfirm('开始新对话？之前的聊天记录将保留但不再显示。')) return;
+    if (!(await showConfirm('开始新对话？之前的聊天记录将保留但不再显示。'))) return;
     setShowSessionPanel(false);
     await newSceneSession(currentScene.id);
   };
@@ -926,7 +847,7 @@ export function ChatView() {
 
   // 多选操作
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -946,7 +867,7 @@ export function ChatView() {
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!await showConfirm(`确定删除选中的 ${selectedIds.size} 条消息？`)) return;
+    if (!(await showConfirm(`确定删除选中的 ${selectedIds.size} 条消息？`))) return;
     await batchDeleteMsgs(Array.from(selectedIds));
     exitSelectMode();
   };
@@ -958,7 +879,8 @@ export function ChatView() {
         return;
       }
       if (clearStep === 1) {
-        if (!await showConfirm('⚠️ 此操作将永久删除该频道的所有聊天记录，不可恢复。确定继续？')) return;
+        if (!(await showConfirm('⚠️ 此操作将永久删除该频道的所有聊天记录，不可恢复。确定继续？')))
+          return;
         setClearStep(0);
         await clearChannelHistory(currentChannel.id);
       }
@@ -970,7 +892,8 @@ export function ChatView() {
       return;
     }
     if (clearStep === 1) {
-      if (!await showConfirm('⚠️ 此操作将永久删除场景的所有聊天记录，不可恢复。确定继续？')) return;
+      if (!(await showConfirm('⚠️ 此操作将永久删除场景的所有聊天记录，不可恢复。确定继续？')))
+        return;
       setClearStep(0);
       await clearSceneMsgs(currentScene.id);
     }
@@ -1000,7 +923,7 @@ export function ChatView() {
     try {
       const oldestId = historyMessages[0].id;
       const result = await listSceneMessages(currentScene.id, undefined, 100, oldestId);
-      setHistoryMessages(prev => [...result.messages, ...prev]);
+      setHistoryMessages((prev) => [...result.messages, ...prev]);
       setHistoryHasMore(result.has_more);
     } catch (e) {
       console.error('加载更多历史失败:', e);
@@ -1011,14 +934,15 @@ export function ChatView() {
 
   // 🆕 搜索过滤
   const filteredHistory = historySearch.trim()
-    ? historyMessages.filter(m => m.content.toLowerCase().includes(historySearch.toLowerCase()))
+    ? historyMessages.filter((m) => m.content.toLowerCase().includes(historySearch.toLowerCase()))
     : historyMessages;
 
   // 🆕 勾选/取消
   const toggleHistorySelect = (id: string) => {
-    setHistorySelectedIds(prev => {
+    setHistorySelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -1028,14 +952,14 @@ export function ChatView() {
     if (historySelectedIds.size === filteredHistory.length) {
       setHistorySelectedIds(new Set());
     } else {
-      setHistorySelectedIds(new Set(filteredHistory.map(m => m.id)));
+      setHistorySelectedIds(new Set(filteredHistory.map((m) => m.id)));
     }
   };
 
   // 🆕 批量删除
   const handleHistoryBatchDelete = async () => {
     if (historySelectedIds.size === 0) return;
-    if (!await showConfirm(`确定删除选中的 ${historySelectedIds.size} 条消息？`)) return;
+    if (!(await showConfirm(`确定删除选中的 ${historySelectedIds.size} 条消息？`))) return;
     try {
       await batchDeleteMessages(Array.from(historySelectedIds));
       if (currentScene) loadHistoryMessages(currentScene.id);
@@ -1048,6 +972,38 @@ export function ChatView() {
     setShowSessionPanel(false);
     switchSceneSession(sessionId);
   };
+
+  // ═══ 虚拟列表行渲染器 ═══
+  const MessageRow = useCallback(
+    ({ index, style, data }: { index: number; style: React.CSSProperties; data: any }) => {
+      const msg = data?.messages?.[index];
+      if (!msg) return null;
+      if (msg.role === 'thought') {
+        return (
+          <div key={msg.id} style={{ ...style, overflow: 'visible' }} className="msg-thought">
+            💭 {msg.content}
+          </div>
+        );
+      }
+      const isLastAI = msg.role === 'ai' && index === data.messages.length - 1;
+      return (
+        <div key={msg.id} style={{ ...style, overflow: 'visible' }}>
+          <MessageBubble
+            msg={msg}
+            toolCards={isLastAI ? msg.toolCards || data.currentToolCards : undefined}
+            toolLogs={msg.id.startsWith('temp-ai-') ? data.currentToolLogs : undefined}
+            onDelete={data.handleDelete}
+            onRegenerate={data.handleRegenerate}
+            onOpenActionMap={data.handleOpenActionMap}
+            selectMode={data.selectMode}
+            selected={data.selectedIds?.has(msg.id)}
+            onToggleSelect={data.toggleSelect}
+          />
+        </div>
+      );
+    },
+    []
+  );
 
   return (
     <div className="chat-overlay">
@@ -1066,22 +1022,39 @@ export function ChatView() {
                     setTempModalOpen(true);
                   }}
                   title="参数调测"
-                >⚙️ 参数</span>
+                >
+                  ⚙️ 参数
+                </span>
               )}
             </span>
             <div className="chat-label-actions">
               <>
                 {!isChannel && currentScene && (
-                  <button className="new-session-btn" onClick={() => { setShowSessionPanel(!showSessionPanel); if (!showSessionPanel) loadHistoryMessages(currentScene.id); }} title="查看历史记录">
+                  <button
+                    className="new-session-btn"
+                    onClick={() => {
+                      setShowSessionPanel(!showSessionPanel);
+                      if (!showSessionPanel) loadHistoryMessages(currentScene.id);
+                    }}
+                    title="查看历史记录"
+                  >
                     📋 记录
                   </button>
                 )}
                 {(currentScene || currentChannel) && (
                   <>
-                    <button className="new-session-btn" onClick={handleNewSession} title="开始新对话">
+                    <button
+                      className="new-session-btn"
+                      onClick={handleNewSession}
+                      title="开始新对话"
+                    >
                       🆕 新会话
                     </button>
-                    <button className="new-session-btn" onClick={selectMode ? exitSelectMode : enterSelectMode} title={selectMode ? '退出选择' : '选择多条消息'}>
+                    <button
+                      className="new-session-btn"
+                      onClick={selectMode ? exitSelectMode : enterSelectMode}
+                      title={selectMode ? '退出选择' : '选择多条消息'}
+                    >
                       {selectMode ? '✅ 完成' : '☑️ 管理'}
                     </button>
                     <button
@@ -1097,20 +1070,28 @@ export function ChatView() {
             </div>
           </div>
         )}
-
         {/* 🆕 历史记录浏览器 — 原会话切换面板改造 */}
         {showSessionPanel && currentScene && (
           <div className="session-panel" style={{ maxHeight: '360px' }}>
-            <div className="session-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div
+              className="session-panel-header"
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            >
               <span>聊天记录 · 共 {historyTotal} 条</span>
               <input
                 type="text"
                 placeholder="🔍 搜索消息..."
                 value={historySearch}
-                onChange={e => setHistorySearch(e.target.value)}
+                onChange={(e) => setHistorySearch(e.target.value)}
                 style={{
-                  background: '#161b22', border: '1px solid #30363d', borderRadius: 4,
-                  padding: '3px 10px', fontSize: 12, color: '#c9d1d9', width: 200, outline: 'none',
+                  background: '#161b22',
+                  border: '1px solid #30363d',
+                  borderRadius: 4,
+                  padding: '3px 10px',
+                  fontSize: 12,
+                  color: '#c9d1d9',
+                  width: 200,
+                  outline: 'none',
                 }}
               />
             </div>
@@ -1122,46 +1103,106 @@ export function ChatView() {
               ) : (
                 <>
                   {/* 全选 + 批量删除栏 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 16px 8px', borderBottom: '1px solid #21262d', marginBottom: 4 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '4px 16px 8px',
+                      borderBottom: '1px solid #21262d',
+                      marginBottom: 4,
+                    }}
+                  >
                     <span
                       onClick={toggleHistorySelectAll}
-                      style={{ cursor: 'pointer', fontSize: 12, color: historySelectedIds.size === filteredHistory.length ? '#58a6ff' : '#8b949e', userSelect: 'none' }}
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        color:
+                          historySelectedIds.size === filteredHistory.length
+                            ? '#58a6ff'
+                            : '#8b949e',
+                        userSelect: 'none',
+                      }}
                     >
-                      {historySelectedIds.size === filteredHistory.length ? '☑️ 取消全选' : '⬜ 全选'}
+                      {historySelectedIds.size === filteredHistory.length
+                        ? '☑️ 取消全选'
+                        : '⬜ 全选'}
                     </span>
                     <button
                       onClick={handleHistoryBatchDelete}
                       disabled={historySelectedIds.size === 0}
                       style={{
-                        background: 'rgba(248,81,73,0.1)', border: '1px solid #f85149', color: '#f85149',
-                        padding: '3px 12px', borderRadius: 4, cursor: historySelectedIds.size ? 'pointer' : 'not-allowed',
-                        fontSize: 11, opacity: historySelectedIds.size ? 1 : 0.4,
+                        background: 'rgba(248,81,73,0.1)',
+                        border: '1px solid #f85149',
+                        color: '#f85149',
+                        padding: '3px 12px',
+                        borderRadius: 4,
+                        cursor: historySelectedIds.size ? 'pointer' : 'not-allowed',
+                        fontSize: 11,
+                        opacity: historySelectedIds.size ? 1 : 0.4,
                       }}
                     >
                       🗑 删除选中 ({historySelectedIds.size})
                     </button>
                   </div>
                   {/* 消息列表 */}
-                  {filteredHistory.map(msg => (
+                  {filteredHistory.map((msg) => (
                     <div
                       key={msg.id}
                       className={`session-item ${historySelectedIds.has(msg.id) ? 'chat-msg-selected' : ''}`}
                       style={{ gap: 8, padding: '6px 16px' }}
                       onClick={() => toggleHistorySelect(msg.id)}
                     >
-                      <div className="check-box" style={{ flexShrink: 0 }} onClick={e => { e.stopPropagation(); toggleHistorySelect(msg.id); }}>
-                        {historySelectedIds.has(msg.id) && <span className="check-box-on" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#58a6ff', borderRadius: 2 }}>✓</span>}
+                      <div
+                        className="check-box"
+                        style={{ flexShrink: 0 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleHistorySelect(msg.id);
+                        }}
+                      >
+                        {historySelectedIds.has(msg.id) && (
+                          <span
+                            className="check-box-on"
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: '#58a6ff',
+                              borderRadius: 2,
+                            }}
+                          >
+                            ✓
+                          </span>
+                        )}
                       </div>
                       <span style={{ fontSize: 12, flexShrink: 0, width: 20, textAlign: 'center' }}>
                         {msg.role === 'user' ? '👤' : '🤖'}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {msg.content.slice(0, 100)}{msg.content.length > 100 ? '...' : ''}
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#c9d1d9',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {msg.content.slice(0, 100)}
+                          {msg.content.length > 100 ? '...' : ''}
                         </div>
                       </div>
                       <span style={{ fontSize: 10, color: '#484f58', flexShrink: 0 }}>
-                        {new Date(msg.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.created_at).toLocaleString('zh-CN', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </span>
                     </div>
                   ))}
@@ -1180,7 +1221,6 @@ export function ChatView() {
             </div>
           </div>
         )}
-
         {/* 多选操作栏 */}
         {selectMode && (
           <div className="select-mode-bar">
@@ -1192,67 +1232,73 @@ export function ChatView() {
             >
               🗑 删除选中 ({selectedIds.size})
             </button>
-            <button className="select-cancel-btn" onClick={exitSelectMode}>取消</button>
+            <button className="select-cancel-btn" onClick={exitSelectMode}>
+              取消
+            </button>
           </div>
         )}
-
         {/* 🆕 Schema v0.7: Agent Loop 仪表盘（仅场景模式） */}
-        {currentScene && !currentChannel && (
-          <AgentLoopDashboard />
-        )}
-
+        {currentScene && !currentChannel && <AgentLoopDashboard />}
         {/* 🆕 错误横幅 */}
         {lastError && (
           <div className="chat-error-banner">
             <span>❌ {lastError}</span>
-            <span className="chat-error-close" onClick={() => useStore.setState({ lastError: null })}>✕</span>
+            <span
+              className="chat-error-close"
+              onClick={() => useStore.setState({ lastError: null })}
+            >
+              ✕
+            </span>
           </div>
         )}
-
         {/* 消息列表 */}
         <div className="chat-messages-wrapper">
-          <div className="chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
-          {/* 加载更早消息指示器 */}
-          {isLoading && (
-            <div style={{ textAlign: 'center', padding: '12px 0', color: '#8b949e', fontSize: 13 }}>
+          {/* 加载更早消息指示器（位于列表上方） */}
+          {isLoading && displayMessages.length > 0 && (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '8px 0',
+                color: '#8b949e',
+                fontSize: 13,
+                flexShrink: 0,
+              }}
+            >
               ⏳ 加载更早消息...
             </div>
           )}
-          {displayMessages.length === 0 && <EmptyState isChannel={isChannel} />}
-          <DelegationMonitor />
-          {displayMessages.map((msg, idx) => (
-            msg.role === 'thought' ? (
-              <div key={msg.id} className="msg-thought">
-                💭 {msg.content}
-              </div>
-            ) : (
-            <MessageBubble
-              key={msg.id}
-              msg={msg}
-              // 流式生成中的最后一条 AI 消息显示当前工具卡片
-              toolCards={
-                msg.role === 'ai'
-                  && idx === displayMessages.length - 1
-                  ? (msg.toolCards || currentToolCards)
-                  : undefined
-              }
-              // 工具执行记录（仅临时消息）
-              toolLogs={
-                msg.id.startsWith('temp-ai-')
-                  ? currentToolLogs
-                  : undefined
-              }
-              onDelete={handleDelete}
-              onRegenerate={handleRegenerate}
-              onOpenActionMap={handleOpenActionMap}
-              selectMode={selectMode}
-              selected={selectedIds.has(msg.id)}
-              onToggleSelect={toggleSelect}
-            />
-            )
-          ))}
-          <div ref={bottomRef} />
-        </div>
+          {displayMessages.length === 0 ? (
+            <>
+              <EmptyState isChannel={isChannel} />
+              <DelegationMonitor />
+            </>
+          ) : (
+            <>
+              <DelegationMonitor />
+              <List
+                rowCount={displayMessages.length}
+                rowHeight={ITEM_SIZE}
+                listRef={listRef}
+                overscanCount={10}
+                defaultHeight={400}
+                onScroll={handleScroll}
+                rowComponent={MessageRow}
+                rowProps={
+                  {
+                    messages: displayMessages,
+                    currentToolCards,
+                    currentToolLogs,
+                    handleDelete,
+                    handleRegenerate,
+                    handleOpenActionMap,
+                    selectMode,
+                    selectedIds,
+                    toggleSelect,
+                  } as any
+                }
+              />
+            </>
+          )}
           {/* ═══ 回到最新消息浮标 ═══ */}
           {showBackToBottom && (
             <div className="back-to-bottom-btn" onClick={() => scrollToBottom(true)}>
@@ -1260,26 +1306,39 @@ export function ChatView() {
               {unreadCount > 0 && <span className="back-to-bottom-badge">{unreadCount}</span>}
             </div>
           )}
-        </div> {/* ═══ end chat-messages-wrapper ═══ */}
-
+        </div>{' '}
+        {/* ═══ end chat-messages-wrapper ═══ */}
         {/* ═══ 参数调测弹窗 ═══ */}
         {tempModalOpen && currentScene && (
           <div className="modal-overlay show" onClick={() => setTempModalOpen(false)}>
-            <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
               <div className="modal-title">
                 <span>⚙️ 参数调测 · {currentScene.name}</span>
-                <button className="modal-close" onClick={() => setTempModalOpen(false)}>✕</button>
+                <button className="modal-close" onClick={() => setTempModalOpen(false)}>
+                  ✕
+                </button>
               </div>
               <div className="form-group">
                 <label className="form-label">Temperature</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <input
-                    type="range" min="0.01" max="1" step="0.05"
+                    type="range"
+                    min="0.01"
+                    max="1"
+                    step="0.05"
                     value={tempValue}
-                    onChange={e => setTempValue(parseFloat(e.target.value))}
+                    onChange={(e) => setTempValue(parseFloat(e.target.value))}
                     style={{ flex: 1 }}
                   />
-                  <span style={{ minWidth: 36, textAlign: 'right', color: '#e6edf3', fontSize: 14, fontWeight: 600 }}>
+                  <span
+                    style={{
+                      minWidth: 36,
+                      textAlign: 'right',
+                      color: '#e6edf3',
+                      fontSize: 14,
+                      fontWeight: 600,
+                    }}
+                  >
                     {tempValue.toFixed(2)}
                   </span>
                 </div>
@@ -1291,31 +1350,53 @@ export function ChatView() {
                 </div>
               </div>
               <div className="modal-actions">
-                <button className="btn" onClick={() => {
-                  setTempValue((currentScene as any).scene_config?.temperature ?? 0.3);
-                  setTempModalOpen(false);
-                }}>取消</button>
-                <button className="btn btn-primary" onClick={async () => {
-                  const updated = await updateScene(currentScene.id, {
-                    scene_config: { ...((currentScene as any).scene_config || {}), temperature: tempValue },
-                  });
-                  useStore.setState({ currentScene: updated as any });
-                  // 刷新侧边栏场景列表，防止切回时读到旧缓存
-                  useStore.getState().loadWorkshopScenes();
-                  setTempModalOpen(false);
-                }}>应用</button>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setTempValue((currentScene as any).scene_config?.temperature ?? 0.3);
+                    setTempModalOpen(false);
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    const updated = await updateScene(currentScene.id, {
+                      scene_config: {
+                        ...((currentScene as any).scene_config || {}),
+                        temperature: tempValue,
+                      },
+                    });
+                    useStore.setState({ currentScene: updated as any });
+                    // 刷新侧边栏场景列表，防止切回时读到旧缓存
+                    useStore.getState().loadWorkshopScenes();
+                    setTempModalOpen(false);
+                  }}
+                >
+                  应用
+                </button>
               </div>
             </div>
           </div>
         )}
-
         {/* ═══ 用户输入背景设定 ═══ */}
         {!isChannel && currentScene && (
           <div className="user-context-panel">
-            <div className="user-context-header" onClick={() => { setUcExpanded(!ucExpanded); setUcEditMode(false); }}>
+            <div
+              className="user-context-header"
+              onClick={() => {
+                setUcExpanded(!ucExpanded);
+                setUcEditMode(false);
+              }}
+            >
               <span>📝 用户输入背景设定</span>
               <span className="user-context-header-right">
-                {ucText ? <span className="user-context-badge">已保存 {ucText.length} 字</span> : <span className="user-context-badge-empty">空</span>}
+                {ucText ? (
+                  <span className="user-context-badge">已保存 {ucText.length} 字</span>
+                ) : (
+                  <span className="user-context-badge-empty">空</span>
+                )}
                 <span className="user-context-chevron">{ucExpanded ? '▼' : '▶'}</span>
               </span>
             </div>
@@ -1336,9 +1417,17 @@ export function ChatView() {
                     <div className="user-context-toolbar">
                       <span className="user-context-count">字数: {ucText.length}/2000</span>
                       <div className="user-context-actions">
-                        <button className="uc-btn" onClick={handleUcDelete} title="清空内容">🗑 清空</button>
-                        <button className="uc-btn" onClick={() => setUcEditMode(false)}>取消</button>
-                        <button className="uc-btn uc-btn-primary" onClick={handleUcSave} disabled={ucSaving}>
+                        <button className="uc-btn" onClick={handleUcDelete} title="清空内容">
+                          🗑 清空
+                        </button>
+                        <button className="uc-btn" onClick={() => setUcEditMode(false)}>
+                          取消
+                        </button>
+                        <button
+                          className="uc-btn uc-btn-primary"
+                          onClick={handleUcSave}
+                          disabled={ucSaving}
+                        >
                           {ucSaving ? '⏳' : '💾'} 保存
                         </button>
                       </div>
@@ -1346,16 +1435,36 @@ export function ChatView() {
                   </>
                 ) : (
                   <div style={{ padding: '8px 12px' }}>
-                    <div style={{ background: '#0d1117', border: '1px solid #21262d', borderRadius: 6, padding: '8px 12px', minHeight: 40, maxHeight: 200, overflow: 'auto', fontSize: 13, lineHeight: 1.6, color: '#c9d1d9', marginBottom: 8 }}>
+                    <div
+                      style={{
+                        background: '#0d1117',
+                        border: '1px solid #21262d',
+                        borderRadius: 6,
+                        padding: '8px 12px',
+                        minHeight: 40,
+                        maxHeight: 200,
+                        overflow: 'auto',
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        color: '#c9d1d9',
+                        marginBottom: 8,
+                      }}
+                    >
                       {ucText ? (
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{ucText}</ReactMarkdown>
                       ) : (
-                        <span style={{ color: '#484f58', fontStyle: 'italic' }}>未设置背景设定</span>
+                        <span style={{ color: '#484f58', fontStyle: 'italic' }}>
+                          未设置背景设定
+                        </span>
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button className="uc-btn" onClick={() => setUcEditMode(true)}>✏️ 编辑</button>
-                      <button className="uc-btn" onClick={handleUcCopy} title="复制到剪贴板">📋 复制</button>
+                      <button className="uc-btn" onClick={() => setUcEditMode(true)}>
+                        ✏️ 编辑
+                      </button>
+                      <button className="uc-btn" onClick={handleUcCopy} title="复制到剪贴板">
+                        📋 复制
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1363,148 +1472,7 @@ export function ChatView() {
             )}
           </div>
         )}
-
-        {/* 输入区 */}
-        <div className="chat-input-area" ref={inputAreaRef}>
-
-          {/* ═══ 容量警告 ═══ */}
-          {capacityWarning && (
-            <div className="capacity-warning">
-              <span>⚠️ {capacityWarning.message}</span>
-              <button
-                className="capacity-warning-btn"
-                onClick={handleCompress}
-                disabled={compressing}
-                title="将历史对话压缩为摘要以释放上下文空间"
-              >
-                {compressing ? '⏳ 压缩中...' : '📝 压缩摘要'}
-              </button>
-            </div>
-          )}
-
-          <div className="chat-input-collapse-bar">
-            <div className="chat-input-collapse-bar-left" />
-            <div className="chat-input-collapse-bar-center" onClick={() => setInputCollapsed(!inputCollapsed)} title={inputCollapsed ? '展开输入区' : '收起输入区'}>
-              <span className={`chat-input-chevron ${inputCollapsed ? 'collapsed' : ''}`}>▼</span>
-            </div>
-            <div className="chat-input-collapse-bar-right">
-              <div className="chat-resize-handle" onMouseDown={onInputResizeStart} title="拖拽调整高度">
-                <span className="chat-resize-dots">⠿</span>
-              </div>
-            </div>
-          </div>
-          {!inputCollapsed && (
-            <>
-              <div className="chat-input-wrapper">
-                <textarea
-                  ref={textareaRef}
-                  className="chat-input"
-                  placeholder={
-                    isChannel
-                      ? '随便聊聊...'
-                      : '输入消息...（说「梳理需求」让 AI 帮你分析）'
-                  }
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={sending || entityGenerating}
-                  rows={2}
-                />
-                <div className="chat-input-toolbar">
-                  <div className="chat-toolbar-left">
-                    {/* 🆕 图片上传按钮 */}
-                    <button
-                      className="chat-toolbar-btn"
-                      onClick={handleAttachImage}
-                      disabled={uploading || sending || entityGenerating}
-                      title="上传图片"
-                    >
-                      {uploading ? '⏳' : '🖼'}
-                    </button>
-                    {/* 🆕 文件上传按钮 */}
-                    <button
-                      className="chat-toolbar-btn"
-                      onClick={handleAttachFile}
-                      disabled={uploading || sending || entityGenerating}
-                      title="上传文件"
-                    >
-                      {uploading ? '⏳' : '📎'}
-                    </button>
-                    {/* 隐藏的文件输入 */}
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      style={{ display: 'none' }}
-                      onChange={handleImageSelect}
-                    />
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.txt,.json,.csv,.doc,.docx,.xls,.xlsx,.md,.zip"
-                      multiple
-                      style={{ display: 'none' }}
-                      onChange={handleFileSelect}
-                    />
-                    {/* 🆕 附件预览条 */}
-                    {attachments.length > 0 && (
-                      <div className="chat-attachment-preview">
-                        {attachments.map((att, i) => (
-                          <div key={i} className="chat-attachment-item">
-                            {att.file_type === 'image' ? (
-                              <img
-                                src={getPreviewUrl(att)}
-                                alt={att.filename}
-                                className="chat-attachment-thumb"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              <span className="chat-attachment-icon">📄</span>
-                            )}
-                            <span className="chat-attachment-name">{att.filename}</span>
-                            <span className="chat-attachment-remove" onClick={() => removeAttachment(i)}>✕</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    className="chat-send-btn"
-                    onClick={handleSend}
-                    disabled={sending || entityGenerating || (!input.trim() && attachments.length === 0)}
-                  >
-                    {sending || entityGenerating ? '⏳' : '发送'}
-                  </button>
-                </div>
-              </div>
-              <div className="chat-input-hint">
-                  {contextUsage && (
-                    <span
-                      className="hint-token"
-                      title={`上下文用量: ${contextUsage.usageStr} · 历史${contextUsage.historyCount}条消息 · ${contextUsage.percentage}%`}
-                    >
-                      ⚡ Token使用量：{contextUsage.usageStr}
-                      <span className="hint-token-track">
-                        <span
-                          className={`hint-token-fill ${contextUsage.percentage >= 75 ? 'fill-danger' : contextUsage.percentage >= 50 ? 'fill-warn' : ''}`}
-                          style={{ width: `${Math.min(contextUsage.percentage, 100)}%` }}
-                        />
-                      </span>
-                    </span>
-                  )}
-                  {displayModel && (
-                    <span>
-                      <strong>当前模型:</strong> <strong><span className="chat-model-name">{displayModel}</span></strong>
-                    </span>
-                  )}
-                  <span className="hint-hotkeys">
-                    {(contextUsage || displayModel) ? ' · ' : ''}Enter 发送 · Shift+Enter 换行
-                  </span>
-              </div>
-            </>
-          )}
-        </div>
+        <ChatInputArea />
       </div>
       {/* 🆕 Schema v1.6: Agent Loop 追踪 */}
       <FloatingTraceButton />
