@@ -45,8 +45,14 @@ def _seed_default_widgets(db):
         return
 
     defaults = [
-        WidgetConfig(widget_type="hello", title="你好世界", config="{}", position=0, width=1, height=1),
-        WidgetConfig(widget_type="clock", title="数字时钟", config="{}", position=1, width=1, height=1),
+        WidgetConfig(widget_type="weather", title="天气预报", config="{}", position=0, width=1, height=1),
+        WidgetConfig(widget_type="todo", title="待办事项", config=json.dumps({"items": [{"id":"1","text":"试试添加任务","done":false}]}, ensure_ascii=False), position=1, width=1, height=1),
+        WidgetConfig(widget_type="news", title="资讯快报", config="{}", position=2, width=1, height=1),
+        WidgetConfig(widget_type="game", title="游戏", config="{}", position=3, width=1, height=1),
+        WidgetConfig(widget_type="analysis", title="数据分析", config="{}", position=4, width=1, height=1),
+        WidgetConfig(widget_type="git", title="代码提交", config="{}", position=5, width=1, height=1),
+        WidgetConfig(widget_type="stock", title="股票行情", config="{}", position=6, width=1, height=1),
+        WidgetConfig(widget_type="shopping", title="购物清单", config=json.dumps({"items":[]}, ensure_ascii=False), position=7, width=1, height=1),
     ]
 
     for w in defaults:

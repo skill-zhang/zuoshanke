@@ -10,10 +10,18 @@ from models import WidgetConfig
 
 router = APIRouter(prefix="/api/widgets", tags=["widgets"])
 
-# 内建 widget 类型列表
+# 内建 widget 类型列表（与前端 widgetRegistry 对齐）
 BUILTIN_WIDGET_TYPES = [
     {"type": "hello", "name": "你好世界", "icon": "👋"},
     {"type": "clock", "name": "数字时钟", "icon": "🕐"},
+    {"type": "weather", "name": "天气预报", "icon": "🌤️"},
+    {"type": "todo", "name": "待办事项", "icon": "✅"},
+    {"type": "news", "name": "资讯快报", "icon": "📰"},
+    {"type": "game", "name": "游戏", "icon": "🎮"},
+    {"type": "analysis", "name": "数据分析", "icon": "📊"},
+    {"type": "git", "name": "代码提交", "icon": "🔨"},
+    {"type": "stock", "name": "股票行情", "icon": "📈"},
+    {"type": "shopping", "name": "购物清单", "icon": "🛒"},
 ]
 
 
