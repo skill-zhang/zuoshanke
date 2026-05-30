@@ -35,6 +35,26 @@ def startup():
     _auto_migrate()
 
 
+def _seed_default_widgets(db):
+    """首次启动时写入默认组件（无迁移数据时）"""
+    import json
+    from models import WidgetConfig, LayoutConfig
+
+    count = db.query(WidgetConfig).count()
+    if count > 0:
+        return
+
+    defaults = [
+        WidgetConfig(widget_type="hello", title="你好世界", config="{}", position=0, width=1, height=1),
+        WidgetConfig(widget_type="clock", title="数字时钟", config="{}", position=1, width=1, height=1),
+    ]
+
+    for w in defaults:
+        db.add(w)
+    db.commit()
+    print(f"[工作台] 种子数据: {len(defaults)} 张默认卡片")
+
+
 def _auto_migrate():
     """主 DB → 工作台 DB 自动迁移（首次启动时）"""
     import json
@@ -98,8 +118,17 @@ def _auto_migrate():
         wb_db.commit()
         main_db.close()
         print(f"[工作台] 自动迁移: {count} 张卡片")
+
+        # 如果迁移结果为 0，写入默认组件
+        if count == 0:
+            _seed_default_widgets(wb_db)
     except Exception as e:
         print(f"[工作台] 迁移跳过: {e}")
+        # 即使迁移失败，也试一下种子数据
+        wb_db = WbSession()
+        existing = wb_db.query(WidgetConfig).count()
+        if existing == 0:
+            _seed_default_widgets(wb_db)
     finally:
         wb_db.close()
 
