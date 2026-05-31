@@ -17,6 +17,7 @@ import json
 import os
 import datetime
 from pathlib import Path
+from typing import Optional
 
 # ── 存储路径 ──
 PRECIPITATE_DIR = os.path.expanduser("~/.zuoshanke/precipitate")
@@ -95,7 +96,7 @@ def _load_today() -> list[dict]:
     return records
 
 
-def precipitate(content: str, tags: list[str] | None = None, source: str = "") -> str:
+def precipitate(content: str, tags: Optional[list[str]] = None, source: str = "") -> str:
     """沉淀知识——将内容持久化存储到本地笔记文件
 
     Args:

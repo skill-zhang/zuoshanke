@@ -13,9 +13,10 @@ import sys
 import json
 import unittest
 import fnmatch
+from typing import Optional
 
 
-def _discover_tests(pattern: str | None = None) -> unittest.TestSuite:
+def _discover_tests(pattern: Optional[str] = None) -> unittest.TestSuite:
     """发现测试用例
 
     Args:
@@ -93,7 +94,7 @@ class _TestResultCollector(unittest.TestResult):
         return "".join(traceback.format_exception(exc_type, exc_value, tb))
 
 
-def run_tests(pattern: str | None = None, filter: str | None = None) -> dict:
+def run_tests(pattern: Optional[str] = None, filter: Optional[str] = None) -> dict:
     """运行 backend/tests/ 下的测试
 
     Args:

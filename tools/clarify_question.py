@@ -10,6 +10,8 @@
 使用此工具生成友好追问，让 AI 回复告知用户缺什么信息。
 """
 
+from typing import Optional
+
 
 def clarify_check_params(params: dict, required: list[str]) -> list[str]:
     """检查必填参数，返回缺失字段列表
@@ -90,7 +92,7 @@ def clarify_ask(missing_fields: list[str], tool_name: str = "",
 
 
 def clarify_format_missing(params: dict, required: list[str],
-                           tool_name: str = "", param_labels: dict = None) -> str | None:
+                           tool_name: str = "", param_labels: dict = None) -> Optional[str]:
     """一站式检查+生成追问
 
     先检查必填参数是否缺失，如果有缺失直接生成追问文本。

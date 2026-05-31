@@ -16,6 +16,7 @@ import logging
 import urllib.request
 import urllib.error
 import urllib.parse
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,8 @@ def _get_ssrf_safe_opener():
 def http_request(
     url: str,
     method: str = "GET",
-    headers: dict | None = None,
-    body: str | None = None,
+    headers: Optional[dict] = None,
+    body: Optional[str] = None,
     timeout: int = 10,
 ) -> dict:
     """发送 HTTP 请求到任意 URL

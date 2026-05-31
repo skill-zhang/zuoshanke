@@ -22,6 +22,7 @@ import time
 import signal
 import re
 import shutil
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -141,7 +142,7 @@ def _build_cmd(code: str, language: str) -> list[str]:
 def _run_cmd(
     cmd: list[str],
     timeout: int,
-    cwd: str | None = None,
+    cwd: Optional[str] = None,
 ) -> dict:
     """
     底层子进程执行。

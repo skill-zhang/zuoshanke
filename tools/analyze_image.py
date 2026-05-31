@@ -11,6 +11,7 @@
 import base64
 import json
 import os
+from typing import Optional
 
 # ── 配置 ──
 # Qwen VLM 端点（如果本地 llama-server 加载了视觉模型）
@@ -21,7 +22,7 @@ VLM_MODEL = os.environ.get("VLM_MODEL", "")
 USE_LOCAL_VLM = os.environ.get("USE_LOCAL_VLM", "0") == "1"
 
 
-def _encode_image(file_path: str) -> str | None:
+def _encode_image(file_path: str) -> Optional[str]:
     """将图片文件编码为 base64"""
     try:
         with open(file_path, "rb") as f:

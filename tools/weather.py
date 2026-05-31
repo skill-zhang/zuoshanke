@@ -429,7 +429,7 @@ def is_weather_query(text: str) -> bool:
     return has_weather_kw and has_city
 
 
-def extract_city(text: str) -> str | None:
+def extract_city(text: str) -> Optional[str]:
     """从文本中提取城市名"""
     t = text.strip()
     # 先匹配英文城市
@@ -503,7 +503,7 @@ def _extract_forecast_days(text: str) -> int:
     return 0
 
 
-def maybe_weather_context(user_text: str) -> str | None:
+def maybe_weather_context(user_text: str) -> Optional[str]:
     """检测用户输入，如果是天气查询则返回天气数据上下文
 
     Args:

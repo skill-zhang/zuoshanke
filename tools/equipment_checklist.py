@@ -46,6 +46,8 @@ equipment_checklist.py
 #     "priority": int,      # 排序权重（越大越靠前）
 # }
 
+from typing import Optional
+
 EQUIPMENT_DB = {
     # ═══════════════════════════════════════
     #  晴朗 (sunny)
@@ -1783,8 +1785,8 @@ EQUIPMENT_DB = {
 
 def get_checklist(
     weather_category: str = "sunny",
-    scene_type: str | None = None,
-    temp: float | None = None,
+    scene_type: Optional[str] = None,
+    temp: Optional[float] = None,
 ) -> dict:
     """获取指定天气分类的装备建议清单。
 
@@ -1865,7 +1867,7 @@ def get_checklist(
     }
 
 
-def _temp_filter(item: dict, temp: float | None) -> bool:
+def _temp_filter(item: dict, temp: Optional[float]) -> bool:
     """根据温度范围过滤装备项"""
     tr = item.get("temp_range")
     if tr is None or temp is None:
@@ -1879,7 +1881,7 @@ def _temp_filter(item: dict, temp: float | None) -> bool:
 
 def format_checklist(
     result: dict,
-    title: str | None = None,
+    title: Optional[str] = None,
     compact: bool = False,
 ) -> str:
     """将装备清单格式化为终端友好的字符串输出。
