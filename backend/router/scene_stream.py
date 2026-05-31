@@ -729,6 +729,9 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                             category=high_risk.get("category", ""),
                             description=high_risk.get("description", ""),
                         )
+                    # 🆕 Delegate 工具出错 → 清端子任务面板（否则 panel 永远"执行中"）
+                    if event["tool"] == "delegate_task":
+                        yield sse_event("child:done", children=[])
                     yield sse_event("tool_status", tool=event["tool"], status="error",
                                     success=False, message=event.get("error", "执行失败"))
                     # 🆕 发射 agent_trace (v1.6)
