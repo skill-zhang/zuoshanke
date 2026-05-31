@@ -16,7 +16,7 @@ DELEGATE_SCHEMA = {
         "父 Agent 等待所有子任务完成后拿到结果摘要。\n\n"
         "**两种模式**：\n"
         "1. **单任务** — 提供 goal + context\n"
-        "2. **批量（并行）** — 提供 tasks 数组，最多 3 个同时执行\n\n"
+        "2. **批量（并行）** — 提供 tasks 数组，最多 10 个同时执行\n\n"
         "**何时用**：\n"
         "- 需要同时做多件事（如后端+前端并行开发）\n"
         "- 子任务逻辑独立，无需互相通信\n"
@@ -87,8 +87,8 @@ def delegate_task(
 
     if tasks:
         # 批量模式
-        if len(tasks) > 3:
-            tasks = tasks[:3]
+        if len(tasks) > 10:
+            tasks = tasks[:10]
         return run_delegate_tasks(tasks)
     else:
         # 单任务模式：透传契约字段

@@ -13,6 +13,7 @@ import json
 import logging
 import sys
 import os
+import threading
 
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -76,7 +77,15 @@ def _run_loop_blocking(
     tool_names = [t["function"]["name"] for t in tools]
     consecutive_tool_only = 0
 
+    # 🆕 子任务进度追踪：读取父 Agent 挂在本线程的 progress dict
+    _progress = getattr(threading.current_thread(), '_child_progress', None)
+    if _progress:
+        _progress["status"] = "running"
+
     for step in range(max_steps):
+        if _progress:
+            _progress["step"] = step + 1
+            _progress["tool"] = "llm_call"
         # 死循环检测
         if consecutive_tool_only >= 6 and consecutive_tool_only % 3 == 0:
             messages.append({
@@ -143,6 +152,8 @@ def _run_loop_blocking(
                     continue
 
                 # 执行工具
+                if _progress:
+                    _progress["tool"] = tool_name
                 set_tool_context(scene_id="")
                 try:
                     result = execute_tool(tool_name, args)
@@ -191,7 +202,7 @@ def _run_loop_blocking(
 # ── Delegate Engine ──
 
 
-_MAX_WORKERS = 3  # 最大并行子 Agent 数
+_MAX_WORKERS = 10  # 最大并行子 Agent 数（丰裕 CPU 核数以支持复杂项目）
 _CHILD_TIMEOUT = 600  # 每个子 Agent 超时秒数（含原型绘制等复杂任务）
 
 

@@ -840,9 +840,15 @@ def run_agent_loop(
                         # 🆕 耗时工具（delegate_task）在线程中执行，避免阻塞 SSE 流
                         if tool_name == "delegate_task":
                             from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
+                            import threading as _thr
+
+                            # 🆕 子任务进度追踪：子 Agent 每步更新，父心跳时展示
+                            _child_progress = {"step": 0, "tool": ""}
 
                             def _thread_execute():
                                 """在线程中执行工具（含 tool context 初始化，因 threading.local 不跨线程）"""
+                                # 把进度字典挂到当前线程，delegate_engine 通过 threading.current_thread() 访问
+                                _thr.current_thread()._child_progress = _child_progress
                                 set_tool_context(scene_id=scene_id)
                                 try:
                                     return execute_tool(tool_name, args, extra_kwargs=extra)
@@ -859,10 +865,17 @@ def run_agent_loop(
                                         break
                                     except _FutTimeout:
                                         _elapsed = int(time.time() - _start)
+                                        _prog = _child_progress
+                                        _prog_str = ""
+                                        if _prog["step"]:
+                                            _prog_str = f" (第{_prog['step']}步"
+                                            if _prog["tool"]:
+                                                _prog_str += f", {_prog['tool']}"
+                                            _prog_str += ")"
                                         yield {
                                             "type": "keepalive",
                                             "ts": time.time(),
-                                            "message": f"⏳ 子任务执行中...（已等待 {_elapsed}s）",
+                                            "message": f"⏳ 子任务执行中...（已等待 {_elapsed}s）{_prog_str}",
                                         }
                             finally:
                                 _pool.shutdown(wait=False, cancel_futures=True)
