@@ -9,7 +9,7 @@
 #   start-zuoshanke.sh status       # 查看运行状态
 #   start-zuoshanke.sh install-deps # 仅安装所有依赖
 
-set -euo pipefail
+set -eo pipefail
 
 ZUOSHANKE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ZUOSHANKE_DIR/backend"
