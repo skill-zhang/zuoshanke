@@ -60,7 +60,7 @@ def _is_binary_extension(path: str) -> bool:
 
 # ── read_file ─────────────────────────────────────────────────────────────────
 
-def read_file(path: str, offset: int = 1, limit: int = 500) -> dict:
+def read_file(path: str, offset: int = 1, limit: int = 2000) -> dict:
     """读取文件内容，带行号和分页。
 
     Args:
