@@ -624,6 +624,48 @@ def run_agent_loop(
                                    f"如果该工具无法提供所需信息，请换其他方式或直接给出结论。]"
                     })
 
+        # ═══ 滑动窗口：历史步骤压缩 ═══
+        # 保留最近 3 步的完整 assistant(tool_calls)+tool 数据，
+        # 更早的步骤压缩为摘要文本，防止 context 无限膨胀。
+        # 注意：messages 前部有 system + 多层 context（memory/config/history/当前用户消息），
+        # 不能硬编码 messages[2:] ——真正可压缩的部分从第一个 assistant(tc) 开始。
+        _HISTORY_WINDOW = 3
+        _asst_positions = [
+            i for i, m in enumerate(messages)
+            if m["role"] == "assistant" and m.get("tool_calls")
+        ]
+        if len(_asst_positions) > _HISTORY_WINDOW:
+            _first_asst = _asst_positions[0]   # 第一个 assistant(tc) — 之前的都是 context 层，不动
+            _keep_from = _asst_positions[-_HISTORY_WINDOW]  # 保留最近 3 步的起点
+            _old_msgs = messages[_first_asst:_keep_from]     # 要压缩的部分
+            _summary_lines = []
+            _step_no = 1
+            _i = 0
+            while _i < len(_old_msgs):
+                _m = _old_msgs[_i]
+                if _m["role"] == "assistant" and _m.get("tool_calls"):
+                    _names = [tc["function"]["name"] for tc in _m["tool_calls"]]
+                    _summary_lines.append(f"步骤 {_step_no}: 调用 {', '.join(_names)}")
+                    # 提取紧随的全部 tool 结果（支持并行多 tool）
+                    while _i + 1 < len(_old_msgs) and _old_msgs[_i + 1]["role"] == "tool":
+                        _tc = _old_msgs[_i + 1].get("content", "")
+                        if _tc:
+                            if len(_tc) > 120:
+                                _tc = _tc[:120] + "…"
+                            _summary_lines.append(f"  → {_tc}")
+                        _i += 1
+                    _step_no += 1  # 只对真正的一步计数
+                _i += 1
+            _summary = "\n".join(_summary_lines)
+            messages[_first_asst:_keep_from] = [
+                {"role": "user", "content": f"## 📋 历史步骤摘要\n{_summary}\n\n以上是之前步骤的摘要。下面是最近的工作详情。"}
+            ]
+            logger.info(
+                f"[AgentLoop] 滑动窗口压缩: {len(_asst_positions)} 步 → "
+                f"摘要 + 最近 {_HISTORY_WINDOW} 步完整 "
+                f"(保留 ctx:0-{_first_asst - 1} 共 {_first_asst} 条)"
+            )
+
         # 3a. 调 LLM
         write_trace(scene_id=scene_id, session_id=session_id, step=step, event_type="llm_call",
                      model=model, msgs=len(messages), tools=len(tools))
