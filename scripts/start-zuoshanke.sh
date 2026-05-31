@@ -133,7 +133,7 @@ check_python() {
     fi
     # 检查版本 >= 3.9
     local ver
-    ver=$("$found" --version 2>&1 | grep -oP '\d+\.\d+')
+    ver=$("$found" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
     local major
     major=$(echo "$ver" | cut -d. -f1)
     local minor
