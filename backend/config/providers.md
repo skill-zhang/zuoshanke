@@ -4,7 +4,7 @@
 > 覆盖市面上所有主流 AI 模型提供商。
 > 每日自动检查更新。
 >
-> 最后更新: 2026-05-30
+> 最后更新: 2026-05-31
 
 ## DeepSeek
 - display_name: DeepSeek
@@ -182,6 +182,42 @@
 - display_name: GPT-5 Codex
 - temperature: 0.7
 - max_tokens: 128000
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5.4
+- display_name: GPT-5.4
+- temperature: 0.7
+- max_tokens: 128000
+- context_length: 272000
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5.5
+- display_name: GPT-5.5
+- temperature: 0.7
+- max_tokens: 384000
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5.5-pro
+- display_name: GPT-5.5 Pro
+- temperature: 0.7
+- max_tokens: 384000
+- context_length: 1048576
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### gpt-5.5-instant
+- display_name: GPT-5.5 Instant
+- temperature: 0.7
+- max_tokens: 16384
 - context_length: 272000
 - repeat_penalty: 1.05
 - vision: true
@@ -396,6 +432,15 @@
 - temperature: 0.7
 - max_tokens: 131072
 - context_length: 131072
+- repeat_penalty: 1.05
+- vision: true
+- function_calling: true
+
+### grok-4.1
+- display_name: Grok 4.1
+- temperature: 0.7
+- max_tokens: 256000
+- context_length: 2097152
 - repeat_penalty: 1.05
 - vision: true
 - function_calling: true

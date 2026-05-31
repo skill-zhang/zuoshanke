@@ -62,24 +62,39 @@ function fmtTime(iso: string): string {
  */
 const renderDiffText = (diffText: string): React.ReactNode[] => {
   const text = (typeof diffText === 'string' ? diffText : JSON.stringify(diffText, null, 2))
-    .replace(/\r\n/g, '\n').replace(/\r/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '')
     // 在 -/+ 前面如果没跟换行符，强行插入
     .replace(/(?<![-\n])(?=[-+])/g, '\n');
   const lines = text.split('\n');
   return lines.map((line, i) => {
-    if (!line) return <div key={i} style={{ height: 2 }} />;  // 空行保高度
+    if (!line) return <div key={i} style={{ height: 2 }} />; // 空行保高度
     const isDel = line.startsWith('-') && !line.startsWith('---');
     const isIns = line.startsWith('+') && !line.startsWith('+++');
     const isHunk = line.startsWith('@@');
     const isHeader = line.startsWith('---') || line.startsWith('+++');
     const bg = isDel ? 'rgba(248,113,113,0.06)' : isIns ? 'rgba(74,222,128,0.06)' : 'transparent';
     return (
-      <div key={i} style={{
-        fontFamily: "'SF Mono','JetBrains Mono',monospace",
-        fontSize: 10.5, lineHeight: 1.4,
-        color: isDel ? '#f87171' : isIns ? '#4ade80' : isHunk ? '#a78bfa' : isHeader ? '#484f58' : '#c9d1d9',
-        background: bg,
-      }}>{line}</div>
+      <div
+        key={i}
+        style={{
+          fontFamily: "'SF Mono','JetBrains Mono',monospace",
+          fontSize: 10.5,
+          lineHeight: 1.4,
+          color: isDel
+            ? '#f87171'
+            : isIns
+              ? '#4ade80'
+              : isHunk
+                ? '#a78bfa'
+                : isHeader
+                  ? '#484f58'
+                  : '#c9d1d9',
+          background: bg,
+        }}
+      >
+        {line}
+      </div>
     );
   });
 };
@@ -120,19 +135,23 @@ const ThinkingCard: React.FC<{ text: string }> = ({ text }) => (
   <div className="trace-thinking-card">
     <div className="trace-thinking-label">💭 LLM 思考</div>
     <div className="trace-thinking-text">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+        {text}
+      </ReactMarkdown>
     </div>
   </div>
 );
 
 /** 工具调用卡片 */
 const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
-  const [expanded, setExpanded] = useState(true);  // 默认展开
+  const [expanded, setExpanded] = useState(true); // 默认展开
   const isError = event.eventType === 'tool_error';
   const isRunning = event.eventType === 'tool_start' && !event.durationMs;
 
   return (
-    <div className={`trace-tool-card ${isError ? 'trace-tool-error' : ''} ${expanded ? 'expanded' : ''}`}>
+    <div
+      className={`trace-tool-card ${isError ? 'trace-tool-error' : ''} ${expanded ? 'expanded' : ''}`}
+    >
       <div className="trace-tool-header" onClick={() => setExpanded(!expanded)}>
         <span className="trace-tool-arrow">{expanded ? '▼' : '▶'}</span>
         <span className={`trace-tool-dot ${isError ? 'fail' : isRunning ? 'running' : 'ok'}`} />
@@ -142,7 +161,7 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
           {isRunning ? '运行中...' : fmtDuration(event.durationMs)}
         </span>
       </div>
-      {(expanded && (event.args || event.result || event.error)) && (
+      {expanded && (event.args || event.result || event.error) && (
         <div className="trace-tool-detail">
           {event.args && (
             <div className="trace-detail-section">
@@ -171,9 +190,7 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
                   <div className="trace-detail-label">
                     📄 {event.result.files_modified?.[0] || event.result.path || 'patch'}
                   </div>
-                  <div className="trace-diff-view">
-                    {renderDiffText(event.result.diff)}
-                  </div>
+                  <div className="trace-diff-view">{renderDiffText(event.result.diff)}</div>
                 </>
               ) : (
                 <>
@@ -243,7 +260,8 @@ const TraceStepView: React.FC<{ step: TraceStep }> = ({ step }) => {
         <span className="trace-step-arrow">{expanded ? '▼' : '▶'}</span>
         <span className="trace-step-num">{step.step + 1}</span>
         <span className="trace-step-label">
-          {step.events.find(e => e.eventType === 'thinking')?.text?.slice(0, 60) || `第 ${step.step + 1} 步`}
+          {step.events.find((e) => e.eventType === 'thinking')?.text?.slice(0, 60) ||
+            `第 ${step.step + 1} 步`}
         </span>
         <span className="trace-step-time">{fmtTime(step.startedAt)}</span>
         <span className={`trace-step-status ${step.status}`} />
@@ -254,7 +272,11 @@ const TraceStepView: React.FC<{ step: TraceStep }> = ({ step }) => {
             if (e.eventType === 'thinking') {
               return <ThinkingCard key={i} text={e.text || ''} />;
             }
-            if (e.eventType === 'tool_start' || e.eventType === 'tool_done' || e.eventType === 'tool_error') {
+            if (
+              e.eventType === 'tool_start' ||
+              e.eventType === 'tool_done' ||
+              e.eventType === 'tool_error'
+            ) {
               return <ToolCallCard key={`${e.tool}-${i}`} event={e} />;
             }
             return null;
@@ -270,7 +292,7 @@ const TraceStepView: React.FC<{ step: TraceStep }> = ({ step }) => {
 // ══════════════════════════════════════
 
 export const AgentTracePanel: React.FC = () => {
-  const currentScene = useStore(s => s.currentScene);
+  const currentScene = useStore((s) => s.currentScene);
   const traceStore = useTraceStore();
   const panelRef = useRef<HTMLDivElement>(null);
   const panelBodyRef = useRef<HTMLDivElement>(null);
@@ -281,14 +303,21 @@ export const AgentTracePanel: React.FC = () => {
   const sceneId = currentScene?.id || '';
   const steps = sceneId ? traceStore.getSteps(sceneId) : [];
   const hasTraces = steps.length > 0;
-  const patchCount = steps.reduce((s, st) => s + st.events.filter(e =>
-    e.tool === 'patch' && (e.eventType === 'tool_done' || e.eventType === 'tool_start')
-  ).length, 0);
+  const patchCount = steps.reduce(
+    (s, st) =>
+      s +
+      st.events.filter(
+        (e) => e.tool === 'patch' && (e.eventType === 'tool_done' || e.eventType === 'tool_start')
+      ).length,
+    0
+  );
   const filteredSteps = showDiffsOnly
-    ? steps.map(s => ({
-        ...s,
-        events: s.events.filter(e => e.tool === 'patch'),
-      })).filter(s => s.events.length > 0)
+    ? steps
+        .map((s) => ({
+          ...s,
+          events: s.events.filter((e) => e.tool === 'patch'),
+        }))
+        .filter((s) => s.events.length > 0)
     : steps;
 
   // 自动滚动：ResizeObserver + _updateVersion 双保险
@@ -372,78 +401,120 @@ export const AgentTracePanel: React.FC = () => {
     };
   }, [isResizing]);
 
+  // Escape 键关闭浮层
+  useEffect(() => {
+    if (!traceStore.isPanelOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') traceStore.setPanelOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [traceStore.isPanelOpen, traceStore]);
+
   if (!traceStore.isPanelOpen) return null;
 
   const stepCount = steps.length;
-  const toolCount = steps.reduce((s, st) => s + st.events.filter(e =>
-    e.eventType === 'tool_start' || e.eventType === 'tool_done'
-  ).length, 0);
-  const llmCount = steps.reduce((s, st) => s + st.events.filter(e =>
-    e.eventType === 'thinking' || e.eventType === 'tool_start'
-  ).length, 0);
-  const isRunning = steps.some(s => s.status === 'running');
+  const toolCount = steps.reduce(
+    (s, st) =>
+      s +
+      st.events.filter((e) => e.eventType === 'tool_start' || e.eventType === 'tool_done').length,
+    0
+  );
+  const llmCount = steps.reduce(
+    (s, st) =>
+      s +
+      st.events.filter((e) => e.eventType === 'thinking' || e.eventType === 'tool_start').length,
+    0
+  );
+  const isRunning = steps.some((s) => s.status === 'running');
 
   return (
-    <div className="trace-panel" ref={panelRef} style={{ width: panelWidth, minWidth: 640 }}>
-      {/* 拖拽把手 */}
-      <div className="trace-resize-handle" onMouseDown={onResizeStart} />
+    <>
+      {/* 遮罩层 — 点击关闭 */}
+      <div className="trace-backdrop" onClick={() => traceStore.setPanelOpen(false)} />
+      <div className="trace-panel" ref={panelRef} style={{ width: panelWidth, minWidth: 640 }}>
+        {/* 拖拽把手 */}
+        <div className="trace-resize-handle" onMouseDown={onResizeStart} />
 
-      {/* 头部 */}
-      <div className="trace-panel-header">
-        <div className="trace-panel-title">
-          ⚡ 执行追踪
-          {isRunning && <span className="trace-badge">实时</span>}
-        </div>
-        <div className="trace-panel-actions">
-          {hasTraces && patchCount > 0 && (
+        {/* 头部 */}
+        <div className="trace-panel-header">
+          <div className="trace-panel-title">
+            ⚡ 执行追踪
+            {isRunning && <span className="trace-badge">实时</span>}
+          </div>
+          <div className="trace-panel-actions">
+            {hasTraces && patchCount > 0 && (
+              <button
+                className={`trace-filter-btn ${showDiffsOnly ? 'active' : ''}`}
+                onClick={() => setShowDiffsOnly((v) => !v)}
+                title={showDiffsOnly ? '显示全部' : '仅显示文件修改'}
+              >
+                📋 Diffs
+              </button>
+            )}
             <button
-              className={`trace-filter-btn ${showDiffsOnly ? 'active' : ''}`}
-              onClick={() => setShowDiffsOnly(v => !v)}
-              title={showDiffsOnly ? '显示全部' : '仅显示文件修改'}
+              onClick={() => {
+                document
+                  .querySelectorAll('.trace-step-group')
+                  .forEach((el) => el.classList.add('expanded'));
+              }}
+              title="全部展开"
             >
-              📋 Diffs
+              ⊞
             </button>
+            <button
+              onClick={() => {
+                document
+                  .querySelectorAll('.trace-step-group')
+                  .forEach((el) => el.classList.remove('expanded'));
+              }}
+              title="全部收起"
+            >
+              ⊟
+            </button>
+            <button onClick={() => traceStore.setPanelOpen(false)} title="关闭">
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* 统计 */}
+        {hasTraces && (
+          <div className="trace-panel-stats">
+            <span>
+              步骤 <b>{stepCount}</b>
+            </span>
+            <span>
+              工具 <b>{toolCount}</b>
+            </span>
+            <span>
+              LLM 请求 <b>{llmCount}</b>
+            </span>
+            <span style={{ color: isRunning ? 'var(--orange)' : 'var(--green)' }}>
+              {isRunning ? '🔄 运行中' : '✅ 已完成'}
+            </span>
+          </div>
+        )}
+
+        {/* 内容 */}
+        <div className="trace-panel-body" ref={panelBodyRef}>
+          {!hasTraces ? (
+            <div className="trace-empty">暂无执行记录</div>
+          ) : filteredSteps.length === 0 ? (
+            <div className="trace-empty">当前无文件修改记录</div>
+          ) : (
+            filteredSteps.map((s) => <TraceStepView key={s.step} step={s} />)
           )}
-          <button onClick={() => {
-            document.querySelectorAll('.trace-step-group').forEach(el => el.classList.add('expanded'));
-          }} title="全部展开">⊞</button>
-          <button onClick={() => {
-            document.querySelectorAll('.trace-step-group').forEach(el => el.classList.remove('expanded'));
-          }} title="全部收起">⊟</button>
-          <button onClick={() => traceStore.setPanelOpen(false)} title="关闭">✕</button>
         </div>
-      </div>
 
-      {/* 统计 */}
-      {hasTraces && (
-        <div className="trace-panel-stats">
-          <span>步骤 <b>{stepCount}</b></span>
-          <span>工具 <b>{toolCount}</b></span>
-          <span>LLM 请求 <b>{llmCount}</b></span>
-          <span style={{ color: isRunning ? 'var(--orange)' : 'var(--green)' }}>
-            {isRunning ? '🔄 运行中' : '✅ 已完成'}
-          </span>
-        </div>
-      )}
-
-      {/* 内容 */}
-      <div className="trace-panel-body" ref={panelBodyRef}>
-        {!hasTraces ? (
-          <div className="trace-empty">暂无执行记录</div>
-        ) : filteredSteps.length === 0 ? (
-          <div className="trace-empty">当前无文件修改记录</div>
-        ) : (
-          filteredSteps.map(s => <TraceStepView key={s.step} step={s} />)
+        {/* 底部 */}
+        {hasTraces && (
+          <div className="trace-panel-footer">
+            <span>更新: {fmtTime(new Date().toISOString())}</span>
+          </div>
         )}
       </div>
-
-      {/* 底部 */}
-      {hasTraces && (
-        <div className="trace-panel-footer">
-          <span>更新: {fmtTime(new Date().toISOString())}</span>
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 
@@ -452,29 +523,36 @@ export const AgentTracePanel: React.FC = () => {
 // ══════════════════════════════════════
 
 export const FloatingTraceButton: React.FC = () => {
-  const currentScene = useStore(s => s.currentScene);
+  const currentScene = useStore((s) => s.currentScene);
   const traceStore = useTraceStore();
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startY: 0, startTop: 0, moved: false });
   const btnRef = useRef<HTMLDivElement>(null);
 
-  const hasTraces = !!currentScene?.id && (traceStore.tracesByScene[currentScene.id]?.length || 0) > 0;
+  const hasTraces =
+    !!currentScene?.id && (traceStore.tracesByScene[currentScene.id]?.length || 0) > 0;
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
-    dragRef.current = {
-      startY: e.clientY,
-      startTop: traceStore.floatingBtnTop,
-      moved: false,
-    };
-  }, [traceStore.floatingBtnTop]);
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      setIsDragging(true);
+      dragRef.current = {
+        startY: e.clientY,
+        startTop: traceStore.floatingBtnTop,
+        moved: false,
+      };
+    },
+    [traceStore.floatingBtnTop]
+  );
 
   useEffect(() => {
     if (!isDragging) return;
     const onMove = (e: MouseEvent) => {
       const dy = e.clientY - dragRef.current.startY;
       if (Math.abs(dy) > 5) dragRef.current.moved = true;
-      const newTop = Math.max(80, Math.min(window.innerHeight - 120, dragRef.current.startTop + dy));
+      const newTop = Math.max(
+        80,
+        Math.min(window.innerHeight - 120, dragRef.current.startTop + dy)
+      );
       if (btnRef.current) {
         btnRef.current.style.top = newTop + 'px';
         btnRef.current.style.transform = 'none';
