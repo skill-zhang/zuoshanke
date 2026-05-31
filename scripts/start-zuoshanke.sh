@@ -132,14 +132,12 @@ check_python() {
         return 1
     fi
     # 检查版本 >= 3.9
-    local ver
-    ver=$("$found" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-    local major
-    major=$(echo "$ver" | cut -d. -f1)
-    local minor
-    minor=$(echo "$ver" | cut -d. -f2)
-    if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 9 ]; }; then
-        log_err "Python 版本过低: $("$found" --version)，需要 >= 3.9"
+    local ver major minor
+    ver=$("$found" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1) || true
+    major="${ver%%.*}"
+    minor="${ver#*.}"
+    if [ -z "$minor" ] || [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 9 ]; }; then
+        log_err "Python 版本过低: $("$found" --version 2>&1)，需要 >= 3.9"
         return 1
     fi
     log_ok "Python $ver （$found）"
