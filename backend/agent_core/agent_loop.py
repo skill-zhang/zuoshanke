@@ -591,6 +591,9 @@ def run_agent_loop(
         "reasoning_tokens": 0, "api_calls": 0,
     }
 
+    # 🆕 read_file 去重缓存：同一文件只读一次，后续返回简短提示
+    _read_file_cache: dict[str, dict] = {}
+
     for step in range(max_steps):
         step_traces: list[dict] = []  # 🆕 Schema v1.6: 每步收集 trace，步结束时批量写入 DB
 
@@ -812,45 +815,73 @@ def run_agent_loop(
 
                 # 执行工具（注入场景上下文）
                 from agent_core.tool_executor import set_tool_context, clear_tool_context
-                set_tool_context(scene_id=scene_id)
-                try:
-                    # 🆕 传递工具回调（如 clarify callback）
-                    cb = (tool_callbacks or {}).get(tool_name)
-                    extra = {"callback": cb} if cb else None
 
-                    # 🆕 耗时工具（delegate_task）在线程中执行，避免阻塞 SSE 流
-                    if tool_name == "delegate_task":
-                        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
+                # 🆕 read_file 去重：同一路径已完整读过则跳过执行，返回简短提示
+                _rf_skip = False
+                if tool_name == "read_file":
+                    _rf_path = args.get("path", "")
+                    if _rf_path and _rf_path in _read_file_cache:
+                        _c = _read_file_cache[_rf_path]
+                        result = {
+                            "success": True,
+                            "result": f"(已在第 {_c['step'] + 1} 步完整读过: {_rf_path}, "
+                                      f"{_c['chars']} 字符 / {_c['lines']} 行, 无需重读)",
+                        }
+                        logger.info(f"[AgentLoop] 跳过重复 read_file: {_rf_path}")
+                        _rf_skip = True
 
-                        def _thread_execute():
-                            """在线程中执行工具（含 tool context 初始化，因 threading.local 不跨线程）"""
-                            set_tool_context(scene_id=scene_id)
-                            try:
-                                return execute_tool(tool_name, args, extra_kwargs=extra)
-                            finally:
-                                clear_tool_context()
+                if not _rf_skip:
+                    set_tool_context(scene_id=scene_id)
+                    try:
+                        # 🆕 传递工具回调（如 clarify callback）
+                        cb = (tool_callbacks or {}).get(tool_name)
+                        extra = {"callback": cb} if cb else None
 
-                        _pool = ThreadPoolExecutor(max_workers=1)
-                        try:
-                            _fut = _pool.submit(_thread_execute)
-                            _start = time.time()
-                            while True:
+                        # 🆕 耗时工具（delegate_task）在线程中执行，避免阻塞 SSE 流
+                        if tool_name == "delegate_task":
+                            from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
+
+                            def _thread_execute():
+                                """在线程中执行工具（含 tool context 初始化，因 threading.local 不跨线程）"""
+                                set_tool_context(scene_id=scene_id)
                                 try:
-                                    result = _fut.result(timeout=10)
-                                    break
-                                except _FutTimeout:
-                                    _elapsed = int(time.time() - _start)
-                                    yield {
-                                        "type": "keepalive",
-                                        "ts": time.time(),
-                                        "message": f"⏳ 子任务执行中...（已等待 {_elapsed}s）",
-                                    }
-                        finally:
-                            _pool.shutdown(wait=False, cancel_futures=True)
-                    else:
-                        result = execute_tool(tool_name, args, extra_kwargs=extra)
-                finally:
-                    clear_tool_context()
+                                    return execute_tool(tool_name, args, extra_kwargs=extra)
+                                finally:
+                                    clear_tool_context()
+
+                            _pool = ThreadPoolExecutor(max_workers=1)
+                            try:
+                                _fut = _pool.submit(_thread_execute)
+                                _start = time.time()
+                                while True:
+                                    try:
+                                        result = _fut.result(timeout=10)
+                                        break
+                                    except _FutTimeout:
+                                        _elapsed = int(time.time() - _start)
+                                        yield {
+                                            "type": "keepalive",
+                                            "ts": time.time(),
+                                            "message": f"⏳ 子任务执行中...（已等待 {_elapsed}s）",
+                                        }
+                            finally:
+                                _pool.shutdown(wait=False, cancel_futures=True)
+                        else:
+                            result = execute_tool(tool_name, args, extra_kwargs=extra)
+                    finally:
+                        clear_tool_context()
+
+                    # 🆕 read_file 读完后缓存，供后续去重使用
+                    if tool_name == "read_file":
+                        _rf_path = args.get("path", "")
+                        if _rf_path and result.get("success"):
+                            _rf_res = result.get("result", {})
+                            if isinstance(_rf_res, dict):
+                                _read_file_cache[_rf_path] = {
+                                    "lines": _rf_res.get("total_lines", 0),
+                                    "chars": len(json.dumps(_rf_res, ensure_ascii=False)),
+                                    "step": step,
+                                }
 
                 _duration = int((time.time() - _tool_start_ts) * 1000)
 
