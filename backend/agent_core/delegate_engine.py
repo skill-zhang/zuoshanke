@@ -192,7 +192,7 @@ def _run_loop_blocking(
 
 
 _MAX_WORKERS = 3  # 最大并行子 Agent 数
-_CHILD_TIMEOUT = 300  # 每个子 Agent 超时秒数
+_CHILD_TIMEOUT = 600  # 每个子 Agent 超时秒数（含原型绘制等复杂任务）
 
 
 def _build_child_prompt(task: dict) -> str:

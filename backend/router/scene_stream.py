@@ -629,6 +629,14 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     # 🆕 Think 工具：转为 thought 事件（带限流）
                     if event["tool"] == "think":
                         args = event.get("args", {})
+                        # 🛡️ 防御：args 可能为字符串
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except json.JSONDecodeError:
+                                args = {}
+                        if not isinstance(args, dict):
+                            args = {}
                         if thought_throttle.allow(loop_round):
                             yield sse_event("thought",
                                 content=args.get("content", ""),
@@ -640,6 +648,14 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     # 🆕 Clarify 工具：发射询问事件给前端（在工具阻塞前）
                     elif event["tool"] == "clarify":
                         args = event.get("args", {})
+                        # 🛡️ 防御：args 可能为字符串
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except json.JSONDecodeError:
+                                args = {}
+                        if not isinstance(args, dict):
+                            args = {}
                         yield sse_event("zhu:clarify",
                             question=args.get("question", ""),
                             choices=args.get("choices"),
@@ -647,6 +663,14 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     # 🆕 Delegate 工具：发射子任务状态
                     elif event["tool"] == "delegate_task":
                         args = event.get("args", {})
+                        # 🛡️ 防御：args 可能为字符串（LLM 传参格式异常时）
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except json.JSONDecodeError:
+                                args = {}
+                        if not isinstance(args, dict):
+                            args = {}
                         tasks = args.get("tasks", []) or [{"goal": args.get("goal", "未知任务")}]
                         yield sse_event("child:started",
                             tasks=[{"goal": t.get("goal", "?"), "status": "running"} for t in tasks],
@@ -729,9 +753,9 @@ def stream_scene_message(scene_id: str, data: MessageCreate, db: Session = Depen
                     _log.error(f"[scene agent loop] {event['message']}")
                     yield sse_event("error", message=event["message"])
                     return
-                # 🆕 SSE keepalive：透传给前端，保持连接活跃
+                # 🆕 SSE keepalive：透传给前端，保持连接活跃（含子任务进度消息）
                 elif etype == "keepalive":
-                    yield sse_event("keepalive", ts=event.get("ts", 0))
+                    yield sse_event("keepalive", ts=event.get("ts", 0), message=event.get("message", ""))
                 # 🆕 Schema v0.7: 仪表盘事件透传
                 elif etype == "dashboard:reflect":
                     yield sse_event("dashboard:reflect",

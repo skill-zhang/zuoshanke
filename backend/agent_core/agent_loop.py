@@ -284,7 +284,7 @@ def call_llm_with_tools(
                 "Content-Type": "application/json",
             },
             json=payload,
-            timeout=(10, 120),
+            timeout=(10, 300),
         )
         resp.raise_for_status()
         return resp.json()
@@ -313,7 +313,7 @@ def call_llm_with_tools(
                     "Content-Type": "application/json",
                 },
                 json=payload,
-                timeout=(10, 120),
+                timeout=(10, 300),
                 proxies={"http": "", "https": ""},
             )
             fallback_resp.raise_for_status()
@@ -794,7 +794,38 @@ def run_agent_loop(
                     # 🆕 传递工具回调（如 clarify callback）
                     cb = (tool_callbacks or {}).get(tool_name)
                     extra = {"callback": cb} if cb else None
-                    result = execute_tool(tool_name, args, extra_kwargs=extra)
+
+                    # 🆕 耗时工具（delegate_task）在线程中执行，避免阻塞 SSE 流
+                    if tool_name == "delegate_task":
+                        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
+
+                        def _thread_execute():
+                            """在线程中执行工具（含 tool context 初始化，因 threading.local 不跨线程）"""
+                            set_tool_context(scene_id=scene_id)
+                            try:
+                                return execute_tool(tool_name, args, extra_kwargs=extra)
+                            finally:
+                                clear_tool_context()
+
+                        _pool = ThreadPoolExecutor(max_workers=1)
+                        try:
+                            _fut = _pool.submit(_thread_execute)
+                            _start = time.time()
+                            while True:
+                                try:
+                                    result = _fut.result(timeout=10)
+                                    break
+                                except _FutTimeout:
+                                    _elapsed = int(time.time() - _start)
+                                    yield {
+                                        "type": "keepalive",
+                                        "ts": time.time(),
+                                        "message": f"⏳ 子任务执行中...（已等待 {_elapsed}s）",
+                                    }
+                        finally:
+                            _pool.shutdown(wait=False, cancel_futures=True)
+                    else:
+                        result = execute_tool(tool_name, args, extra_kwargs=extra)
                 finally:
                     clear_tool_context()
 
@@ -858,7 +889,8 @@ def run_agent_loop(
                     }
                     if high_risk:
                         event["high_risk"] = high_risk
-                        event["blocked_command"] = params.get("command", "") if isinstance(params, dict) else ""
+                        # 🛡️ 修复：原代码用未定义变量 params → NameError。应取工具 args 中的命令
+                        event["blocked_command"] = args.get("code") or args.get("command", "")
                     yield event
 
                     # 收集 DB trace

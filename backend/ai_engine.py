@@ -190,7 +190,7 @@ def call_llm(messages: list[dict], route_cfg: dict, temperature: float = 0.7,
             f"{base_url}/v1/chat/completions",
             headers=headers,
             json=payload,
-            timeout=120,
+            timeout=300,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -244,7 +244,7 @@ def call_llm_stream(messages: list[dict], route_cfg: dict, temperature: float = 
             f"{base_url}/v1/chat/completions",
             headers=headers,
             json=payload,
-            timeout=120,
+            timeout=300,
             stream=True,
         )
         resp.raise_for_status()
@@ -1005,7 +1005,7 @@ def call_deepseek_chat(
                 "temperature": temp,
                 "max_tokens": mt,
             },
-            timeout=120,
+            timeout=300,
         )
         resp.raise_for_status()
         data = resp.json()
