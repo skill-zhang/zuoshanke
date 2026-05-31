@@ -143,10 +143,19 @@ const ThinkingCard: React.FC<{ text: string }> = ({ text }) => (
 );
 
 /** 工具调用卡片 */
-const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
+const ToolCallCard: React.FC<{ event: TraceEvent; sceneId?: string }> = ({ event, sceneId }) => {
   const [expanded, setExpanded] = useState(true); // 默认展开
   const isError = event.eventType === 'tool_error';
   const isRunning = event.eventType === 'tool_start' && !event.durationMs;
+  const isDelegate = event.tool === 'delegate_task' && !!event.toolCallId;
+
+  // 读取子 Agent trace
+  const subTraces = useTraceStore((s) => {
+    if (!isDelegate || !sceneId || !event.toolCallId) return [];
+    const byScene = s.subTracesByScene[sceneId];
+    if (!byScene) return [];
+    return byScene[event.toolCallId] || [];
+  });
 
   return (
     <div
@@ -157,11 +166,16 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
         <span className={`trace-tool-dot ${isError ? 'fail' : isRunning ? 'running' : 'ok'}`} />
         <span className="trace-tool-icon">{getToolIcon(event.tool || '')}</span>
         <span className="trace-tool-name">{event.tool}</span>
+        {isDelegate && subTraces.length > 0 && (
+          <span className="trace-tool-substeps">
+            ({subTraces.filter((e) => e.eventType === 'sub_thinking').length} 步)
+          </span>
+        )}
         <span className="trace-tool-time">
           {isRunning ? '运行中...' : fmtDuration(event.durationMs)}
         </span>
       </div>
-      {expanded && (event.args || event.result || event.error) && (
+      {expanded && (event.args || event.result || event.error || subTraces.length > 0) && (
         <div className="trace-tool-detail">
           {event.args && (
             <div className="trace-detail-section">
@@ -175,6 +189,60 @@ const ToolCallCard: React.FC<{ event: TraceEvent }> = ({ event }) => {
               >
                 {formatArgs(event.args)}
               </SyntaxHighlighter>
+            </div>
+          )}
+          {/* 🆕 子 Agent trace 内嵌视图 */}
+          {isDelegate && subTraces.length > 0 && (
+            <div className="trace-detail-section">
+              <div className="trace-detail-label">子步骤</div>
+              <div className="trace-sub-timeline">
+                {subTraces.map((st, i) => {
+                  if (st.eventType === 'sub_thinking') {
+                    return (
+                      <div key={i} className="trace-sub-thinking">
+                        <span className="trace-sub-step-num">{st.subStep}</span>
+                        <span className="trace-sub-text">
+                          {st.text?.slice(0, 80)}
+                          {(st.text?.length || 0) > 80 ? '…' : ''}
+                        </span>
+                      </div>
+                    );
+                  }
+                  if (st.eventType === 'sub_tool_done') {
+                    return (
+                      <div key={i} className="trace-sub-tool done">
+                        <span className="trace-sub-step-num">{st.subStep}</span>
+                        <span className="trace-tool-dot ok" />
+                        <span className="trace-sub-tool-icon">{getToolIcon(st.tool || '')}</span>
+                        <span className="trace-sub-tool-name">{st.tool}</span>
+                        {st.durationMs != null && (
+                          <span className="trace-sub-time">{fmtDuration(st.durationMs)}</span>
+                        )}
+                      </div>
+                    );
+                  }
+                  if (st.eventType === 'sub_tool_error') {
+                    return (
+                      <div key={i} className="trace-sub-tool error">
+                        <span className="trace-sub-step-num">{st.subStep}</span>
+                        <span className="trace-tool-dot fail" />
+                        <span className="trace-sub-tool-icon">{getToolIcon(st.tool || '')}</span>
+                        <span className="trace-sub-tool-name">{st.tool}</span>
+                        <span className="trace-sub-error">❌ {st.error?.slice(0, 40)}</span>
+                      </div>
+                    );
+                  }
+                  if (st.eventType === 'sub_done') {
+                    return (
+                      <div key={i} className="trace-sub-done">
+                        <span className="trace-sub-step-num">{st.subStep}</span>
+                        <span className="trace-sub-done-text">✅ {st.summary?.slice(0, 100)}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
             </div>
           )}
           {event.error && (
@@ -249,7 +317,7 @@ function formatResult(result: any): string {
 }
 
 /** 单步内容 */
-const TraceStepView: React.FC<{ step: TraceStep }> = ({ step }) => {
+const TraceStepView: React.FC<{ step: TraceStep; sceneId?: string }> = ({ step, sceneId }) => {
   const [expanded, setExpanded] = useState(true);
 
   const statusIcon = step.status === 'error' ? '❌' : step.status === 'running' ? '🔄' : '✅';
@@ -277,7 +345,7 @@ const TraceStepView: React.FC<{ step: TraceStep }> = ({ step }) => {
               e.eventType === 'tool_done' ||
               e.eventType === 'tool_error'
             ) {
-              return <ToolCallCard key={`${e.tool}-${i}`} event={e} />;
+              return <ToolCallCard key={`${e.tool}-${i}`} event={e} sceneId={sceneId} />;
             }
             return null;
           })}
@@ -320,16 +388,23 @@ export const AgentTracePanel: React.FC = () => {
         .filter((s) => s.events.length > 0)
     : steps;
 
-  // 自动滚动：ResizeObserver + _updateVersion 双保险
+  // ── 自动滚动方案 ──
+  // 用 scroll 事件追踪用户是否在底部附近，避免 requestAnimationFrame 的 DOM 快照不同步问题
   const prevOpenRef = useRef(false);
+  const isAtBottomRef = useRef(true);
 
-  // 统一滚动到底部的函数
-  const scrollToBottom = useCallback(() => {
+  // 监听滚动事件 — 无 requestAnimationFrame，纯事件驱动
+  useEffect(() => {
     const el = panelBodyRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+
+    const onScroll = () => {
+      const threshold = 120;
+      isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
   // 面板打开时初始滚动，及 _updateVersion 变化时跟随
@@ -339,35 +414,32 @@ export const AgentTracePanel: React.FC = () => {
       return;
     }
 
-    requestAnimationFrame(() => {
-      const el = panelBodyRef.current;
-      if (!el) return;
+    const el = panelBodyRef.current;
+    if (!el) return;
 
-      // 面板刚打开 → 强制滚到底
-      if (!prevOpenRef.current) {
-        prevOpenRef.current = true;
-        el.scrollTop = el.scrollHeight;
-        return;
-      }
+    // 面板刚打开 → 强制滚到底
+    if (!prevOpenRef.current) {
+      prevOpenRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
 
-      // 已打开：只在底部附近时自动跟随
-      const threshold = 120;
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-      if (atBottom) el.scrollTop = el.scrollHeight;
-    });
-  }, [traceStore._updateVersion, traceStore.isPanelOpen, scrollToBottom]);
+    // 用户主动上翻时不跟随
+    if (!isAtBottomRef.current) return;
 
-  // ResizeObserver 兜底：当面板内容（含 tool_done 原地更新）改变高度时触发
+    // 直接设置 scrollTop（rAF 反而可能被 React 18 批处理打乱时机）
+    el.scrollTop = el.scrollHeight;
+  }, [traceStore._updateVersion, traceStore.isPanelOpen]);
+
+  // ResizeObserver 兜底：tool_done 原地更新导致卡片展开高度变化
   useEffect(() => {
     const el = panelBodyRef.current;
     if (!el) return;
 
     const ro = new ResizeObserver(() => {
       if (!traceStore.isPanelOpen) return;
-      // 面板已打开且在底部附近 → 跟随
-      const threshold = 120;
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-      if (atBottom) el.scrollTop = el.scrollHeight;
+      if (!isAtBottomRef.current) return;
+      el.scrollTop = el.scrollHeight;
     });
 
     ro.observe(el);
@@ -503,7 +575,7 @@ export const AgentTracePanel: React.FC = () => {
           ) : filteredSteps.length === 0 ? (
             <div className="trace-empty">当前无文件修改记录</div>
           ) : (
-            filteredSteps.map((s) => <TraceStepView key={s.step} step={s} />)
+            filteredSteps.map((s) => <TraceStepView key={s.step} step={s} sceneId={sceneId} />)
           )}
         </div>
 

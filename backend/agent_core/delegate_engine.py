@@ -14,6 +14,7 @@ import logging
 import sys
 import os
 import threading
+import time
 
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -31,7 +32,7 @@ def _run_loop_blocking(
     tools: list[dict],
     memory_context: str = "",
     model: str = "flash",
-    max_steps: int = 25,
+    max_steps: int = 50,
     scene_config: Optional[dict] = None,
 ) -> dict:
     """同步阻塞版 Agent Loop。
@@ -76,9 +77,18 @@ def _run_loop_blocking(
 
     tool_names = [t["function"]["name"] for t in tools]
     consecutive_tool_only = 0
+    tool_call_trace: list[tuple[str, int]] = []  # 🆕 工具重复调用检测
+    _read_file_cache: dict[str, dict] = {}        # 🆕 read_file 去重缓存
 
-    # 🆕 子任务进度追踪：读取父 Agent 挂在本线程的 progress dict
+    # 🆕 子任务 trace 队列：父 Agent 挂在本线程的 deque，用于实时推送子步骤
     _progress = getattr(threading.current_thread(), '_child_progress', None)
+    _tq = getattr(threading.current_thread(), '_child_trace_queue', None)
+
+    # 辅助函数：安全推 trace 事件
+    def _push(event: dict):
+        if _tq is not None:
+            _tq.append(event)
+
     if _progress:
         _progress["status"] = "running"
 
@@ -94,6 +104,55 @@ def _run_loop_blocking(
                            f"如果已有足够信息，请直接给出你的分析结论。]"
             })
 
+        # 🆕 工具重复调用检测：同一工具连调 4+ 次 → 提醒
+        if len(tool_call_trace) >= 4:
+            from collections import Counter
+            recent = tool_call_trace[-8:]
+            counts = Counter(t[0] for t in recent)
+            repeated = [(n, c) for n, c in counts.items() if c >= 4]
+            if repeated:
+                for name, cnt in repeated:
+                    messages.append({
+                        "role": "user",
+                        "content": f"[系统提示：你已反复调用 {name} 工具 {cnt} 次。"
+                                   f"如果该工具无法提供所需信息，请换其他方式或直接给出结论。]"
+                    })
+
+        # ═══ 滑动窗口：历史步骤压缩 ═══
+        # 保留最近 3 步的完整 assistant(tool_calls)+tool 数据，
+        # 更早的步骤压缩为摘要文本，防止 context 无限膨胀。
+        _HISTORY_WINDOW = 3
+        _asst_positions = [
+            i for i, m in enumerate(messages)
+            if m["role"] == "assistant" and m.get("tool_calls")
+        ]
+        if len(_asst_positions) > _HISTORY_WINDOW:
+            _keep_from = _asst_positions[-_HISTORY_WINDOW]
+            _old_msgs = messages[2:_keep_from]  # 跳过 system + user
+            _summary_lines = []
+            _step_no = 1
+            _i = 0
+            while _i < len(_old_msgs):
+                _m = _old_msgs[_i]
+                if _m["role"] == "assistant" and _m.get("tool_calls"):
+                    _names = [tc["function"]["name"] for tc in _m["tool_calls"]]
+                    _summary_lines.append(f"步骤 {_step_no}: 调用 {', '.join(_names)}")
+                    # 提取紧随的 tool 结果文本
+                    while _i + 1 < len(_old_msgs) and _old_msgs[_i + 1]["role"] == "tool":
+                        _tc_text = _old_msgs[_i + 1].get("content", "")
+                        if _tc_text and len(_tc_text) > 100:
+                            _tc_text = _tc_text[:100] + "…"
+                        if _tc_text:
+                            _summary_lines.append(f"  → {_tc_text}")
+                        _i += 1
+                    _step_no += 1
+                _i += 1
+            _summary = "\n".join(_summary_lines)
+            messages[2:_keep_from] = [
+                {"role": "user", "content": f"## 📋 历史步骤摘要\n{_summary}\n\n以上是之前步骤的摘要。下面是最近的工作详情。"}
+            ]
+            logger.info(f"[SubAgent] 滑动窗口压缩: {len(_asst_positions)} 步 → 摘要 + 最近 {_HISTORY_WINDOW} 步")
+
         # 调 LLM
         response = call_llm_with_tools(messages, tools, model=model, scene_config=scene_config)
         if response is None:
@@ -107,10 +166,26 @@ def _run_loop_blocking(
             return {"success": False, "summary": "", "steps": step + 1,
                     "error": f"LLM 返回格式异常: {e}"}
 
+        # 推送 LLM 思考（如果有 content 文本）
+        thinking_text = msg.get("content", "")
+        if thinking_text:
+            _push({
+                "type": "sub_thinking",
+                "sub_step": step + 1,
+                "text": thinking_text,
+                "ts": time.time(),
+            })
+
         tool_calls = msg.get("tool_calls")
         if not tool_calls:
             # LLM 返回文本 → 完成
             content = msg.get("content", "")
+            _push({
+                "type": "sub_done",
+                "sub_step": step + 1,
+                "summary": content or "(无回复)",
+                "ts": time.time(),
+            })
             return {
                 "success": True,
                 "summary": content or "(无回复)",
@@ -128,6 +203,7 @@ def _run_loop_blocking(
         consecutive_tool_only += 1
 
         for tc in tool_calls:
+            tool_call_trace.append((tc.get("function", {}).get("name", "?"), step))
             try:
                 func = tc.get("function", {})
                 tool_name = func.get("name", "")
@@ -140,6 +216,14 @@ def _run_loop_blocking(
 
                 # 子 Agent 不能调 clarify
                 if tool_name == "clarify":
+                    _push({
+                        "type": "sub_tool_error",
+                        "sub_step": step + 1,
+                        "tool": tool_name,
+                        "error": "子 Agent 不能问用户问题",
+                        "tool_call_id": tc.get("id", ""),
+                        "ts": time.time(),
+                    })
                     tool_result_content = json.dumps(
                         {"error": "子 Agent 不能问用户问题，请自行决策"},
                         ensure_ascii=False,
@@ -151,25 +235,88 @@ def _run_loop_blocking(
                     })
                     continue
 
-                # 执行工具
-                if _progress:
-                    _progress["tool"] = tool_name
-                set_tool_context(scene_id="")
-                try:
-                    result = execute_tool(tool_name, args)
-                finally:
-                    clear_tool_context()
+                # 🆕 推送 tool_start
+                _push({
+                    "type": "sub_tool_start",
+                    "sub_step": step + 1,
+                    "tool": tool_name,
+                    "args": args,
+                    "tool_call_id": tc.get("id", ""),
+                    "ts": time.time(),
+                })
 
-                tool_result_content = json.dumps(
-                    result.get("result") or result.get("error", ""),
-                    ensure_ascii=False,
-                )
+                # 🆕 read_file 去重：同一路径已完整读过则跳过执行
+                _rf_skip = False
+                _dur = 0
+                if tool_name == "read_file":
+                    _rf_path = args.get("path", "")
+                    if _rf_path and _rf_path in _read_file_cache:
+                        _c = _read_file_cache[_rf_path]
+                        result = {
+                            "success": True,
+                            "result": f"(已在第 {_c['step'] + 1} 步完整读过: {_rf_path}, "
+                                      f"{_c['chars']} 字符 / {_c['lines']} 行, 无需重读)",
+                        }
+                        logger.info(f"[SubAgent] 跳过重复 read_file: {_rf_path}")
+                        _rf_skip = True
+
+                if not _rf_skip:
+                    # 执行工具
+                    if _progress:
+                        _progress["tool"] = tool_name
+                    set_tool_context(scene_id="")
+                    _ts = time.time()
+                    try:
+                        result = execute_tool(tool_name, args)
+                    finally:
+                        clear_tool_context()
+                    _dur = int((time.time() - _ts) * 1000)
+
+                if result.get("success"):
+                    tool_result_content = json.dumps(
+                        result.get("result") or "",
+                        ensure_ascii=False,
+                    )
+                    _push({
+                        "type": "sub_tool_done",
+                        "sub_step": step + 1,
+                        "tool": tool_name,
+                        "result": result.get("result"),
+                        "duration_ms": _dur,
+                        "tool_call_id": tc.get("id", ""),
+                        "ts": time.time(),
+                    })
+                else:
+                    tool_result_content = json.dumps(
+                        result.get("error", ""),
+                        ensure_ascii=False,
+                    )
+                    _push({
+                        "type": "sub_tool_error",
+                        "sub_step": step + 1,
+                        "tool": tool_name,
+                        "error": result.get("error", ""),
+                        "tool_call_id": tc.get("id", ""),
+                        "ts": time.time(),
+                    })
 
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id", ""),
                     "content": tool_result_content,
                 })
+
+                # 🆕 read_file 读完后缓存，供后续去重使用
+                if tool_name == "read_file" and not _rf_skip:
+                    _rf_path = args.get("path", "")
+                    if _rf_path and result.get("success"):
+                        _rf_res = result.get("result", {})
+                        if isinstance(_rf_res, dict):
+                            _read_file_cache[_rf_path] = {
+                                "lines": _rf_res.get("total_lines", 0),
+                                "chars": len(json.dumps(_rf_res, ensure_ascii=False)),
+                                "step": step,
+                            }
 
             except json.JSONDecodeError as e:
                 messages.append({
@@ -190,6 +337,13 @@ def _run_loop_blocking(
         if m["role"] == "assistant" and m.get("content"):
             last_content = m["content"]
             break
+
+    _push({
+        "type": "sub_done",
+        "sub_step": max_steps,
+        "summary": f"达到最大步数。最后回复: {last_content[:200]}",
+        "ts": time.time(),
+    })
 
     return {
         "success": False,

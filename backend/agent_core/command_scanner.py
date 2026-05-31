@@ -70,6 +70,13 @@ HIGH_RISK_PATTERNS: list[tuple[str, str, str]] = [
     (r'\bdpkg\s+--purge\s+(python3?|systemd|libc)\b', 'package', '彻底移除系统关键包'),
     (r'\bpacman\s+-Rns?\s+(python|systemd|glibc)\b', 'package', 'Arch 移除关键包'),
 
+    # ── 后端自杀（坐山客 / agai-maas 进程）──
+    (r'lsof\s+-ti\s*:?\s*8\d{3}\s*\|\s*xargs\s+kill', 'service', '通过端口查找并 xargs kill 后端服务进程 → SSE 断连'),
+    (r'kill\s+.*\b8\d{3}\b', 'service', '按端口号 kill 后端服务进程（端口 8xxx）'),
+    (r'xargs\s+kill\s+-9', 'service', 'xargs kill -9 批量终止进程 → 可能杀死后端服务'),
+    (r'systemctl\s+(?:stop|restart)\s+(?:zuoshanke|agai-maas|backend)', 'service', '停止/重启 zuoshanke 后端服务 → SSE 断连'),
+    (r'cd\s+~[/\w]*zuoshanke.*&&.*python3\s+backend/main\.py', 'service', '手动重启 zuoshanke 后端 → 导致当前 SSE 断连'),
+    (r'cd\s+~[/\w]*agai-maas.*&&.*python3\s+-m\s+backend\.main', 'service', '手动重启 agai-maas 后端 → 导致当前 SSE 断连'),
     # ── 配置/认证毁灭 ──
     (r'\brm\s+(?:-[rf]+\s+)?~?/\.ssh/', 'config', '删除 SSH 密钥/配置 → 远程自锁'),
     (r'\brm\s+(?:-[rf]+\s+)?/etc/(?:passwd|shadow|sudoers|resolv\.conf|ssl)', 'config', '删除系统关键配置'),

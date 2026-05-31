@@ -179,6 +179,14 @@ def build_agent_system_prompt(memory_context: str = "") -> str:
 - **写文件先检查路径**：确保不会覆盖重要文件
 - **遇到错误告诉我**：如果工具执行失败，分析原因再重试
 
+## 🛡️ 进程安全——不要杀死自己
+- **你运行在坐山客后端进程中**。任何 kill 后端进程、systemctl 停服务、重启后端
+  的操作都会导致你自己被中断、当前任务丢失。
+- 在操作系统级操作前（kill、systemctl、重启服务等），**必须先通过 clarify 工具
+  询问用户**，等用户确认后再执行。
+- 如果 run_code 返回"高危操作"错误（被 command_scanner 拦截），说明你试图
+  执行了危险命令。停下来，用 clarify 问用户是否需要这样做。
+
 ## 回忆能力（重要）
 - 你可以使用 **session_search** 工具搜索之前聊过的历史内容
 - 当用户提到"上次我们说的……"、"之前那个……"、"还记得……"的时候，
@@ -839,16 +847,21 @@ def run_agent_loop(
 
                         # 🆕 耗时工具（delegate_task）在线程中执行，避免阻塞 SSE 流
                         if tool_name == "delegate_task":
+                            from collections import deque as _deque
                             from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
                             import threading as _thr
 
-                            # 🆕 子任务进度追踪：子 Agent 每步更新，父心跳时展示
+                            # 🆕 子任务进度 + trace 事件队列：子 Agent 每步更新，父心跳时 drain
                             _child_progress = {"step": 0, "tool": ""}
+                            _child_trace_queue = _deque()
+                            _child_sub_task_id = tc.get("id", f"dt_{step}_{int(time.time()*1000)}")
 
                             def _thread_execute():
                                 """在线程中执行工具（含 tool context 初始化，因 threading.local 不跨线程）"""
-                                # 把进度字典挂到当前线程，delegate_engine 通过 threading.current_thread() 访问
+                                # 把进度/队列/ID 挂到当前线程，delegate_engine 通过 threading.current_thread() 访问
                                 _thr.current_thread()._child_progress = _child_progress
+                                _thr.current_thread()._child_trace_queue = _child_trace_queue
+                                _thr.current_thread()._child_sub_task_id = _child_sub_task_id
                                 set_tool_context(scene_id=scene_id)
                                 try:
                                     return execute_tool(tool_name, args, extra_kwargs=extra)
@@ -877,6 +890,16 @@ def run_agent_loop(
                                             "ts": time.time(),
                                             "message": f"⏳ 子任务执行中...（已等待 {_elapsed}s）{_prog_str}",
                                         }
+                                        # drain 子 agent trace 队列 → 作为 SSE 事件 yield
+                                        while _child_trace_queue:
+                                            _ev = _child_trace_queue.popleft()
+                                            _ev["sub_task_id"] = _child_sub_task_id
+                                            yield _ev
+                                # 🆕 子 agent 完成后：drain 队列中剩余事件（含 sub_done）
+                                while _child_trace_queue:
+                                    _ev = _child_trace_queue.popleft()
+                                    _ev["sub_task_id"] = _child_sub_task_id
+                                    yield _ev
                             finally:
                                 _pool.shutdown(wait=False, cancel_futures=True)
                         else:

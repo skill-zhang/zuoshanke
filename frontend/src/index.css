@@ -7861,3 +7861,95 @@ body {
   justify-content: flex-end;
   flex-shrink: 0;
 }
+
+/* 🆕 子 Agent trace 时间线 */
+.trace-sub-timeline {
+  background: #0d1117;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.trace-sub-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: #1c1c22;
+  color: #484f58;
+  font-size: 9px;
+  font-weight: 600;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.trace-sub-thinking {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+  color: #8b949e;
+}
+.trace-sub-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+.trace-sub-tool {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.trace-sub-tool .trace-tool-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.trace-sub-tool-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.trace-sub-tool-name {
+  color: #c9d1d9;
+  font-size: 10.5px;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+.trace-sub-time {
+  color: #484f58;
+  font-size: 10px;
+  margin-left: auto;
+}
+.trace-sub-error {
+  color: #f87171;
+  font-size: 10.5px;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trace-sub-done {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+}
+.trace-sub-done-text {
+  flex: 1;
+  color: #8b949e;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trace-tool-substeps {
+  font-size: 10px;
+  color: #484f58;
+  margin-left: 4px;
+  font-weight: 400;
+}
