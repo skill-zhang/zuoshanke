@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 
 from agent_core.clarify_handler import ClarifyHandler
 
@@ -43,7 +44,7 @@ def make_clarify_callback(scene_id: str, event_yield_func: callable) -> callable
     Returns:
         callback(question, choices) -> str 的同步阻塞函数
     """
-    def _callback(question: str, choices: list[str] | None) -> str:
+    def _callback(question: str, choices: Optional[list[str]]) -> str:
         handler = ClarifyHandler.get_instance()
         req = handler.create_request(question, choices)
 

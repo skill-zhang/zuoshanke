@@ -254,7 +254,7 @@ def _run_single_child(task: dict, tools: list[dict], model: str) -> dict:
 
 def run_delegate_tasks(
     tasks: list[dict],
-    tools: list[dict] | None = None,
+    tools: Optional[list[dict]] = None,
     model: str = "flash",
 ) -> str:
     """并行执行多个子任务。
@@ -334,7 +334,7 @@ def run_delegate_tasks(
 
 def run_delegate_single(
     task: dict,
-    tools: list[dict] | None = None,
+    tools: Optional[list[dict]] = None,
     model: str = "flash",
 ) -> str:
     """单个子任务模式（便捷接口）

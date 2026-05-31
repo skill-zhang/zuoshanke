@@ -218,7 +218,7 @@ def get_weather(city: str, forecast_days: int = 0) -> dict:
             "desc": str,
             "humidity": str,
             "wind": str,
-            "forecast": list[dict] | None  # 当 forecast_days > 0 时
+            "forecast": Optional[list[dict]]  # 当 forecast_days > 0 时
         }
     """
     key = city.strip()
