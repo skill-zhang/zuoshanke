@@ -646,13 +646,36 @@ def run_agent_loop(
                 if _m["role"] == "assistant" and _m.get("tool_calls"):
                     _names = [tc["function"]["name"] for tc in _m["tool_calls"]]
                     _summary_lines.append(f"步骤 {_step_no}: 调用 {', '.join(_names)}")
+                    # 构建 tool_call_id → tool 信息 映射（便于 tool result 中定位）
+                    _tc_info = {}
+                    for _tc_call in _m["tool_calls"]:
+                        _tid = _tc_call.get("id", "")
+                        _tname = _tc_call["function"]["name"]
+                        _info = {"name": _tname}
+                        if _tname == "read_file":
+                            try:
+                                _tc_args = json.loads(_tc_call["function"]["arguments"])
+                                _info["path"] = _tc_args.get("path", "")
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        _tc_info[_tid] = _info
                     # 提取紧随的全部 tool 结果（支持并行多 tool）
                     while _i + 1 < len(_old_msgs) and _old_msgs[_i + 1]["role"] == "tool":
-                        _tc = _old_msgs[_i + 1].get("content", "")
-                        if _tc:
-                            if len(_tc) > 120:
-                                _tc = _tc[:120] + "…"
-                            _summary_lines.append(f"  → {_tc}")
+                        _tc_res = _old_msgs[_i + 1]
+                        _tc_text = _tc_res.get("content", "")
+                        if _tc_text:
+                            _call_id = _tc_res.get("tool_call_id", "")
+                            _cinfo = _tc_info.get(_call_id, {})
+                            if _cinfo.get("name") == "read_file" and _cinfo.get("path"):
+                                # 🛡️ read_file: 不截取内容前 120 字暴露给 LLM，
+                                # 否则 LLM 以为只读了开头，会反复再读同一文件
+                                _summary_lines.append(
+                                    f"  → 读文件 {_cinfo['path']} ({len(_tc_text)} 字符)"
+                                )
+                            else:
+                                if len(_tc_text) > 120:
+                                    _tc_text = _tc_text[:120] + "…"
+                                _summary_lines.append(f"  → {_tc_text}")
                         _i += 1
                     _step_no += 1  # 只对真正的一步计数
                 _i += 1
