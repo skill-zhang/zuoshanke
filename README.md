@@ -22,6 +22,66 @@
 | 存储 | SQLite + Alembic |
 | 引擎 | DeepSeek v4 Flash / Claude / Qwen（可切换 Provider） |
 
+## 快速开始
+
+### 前置要求
+
+- **Python 3.9+**
+- **Node.js 18+**（含 npm）
+- **pnpm**（Node 包管理器）
+
+### 一键启动
+
+```bash
+git clone https://github.com/skill-zhang/zuoshanke.git
+cd zuoshanke
+bash scripts/start-zuoshanke.sh
+```
+
+启动脚本会自动：
+
+1. ✅ 检查 Python / Node.js / pnpm 是否安装
+2. ✅ 自动创建 Python 虚拟环境并安装后端依赖
+3. ✅ 自动安装前端依赖
+4. ✅ 启动后端（http://localhost:8000）+ 前端（http://localhost:5173）
+
+### 如果缺依赖
+
+脚本会在启动前检测并给出**即贴即用的安装命令**。macOS 上例如：
+
+```bash
+# 安装 Homebrew（如果没有）
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zshrc
+source ~/.zshrc
+
+# 安装 Node.js（会自动附带 npm）
+brew install node
+
+# 安装 pnpm
+npm install -g pnpm
+```
+
+### 单独安装依赖
+
+```bash
+bash scripts/start-zuoshanke.sh install-deps
+```
+
+### 仅启动后端 / 前端
+
+```bash
+bash scripts/start-zuoshanke.sh backend
+bash scripts/start-zuoshanke.sh frontend
+```
+
+### 停止 / 查看状态
+
+```bash
+bash scripts/start-zuoshanke.sh stop
+bash scripts/start-zuoshanke.sh status
+```
+
 ## 仓库结构
 
 ```
@@ -30,42 +90,15 @@ zuoshanke/
 ├── docs/
 │   ├── design/        # 架构决策、设计文档
 │   ├── api/           # OpenAPI 定义
-│   └── meetings/      # 讨论纪要
+│   └── meetings/       # 讨论纪要
 ├── backend/
 │   ├── models.py
 │   ├── migrations/    # Alembic 迁移
 │   └── ...
 ├── frontend/
 │   └── src/
-└── .git/
-```
-
-## 快速开始
-
-### 后端
-
-```bash
-# 克隆后，进入 backend 目录创建虚拟环境
-cd zuoshanke/backend
-python3 -m venv venv
-
-# 安装依赖
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 启动后端
-venv/bin/python main.py
-```
-
-> **重要**：必须使用 venv，系统 Python 的 SQLAlchemy 版本过旧（1.4.x），代码需要 >= 2.0.36。
-> 详见 [docs/design/python-venv-setup.md](docs/design/python-venv-setup.md)
-
-### 前端
-
-```bash
-cd zuoshanke/frontend
-npm install
-npm run dev
+└── scripts/
+    └── start-zuoshanke.sh   # 一键启动脚本
 ```
 
 ## 许可证
