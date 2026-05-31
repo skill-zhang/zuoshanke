@@ -103,16 +103,30 @@ def read_file(path: str, offset: int = 1, limit: int = 2000) -> dict:
         start = offset - 1
         chunk = lines[start:start + limit]
 
+        # 字符数硬上限：防止一行超长（如压缩 JS）撑爆 context
+        # 同时允许行短的文件（如 HTML）一次读更多行
+        MAX_CHARS = 100000
+        char_count = 0
         content_lines = []
+        truncated = False
         for i, line in enumerate(chunk, start=offset):
-            content_lines.append(f"{i}|{line.rstrip()}")
+            line_str = f"{i}|{line.rstrip()}"
+            char_count += len(line_str) + 1  # +1 for newline
+            if char_count > MAX_CHARS:
+                truncated = True
+                break
+            content_lines.append(line_str)
 
-        return {
+        result = {
             "content": "\n".join(content_lines),
             "total_lines": total,
             "offset": offset,
             "limit": limit,
         }
+        if truncated:
+            result["truncated_char"] = True
+            result["next_offset"] = i
+        return result
 
     except UnicodeDecodeError:
         return {"error": f"文件无法以 UTF-8 解码（可能是二进制文件）: {path}"}

@@ -598,7 +598,7 @@
         },
         "limit": {
           "type": "integer",
-          "description": "最多读取行数",
+          "description": "最多读取行数（内部按字符数截断，短行文件可一次读更多行）",
           "optional": true
         }
       },
